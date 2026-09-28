@@ -17,14 +17,14 @@ mod windows_impl {
 
     use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{
-        CallNextHookEx, MSG, PeekMessageW, SetWindowsHookExW,
-        TranslateMessage, DispatchMessageW,
-        KBDLLHOOKSTRUCT, MSLLHOOKSTRUCT,
+        CallNextHookEx, DispatchMessageW, GetMessageW, SetWindowsHookExW,
+        TranslateMessage, MSG, KBDLLHOOKSTRUCT, MSLLHOOKSTRUCT,
         WH_KEYBOARD_LL, WH_MOUSE_LL, WM_KEYDOWN, WM_KEYUP,
-        WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_SYSKEYDOWN,
-        PM_REMOVE,
+        WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_SYSKEYDOWN, WM_SYSKEYUP,
     };
-    use windows::Win32::UI::Input::KeyboardAndMouse::{VK_ESCAPE, VK_SHIFT};
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetAsyncKeyState, VK_ESCAPE, VK_LSHIFT, VK_RSHIFT, VK_SHIFT,
+    };
 
     use crate::WinEvent;
 
@@ -34,9 +34,12 @@ mod windows_impl {
     static LBUTTON_DOWN: AtomicBool = AtomicBool::new(false);
     static BUTTON_X: AtomicI32 = AtomicI32::new(0);
     static BUTTON_Y: AtomicI32 = AtomicI32::new(0);
+    static CURSOR_X: AtomicI32 = AtomicI32::new(0);
+    static CURSOR_Y: AtomicI32 = AtomicI32::new(0);
     static DRAG_ARMED: AtomicBool = AtomicBool::new(false);
     static THRESHOLD_PX: AtomicI32 = AtomicI32::new(6);
     static PAUSED: AtomicBool = AtomicBool::new(false);
+    static ALWAYS_SHOW: AtomicBool = AtomicBool::new(false);
 
     // Thread-local sender; set once when the hook thread starts.
     thread_local! {
@@ -50,6 +53,16 @@ mod windows_impl {
                 let _ = tx.send(event);
             }
         });
+    }
+
+    #[inline]
+    fn is_shift_pressed() -> bool {
+        SHIFT_DOWN.load(Ordering::Relaxed)
+            || unsafe {
+                (GetAsyncKeyState(VK_SHIFT.0 as i32) as u16 & 0x8000) != 0
+                    || (GetAsyncKeyState(VK_LSHIFT.0 as i32) as u16 & 0x8000) != 0
+                    || (GetAsyncKeyState(VK_RSHIFT.0 as i32) as u16 & 0x8000) != 0
+            }
     }
 
     unsafe extern "system" fn mouse_hook_proc(
@@ -68,30 +81,34 @@ mod windows_impl {
                     DRAG_ARMED.store(false, Ordering::Relaxed);
                     BUTTON_X.store(x, Ordering::Relaxed);
                     BUTTON_Y.store(y, Ordering::Relaxed);
+                    CURSOR_X.store(x, Ordering::Relaxed);
+                    CURSOR_Y.store(y, Ordering::Relaxed);
                     send_event(WinEvent::LButtonChanged { pressed: true, x, y });
                 }
                 v if v == WM_LBUTTONUP => {
                     LBUTTON_DOWN.store(false, Ordering::Relaxed);
-                    let was_armed = DRAG_ARMED.swap(false, Ordering::Relaxed);
+                    let _was_armed = DRAG_ARMED.swap(false, Ordering::Relaxed);
                     send_event(WinEvent::LButtonChanged { pressed: false, x, y });
-                    if was_armed {
-                        send_event(WinEvent::DragCancelled);
-                    }
                 }
-                v if v == WM_MOUSEMOVE && LBUTTON_DOWN.load(Ordering::Relaxed) => {
-                    send_event(WinEvent::MouseMove { x, y });
+                v if v == WM_MOUSEMOVE => {
+                    CURSOR_X.store(x, Ordering::Relaxed);
+                    CURSOR_Y.store(y, Ordering::Relaxed);
 
-                    if !DRAG_ARMED.load(Ordering::Relaxed) {
-                        let bx = BUTTON_X.load(Ordering::Relaxed);
-                        let by = BUTTON_Y.load(Ordering::Relaxed);
-                        let dx = (x - bx).abs();
-                        let dy = (y - by).abs();
-                        let threshold = THRESHOLD_PX.load(Ordering::Relaxed);
-                        if (dx * dx + dy * dy) >= threshold * threshold
-                            && SHIFT_DOWN.load(Ordering::Relaxed)
-                        {
-                            DRAG_ARMED.store(true, Ordering::Relaxed);
-                            send_event(WinEvent::DragArmed { x, y });
+                    if LBUTTON_DOWN.load(Ordering::Relaxed) {
+                        send_event(WinEvent::MouseMove { x, y });
+
+                        if !DRAG_ARMED.load(Ordering::Relaxed) {
+                            let bx = BUTTON_X.load(Ordering::Relaxed);
+                            let by = BUTTON_Y.load(Ordering::Relaxed);
+                            let dx = (x - bx).abs();
+                            let dy = (y - by).abs();
+                            let threshold = THRESHOLD_PX.load(Ordering::Relaxed);
+                            if (dx * dx + dy * dy) >= threshold * threshold
+                                && (ALWAYS_SHOW.load(Ordering::Relaxed) || is_shift_pressed())
+                            {
+                                DRAG_ARMED.store(true, Ordering::Relaxed);
+                                send_event(WinEvent::DragArmed { x, y });
+                            }
                         }
                     }
                 }
@@ -110,20 +127,39 @@ mod windows_impl {
         if code >= 0 {
             let kb = &*(lparam.0 as *const KBDLLHOOKSTRUCT);
             let vk = kb.vkCode;
+            let is_shift = vk == VK_SHIFT.0 as u32
+                || vk == VK_LSHIFT.0 as u32
+                || vk == VK_RSHIFT.0 as u32;
 
             match wparam.0 as u32 {
                 v if v == WM_KEYDOWN || v == WM_SYSKEYDOWN => {
-                    if vk == VK_SHIFT.0 as u32 {
+                    if is_shift {
                         SHIFT_DOWN.store(true, Ordering::Relaxed);
                         send_event(WinEvent::ShiftChanged(true));
+
+                        // If left button is already held and mouse moved past threshold,
+                        // arm the drag immediately upon pressing Shift!
+                        if LBUTTON_DOWN.load(Ordering::Relaxed) && !DRAG_ARMED.load(Ordering::Relaxed) {
+                            let bx = BUTTON_X.load(Ordering::Relaxed);
+                            let by = BUTTON_Y.load(Ordering::Relaxed);
+                            let cx = CURSOR_X.load(Ordering::Relaxed);
+                            let cy = CURSOR_Y.load(Ordering::Relaxed);
+                            let dx = (cx - bx).abs();
+                            let dy = (cy - by).abs();
+                            let threshold = THRESHOLD_PX.load(Ordering::Relaxed);
+                            if (dx * dx + dy * dy) >= threshold * threshold {
+                                DRAG_ARMED.store(true, Ordering::Relaxed);
+                                send_event(WinEvent::DragArmed { x: cx, y: cy });
+                            }
+                        }
                     } else if vk == VK_ESCAPE.0 as u32 && DRAG_ARMED.load(Ordering::Relaxed) {
                         DRAG_ARMED.store(false, Ordering::Relaxed);
                         send_event(WinEvent::EscapePressed);
                         send_event(WinEvent::DragCancelled);
                     }
                 }
-                v if v == WM_KEYUP => {
-                    if vk == VK_SHIFT.0 as u32 {
+                v if v == WM_KEYUP || v == WM_SYSKEYUP => {
+                    if is_shift {
                         SHIFT_DOWN.store(false, Ordering::Relaxed);
                         send_event(WinEvent::ShiftChanged(false));
                     }
@@ -161,12 +197,9 @@ mod windows_impl {
                 debug!("Hooks installed: mouse={:?} keyboard={:?}", mouse_hook, keyboard_hook);
 
                 let mut msg = MSG::default();
-                loop {
-                    // PeekMessage keeps the hook thread alive (required for LL hooks)
-                    let _ = PeekMessageW(&mut msg, None, 0, 0, PM_REMOVE);
+                while GetMessageW(&mut msg, None, 0, 0).as_bool() {
                     let _ = TranslateMessage(&msg);
                     DispatchMessageW(&msg);
-                    std::thread::sleep(std::time::Duration::from_millis(1));
                 }
             })
             .expect("Failed to spawn hook thread");
@@ -181,10 +214,14 @@ mod windows_impl {
     pub fn set_threshold(px: i32) {
         THRESHOLD_PX.store(px, Ordering::Relaxed);
     }
+
+    pub fn set_always_show(always: bool) {
+        ALWAYS_SHOW.store(always, Ordering::Relaxed);
+    }
 }
 
 #[cfg(windows)]
-pub use windows_impl::{start_hooks, set_paused, set_threshold};
+pub use windows_impl::{start_hooks, set_paused, set_threshold, set_always_show};
 
 #[cfg(not(windows))]
 pub fn start_hooks(
@@ -197,3 +234,10 @@ pub fn start_hooks(
     let handle = std::thread::spawn(|| {});
     (rx, handle)
 }
+
+#[cfg(not(windows))]
+pub fn set_paused(_paused: bool) {}
+#[cfg(not(windows))]
+pub fn set_threshold(_px: i32) {}
+#[cfg(not(windows))]
+pub fn set_always_show(_always: bool) {}

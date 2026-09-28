@@ -180,9 +180,19 @@ Checked via `cargo info window-vibrancy`.
 **Decision:** Implement a dedicated floating command palette (`640x480`, borderless, always-on-top) supporting fuzzy searching across all tools, conversions, presets, and SQLite history items, with keyboard navigation (`↑`/`↓`, `Enter`, `Esc`).
 **Rationale:** Serves power users who prefer keyboard-centric workflows over mouse gestures and provides quick access to recent conversions and file operations.
 
+### D034: Low-level keyboard Shift detection, OLE STA initialization, and background window lifecycle
+**Decision:**
+1. In `wheel_win::hooks`, detect `VK_LSHIFT` (`0xA0`) and `VK_RSHIFT` (`0xA1`) alongside `VK_SHIFT` (`0x10`), and back with `GetAsyncKeyState` in the low-level mouse procedure.
+2. If the user presses Shift mid-drag while the mouse is already in motion, arm the trigger immediately without requiring a re-click.
+3. Call `OleInitialize(None)` before `RegisterDragDrop` to guarantee STA COM initialization on the overlay thread.
+4. Remove the default `"main"` window from `tauri.conf.json` (`"windows": []`), and configure `tauri_plugin_window_state` to ignore `"overlay"` and never restore `VISIBLE` state flags.
+5. In `start_hook_listener`, check whether `WM_LBUTTONUP` occurs within the overlay bounds before emitting `drag-cancelled`, preventing premature cancellation while OLE `Drop` is being dispatched.
+**Rationale:** In Windows, `WH_KEYBOARD_LL` sends specific left/right keycodes rather than generic `VK_SHIFT`, which caused Shift to appear unpressed. Without `OleInitialize`, Win32 OLE DragDrop registration fails or drops are rejected. Removing the default window from configuration eliminates the blank white 800x600 window and restores Wheel to a proper tray-only background architecture.
+
 ---
 
 ## Pending / Open Questions
 
 - **Code signing:** Windows code signing requires a certificate. The Tauri bundler supports
   it via env vars. We'll document the process in M7 without purchasing one for dev builds.
+

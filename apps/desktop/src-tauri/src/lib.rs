@@ -74,7 +74,15 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_window_state::Builder::new().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_denylist(&["overlay", "main"])
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        & !tauri_plugin_window_state::StateFlags::VISIBLE,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(state)
@@ -138,13 +146,16 @@ pub fn run() {
 async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>) {
     use wheel_win::WinEvent;
 
-    let threshold = {
+    let (threshold, always_show) = {
         let s = settings.lock().await;
-        s.trigger.movement_threshold_px as i32
+        (s.trigger.movement_threshold_px as i32, s.trigger.always_show)
     };
+    wheel_win::hooks::set_always_show(always_show);
 
     let (mut rx, _hook_thread) = wheel_win::hooks::start_hooks(threshold);
     info!("Hook listener started");
+
+    let mut current_overlay_rect: Option<(i32, i32, i32, i32)> = None;
 
     while let Some(event) = rx.recv().await {
         match event {
@@ -163,6 +174,7 @@ async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>
                         // Center the overlay on cursor, clamped to work area
                         let overlay_size = 400i32;
                         let (ox, oy) = wheel_win::dpi::clamp_to_work_area(x, y, overlay_size, overlay_size);
+                        current_overlay_rect = Some((ox, oy, overlay_size, overlay_size));
                         let _ = overlay.set_position(tauri::Position::Physical(
                             tauri::PhysicalPosition { x: ox, y: oy },
                         ));
@@ -171,6 +183,7 @@ async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>
                 }
             }
             WinEvent::DragCancelled | WinEvent::EscapePressed => {
+                current_overlay_rect = None;
                 if let Some(overlay) = app.get_webview_window("overlay") {
                     let _ = overlay.emit("drag-cancelled", ());
                     let _ = overlay.hide();
@@ -181,10 +194,31 @@ async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>
                     let _ = overlay.emit("cursor-move", serde_json::json!({ "x": x, "y": y }));
                 }
             }
-            WinEvent::LButtonChanged { pressed: false, .. } => {
-                if let Some(overlay) = app.get_webview_window("overlay") {
-                    let _ = overlay.emit("drag-cancelled", ());
-                    let _ = overlay.hide();
+            WinEvent::LButtonChanged { pressed: false, x, y } => {
+                let is_inside_overlay = if let Some((ox, oy, w, h)) = current_overlay_rect {
+                    x >= ox && x <= ox + w && y >= oy && y <= oy + h
+                } else {
+                    false
+                };
+
+                current_overlay_rect = None;
+
+                if !is_inside_overlay {
+                    if let Some(overlay) = app.get_webview_window("overlay") {
+                        let _ = overlay.emit("drag-cancelled", ());
+                        let _ = overlay.hide();
+                    }
+                } else {
+                    // Released inside overlay: OLE drop will handle action dispatch.
+                    // Keep overlay visible for a brief moment so the drop completes,
+                    // then auto-hide after 350ms.
+                    let overlay_clone = app.get_webview_window("overlay");
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+                        if let Some(overlay) = overlay_clone {
+                            let _ = overlay.hide();
+                        }
+                    });
                 }
             }
             _ => {}

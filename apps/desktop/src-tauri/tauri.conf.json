@@ -10,16 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [
-      {
-        "label": "main",
-        "title": "Wheel",
-        "width": 800,
-        "height": 600,
-        "visible": false,
-        "skipTaskbar": true
-      }
-    ],
+    "windows": [],
     "trayIcon": {
       "id": "wheel-tray",
       "iconPath": "icons/icon.ico",

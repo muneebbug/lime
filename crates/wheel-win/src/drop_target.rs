@@ -21,7 +21,7 @@ mod windows_impl {
     };
     use windows::Win32::System::Ole::{
         IDropTarget, IDropTarget_Impl, RegisterDragDrop, RevokeDragDrop, ReleaseStgMedium,
-        DROPEFFECT_COPY, DROPEFFECT_NONE, DROPEFFECT,
+        DROPEFFECT_COPY, DROPEFFECT_NONE, DROPEFFECT, OleInitialize,
     };
     use windows::Win32::System::SystemServices::MODIFIERKEYS_FLAGS;
     use windows::Win32::UI::Shell::{DragQueryFileW, HDROP};
@@ -173,6 +173,7 @@ mod windows_impl {
         callback: DropCallback,
     ) -> anyhow::Result<DropTargetHandle> {
         unsafe {
+            let _ = OleInitialize(None);
             let hwnd = HWND(hwnd as *mut std::ffi::c_void);
             let target = WheelDropTarget::new(hwnd, callback);
             let itarget: IDropTarget = target.into();

@@ -34,10 +34,50 @@ export function WheelOverlay() {
   useEffect(() => {
     const unlisteners: Array<() => void> = [];
 
+    const handleFilesDropped = (files: string[], x: number, y: number) => {
+      const exts =
+        store.dragExtensions.length > 0
+          ? store.dragExtensions
+          : files.map((f) => f.split(".").pop()?.toLowerCase() ?? "").filter(Boolean);
+      const visible = filterActions(store.actions, store.currentPage, exts);
+      const idx = hitTestWedge(x, y, visible.length, 200, 200);
+      const wedgeId = idx !== null ? visible[idx]?.id : store.hoveredWedge;
+      if (!wedgeId) {
+        store.clearDragState();
+        return;
+      }
+
+      invoke("dispatch_action", {
+        request: {
+          action_id: wedgeId,
+          files,
+          params: {},
+        },
+      })
+        .then((jobId) => {
+          console.log("Action dispatched:", jobId);
+        })
+        .catch((e) => console.error("Dispatch failed:", e));
+
+      store.clearDragState();
+    };
+
     // Drag armed — position pre-computed in Rust; overlay already shown
     listen<DragArmedEvent>("drag-armed", ({ payload }) => {
-      // The Rust side positioned the window; this event tells the wheel where center is
       store.setDragState([], [], payload.x, payload.y);
+    }).then((u) => unlisteners.push(u));
+
+    // Cursor move from low-level mouse hook
+    listen<{ x: number; y: number }>("cursor-move", ({ payload }) => {
+      if (!store.isDragging) return;
+      const dx = payload.x - store.cursorX;
+      const dy = payload.y - store.cursorY;
+      const clientX = 200 + dx;
+      const clientY = 200 + dy;
+      store.setCursor(clientX, clientY);
+      const visible = filterActions(store.actions, store.currentPage, store.dragExtensions);
+      const idx = hitTestWedge(clientX, clientY, visible.length, 200, 200);
+      store.setHoveredWedge(idx !== null ? visible[idx]?.id ?? null : null);
     }).then((u) => unlisteners.push(u));
 
     // OLE DragEnter — files confirmed, set context
@@ -53,38 +93,45 @@ export function WheelOverlay() {
       store.setHoveredWedge(idx !== null ? visible[idx]?.id ?? null : null);
     }).then((u) => unlisteners.push(u));
 
-    // OLE DragLeave — clear (but keep overlay visible — user might re-enter)
+    // OLE DragLeave — clear
     listen("drop-leave", () => {
-      // Keep shown but remove hover state
       store.setHoveredWedge(null);
     }).then((u) => unlisteners.push(u));
 
     // OLE Drop — dispatch the action
     listen<DropFilesEvent>("drop-files", ({ payload }) => {
-      const visible = filterActions(store.actions, store.currentPage, store.dragExtensions);
-      const idx = hitTestWedge(payload.x, payload.y, visible.length, 200, 200);
-      const wedgeId = idx !== null ? visible[idx]?.id : store.hoveredWedge;
-      if (!wedgeId) {
-        store.clearDragState();
-        return;
-      }
-
-      invoke("dispatch_action", {
-        request: {
-          action_id: wedgeId,
-          files: payload.files,
-          params: {},
-        },
-      })
-        .then((jobId) => {
-          console.log("Action dispatched:", jobId);
-        })
-        .catch((e) => console.error("Dispatch failed:", e));
-
-      store.clearDragState();
+      handleFilesDropped(payload.files, payload.x, payload.y);
     }).then((u) => unlisteners.push(u));
 
-    // Drag cancelled (button released or Escape)
+    // Built-in Tauri file drag drop fallback listeners
+    listen<{ paths: string[]; position: { x: number; y: number } }>(
+      "tauri://drag-drop",
+      ({ payload }) => {
+        handleFilesDropped(
+          payload.paths ?? [],
+          payload.position?.x ?? 200,
+          payload.position?.y ?? 200
+        );
+      }
+    ).then((u) => unlisteners.push(u));
+
+    listen<{ paths: string[]; position: { x: number; y: number } }>(
+      "tauri://drag-enter",
+      ({ payload }) => {
+        const files = payload.paths ?? [];
+        const extensions = files
+          .map((f) => f.split(".").pop()?.toLowerCase() ?? "")
+          .filter(Boolean);
+        store.setDragState(
+          files,
+          extensions,
+          payload.position?.x ?? 200,
+          payload.position?.y ?? 200
+        );
+      }
+    ).then((u) => unlisteners.push(u));
+
+    // Drag cancelled (button released outside or Escape)
     listen("drag-cancelled", () => {
       store.clearDragState();
     }).then((u) => unlisteners.push(u));
