@@ -42,7 +42,9 @@
     ],
     "windows": {
       "wix": {},
-      "nsis": {}
+      "nsis": {
+        "installMode": "currentUser"
+      }
     }
   }
 }
