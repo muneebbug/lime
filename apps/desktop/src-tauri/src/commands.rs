@@ -641,3 +641,263 @@ pub async fn strip_image_metadata(
 
     Ok(res.to_string_lossy().to_string())
 }
+
+/// Add background to image
+#[tauri::command]
+pub async fn add_background_file(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    input_path: String,
+    padding: u32,
+    corner_radius: u32,
+    shadow_blur: u32,
+    aspect_ratio: String,
+    color_start: [u8; 4],
+    color_end: [u8; 4],
+    format: String,
+    output_path: Option<String>,
+) -> Result<String, String> {
+    let input = PathBuf::from(&input_path);
+    if !input.exists() {
+        return Err(format!("Input file does not exist: {}", input_path));
+    }
+
+    let output_settings = {
+        let out = state.settings.lock().await.output.clone();
+        out
+    };
+
+    let target_out = match output_path {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let ext = if format.is_empty() { "png" } else { &format };
+            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
+            wheel_core::output::resolve_output_path(
+                &input,
+                ext,
+                if output_settings.suffix.is_empty() { ".bg" } else { &output_settings.suffix },
+                &output_settings.policy,
+                fixed_folder,
+                output_settings.overwrite_source,
+            )
+        }
+    };
+
+    let params = wheel_engines::bg::AddBgParams {
+        padding,
+        corner_radius,
+        shadow_blur,
+        aspect_ratio,
+        color_start,
+        color_end,
+        format,
+    };
+
+    let input_clone = input.clone();
+    let out_clone = target_out.clone();
+
+    let res = tokio::task::spawn_blocking(move || {
+        wheel_engines::bg::add_background(&input_clone, &out_clone, &params)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    // Record job in history
+    let mut job = wheel_core::Job::new("tool.add_bg", vec![input], serde_json::json!({ "padding": padding, "corner_radius": corner_radius }));
+    job.status = wheel_core::job::JobStatus::Completed;
+    job.progress = 1.0;
+    job.outputs = vec![res.clone()];
+    let _ = state.history.insert_job(&job);
+
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder()
+        .title("Wheel — Background added")
+        .body(format!("Backdrop image saved to {:?}", res.file_name().unwrap_or_default()))
+        .show();
+
+    Ok(res.to_string_lossy().to_string())
+}
+
+/// Edit photo adjustments (brightness, contrast, rotation, flip, resize)
+#[tauri::command]
+pub async fn edit_image_file(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    input_path: String,
+    brightness: i32,
+    contrast: f32,
+    rotation: u32,
+    flip_h: bool,
+    flip_v: bool,
+    resize_w: Option<u32>,
+    resize_h: Option<u32>,
+    output_path: Option<String>,
+) -> Result<String, String> {
+    let input = PathBuf::from(&input_path);
+    if !input.exists() {
+        return Err(format!("Input file does not exist: {}", input_path));
+    }
+
+    let output_settings = {
+        let out = state.settings.lock().await.output.clone();
+        out
+    };
+
+    let target_out = match output_path {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let ext = input.extension().and_then(|e| e.to_str()).unwrap_or("png");
+            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
+            wheel_core::output::resolve_output_path(
+                &input,
+                ext,
+                if output_settings.suffix.is_empty() { ".edited" } else { &output_settings.suffix },
+                &output_settings.policy,
+                fixed_folder,
+                output_settings.overwrite_source,
+            )
+        }
+    };
+
+    let params = wheel_engines::edit::EditParams {
+        brightness,
+        contrast,
+        rotation,
+        flip_h,
+        flip_v,
+        resize_w,
+        resize_h,
+    };
+
+    let input_clone = input.clone();
+    let out_clone = target_out.clone();
+
+    let res = tokio::task::spawn_blocking(move || {
+        wheel_engines::edit::edit_image(&input_clone, &out_clone, &params)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    // Record job in history
+    let mut job = wheel_core::Job::new("tool.edit", vec![input], serde_json::json!({ "brightness": brightness, "contrast": contrast, "rotation": rotation }));
+    job.status = wheel_core::job::JobStatus::Completed;
+    job.progress = 1.0;
+    job.outputs = vec![res.clone()];
+    let _ = state.history.insert_job(&job);
+
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder()
+        .title("Wheel — Edit complete")
+        .body(format!("Edited image saved to {:?}", res.file_name().unwrap_or_default()))
+        .show();
+
+    Ok(res.to_string_lossy().to_string())
+}
+
+/// Remove background from image
+#[tauri::command]
+pub async fn remove_background_file(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    input_path: String,
+    feather_radius: u32,
+    bg_color: Option<[u8; 4]>,
+    format: String,
+    output_path: Option<String>,
+) -> Result<String, String> {
+    let input = PathBuf::from(&input_path);
+    if !input.exists() {
+        return Err(format!("Input file does not exist: {}", input_path));
+    }
+
+    let output_settings = {
+        let out = state.settings.lock().await.output.clone();
+        out
+    };
+
+    let target_out = match output_path {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let ext = if format.is_empty() { "png" } else { &format };
+            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
+            wheel_core::output::resolve_output_path(
+                &input,
+                ext,
+                if output_settings.suffix.is_empty() { ".nobg" } else { &output_settings.suffix },
+                &output_settings.policy,
+                fixed_folder,
+                output_settings.overwrite_source,
+            )
+        }
+    };
+
+    let params = wheel_engines::remove_bg::RemoveBgParams {
+        feather_radius,
+        bg_color,
+        format,
+    };
+
+    let input_clone = input.clone();
+    let out_clone = target_out.clone();
+
+    let res = tokio::task::spawn_blocking(move || {
+        wheel_engines::remove_bg::remove_background(&input_clone, &out_clone, &params)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    // Record job in history
+    let mut job = wheel_core::Job::new("tool.remove_bg", vec![input], serde_json::json!({ "feather_radius": feather_radius }));
+    job.status = wheel_core::job::JobStatus::Completed;
+    job.progress = 1.0;
+    job.outputs = vec![res.clone()];
+    let _ = state.history.insert_job(&job);
+
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder()
+        .title("Wheel — Background removed")
+        .body(format!("Image saved to {:?}", res.file_name().unwrap_or_default()))
+        .show();
+
+    Ok(res.to_string_lossy().to_string())
+}
+
+/// Retrieve model installation status
+#[tauri::command]
+pub async fn get_rmbg_model_status() -> Result<wheel_engines::remove_bg::ModelStatus, String> {
+    Ok(wheel_engines::remove_bg::get_model_status())
+}
+
+/// Download RMBG-1.4 model with progress notifications
+#[tauri::command]
+pub async fn download_rmbg_model(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri::Emitter;
+    let app_clone = app.clone();
+
+    let res = tokio::task::spawn_blocking(move || {
+        wheel_engines::remove_bg::download_model(move |percent, downloaded, total| {
+            let _ = app_clone.emit(
+                "model-download-progress",
+                serde_json::json!({
+                    "percent": percent,
+                    "downloaded": downloaded,
+                    "total": total,
+                }),
+            );
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    Ok(res.to_string_lossy().to_string())
+}
+
+/// Delete local RMBG model
+#[tauri::command]
+pub async fn delete_rmbg_model() -> Result<(), String> {
+    wheel_engines::remove_bg::delete_model().map_err(|e| e.to_string())
+}

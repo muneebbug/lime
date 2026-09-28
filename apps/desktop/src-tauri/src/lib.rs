@@ -95,6 +95,12 @@ pub fn run() {
             commands::compress_image_file,
             commands::get_image_metadata,
             commands::strip_image_metadata,
+            commands::add_background_file,
+            commands::edit_image_file,
+            commands::remove_background_file,
+            commands::get_rmbg_model_status,
+            commands::download_rmbg_model,
+            commands::delete_rmbg_model,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

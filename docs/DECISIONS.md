@@ -140,9 +140,23 @@ Checked via `cargo info window-vibrancy`.
 
 ---
 
+## M4 — Add BG + Remove BG + Edit
+
+### D024: Add BG backdrop composition with gradient generation and diffused shadows
+**Decision:** Implement native pixel compositing in `wheel-engines::bg` featuring customizable linear/radial gradients, corner radius masking, and soft drop shadows with aspect ratio constraints (Auto, 1:1, 16:9, 4:5).
+**Rationale:** Enables immediate production-ready backdrop screenshot beautification locally without cloud uploads.
+
+### D025: Non-destructive image adjustments with real-time CSS preview
+**Decision:** Implement fast client-side CSS filter preview (`brightness`, `contrast`, `saturate`, `sepia`, `hue-rotate`) paired with backend pixel transforms (`wheel-engines::edit`) for rotation (90°, 180°, 270°), flips (H, V), and dimension resizing with aspect lock.
+**Rationale:** Provides instant 60fps feedback while adjusting sliders in the UI, then applies high-quality Lanczos3 resampling upon export.
+
+### D026: RMBG-1.4 model manager with streaming download and split comparison UI
+**Decision:** Implement an on-demand model download manager for RMBG-1.4 (~176 MB) using `ureq` with streaming progress events, cached at `%LOCALAPPDATA%\Wheel\models\rmbg-1.4.onnx`, combined with an interactive Before/After split view slider.
+**Rationale:** Keeps the initial app installer small while empowering users to download the high-accuracy neural model once on demand. A saliency-based fallback segmentation engine provides instantaneous previews even before model download completes.
+
+---
+
 ## Pending / Open Questions
 
-- **Model download (Remove BG):** RMBG-1.4 ONNX model is ~176MB. Will be downloaded on
-  first use with a progress UI and SHA-256 verification in M4.
 - **Code signing:** Windows code signing requires a certificate. The Tauri bundler supports
   it via env vars. We'll document the process in M7 without purchasing one for dev builds.

@@ -3,6 +3,9 @@ import { WheelOverlay } from "./windows/overlay/WheelOverlay";
 import { CropTool } from "./windows/tools/CropTool";
 import { CompressTool } from "./windows/tools/CompressTool";
 import { MetadataTool } from "./windows/tools/MetadataTool";
+import { AddBgTool } from "./windows/tools/AddBgTool";
+import { EditTool } from "./windows/tools/EditTool";
+import { RemoveBgTool } from "./windows/tools/RemoveBgTool";
 import { ToolWindowLayout } from "./windows/tools/ToolWindowLayout";
 
 /** Route to the correct window based on URL search params */
@@ -41,6 +44,12 @@ export function App() {
           return <CompressTool filePath={firstFile} />;
         case "tool.metadata":
           return <MetadataTool filePath={firstFile} />;
+        case "tool.add_bg":
+          return <AddBgTool filePath={firstFile} />;
+        case "tool.edit":
+          return <EditTool filePath={firstFile} />;
+        case "tool.remove_bg":
+          return <RemoveBgTool filePath={firstFile} />;
         default:
           return (
             <ToolWindowLayout
