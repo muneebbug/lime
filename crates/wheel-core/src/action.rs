@@ -38,7 +38,8 @@ impl AcceptedInput {
         if self.extensions.is_empty() {
             return true;
         }
-        self.extensions.iter().any(|e| e == ext)
+        let clean = ext.trim_start_matches('.').to_lowercase();
+        self.extensions.iter().any(|e| e.to_lowercase() == clean)
     }
 }
 
@@ -119,12 +120,12 @@ impl ActionRegistry {
         &self.actions
     }
 
-    pub fn for_category(&self, cat: &ActionCategory) -> impl Iterator<Item = &ActionManifest> {
+    pub fn for_category<'a>(&'a self, cat: &'a ActionCategory) -> impl Iterator<Item = &'a ActionManifest> + 'a {
         self.actions.iter().filter(move |a| &a.category == cat && a.enabled)
     }
 
     /// Filter actions that accept at least one of the given extensions
-    pub fn compatible(&self, extensions: &[&str]) -> impl Iterator<Item = &ActionManifest> {
+    pub fn compatible<'a>(&'a self, extensions: &'a [&'a str]) -> impl Iterator<Item = &'a ActionManifest> + 'a {
         self.actions.iter().filter(move |a| {
             a.enabled && a.accepts_files(extensions)
         })
@@ -213,4 +214,59 @@ pub fn default_actions() -> Vec<ActionManifest> {
     }
 
     actions
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_default_actions_populated() {
+        let actions = default_actions();
+        assert_eq!(actions.len(), 16);
+        let convert_count = actions.iter().filter(|a| a.category == ActionCategory::Convert).count();
+        let tools_count = actions.iter().filter(|a| a.category == ActionCategory::Tools).count();
+        assert_eq!(convert_count, 8);
+        assert_eq!(tools_count, 8);
+    }
+
+    #[test]
+    fn test_action_registry_lookup_and_filter() {
+        let mut registry = ActionRegistry::new();
+        for action in default_actions() {
+            registry.register(action);
+        }
+
+        assert!(registry.get("convert.png").is_some());
+        assert!(registry.get("tool.crop").is_some());
+        assert!(registry.get("nonexistent").is_none());
+
+        let converts: Vec<_> = registry.for_category(&ActionCategory::Convert).collect();
+        assert_eq!(converts.len(), 8);
+
+        let image_actions: Vec<_> = registry.compatible(&["png"]).collect();
+        assert!(!image_actions.is_empty());
+
+        let video_only_actions: Vec<_> = registry.compatible(&["mp4"]).collect();
+        // None of the image-only default tools accept mp4
+        assert_eq!(video_only_actions.len(), 0);
+    }
+
+    #[test]
+    fn test_accepted_input_matching() {
+        let input = AcceptedInput {
+            extensions: vec!["png".into(), "jpg".into()],
+            multi: false,
+        };
+        assert!(input.accepts_extension("png"));
+        assert!(input.accepts_extension("PNG"));
+        assert!(input.accepts_extension(".png"));
+        assert!(!input.accepts_extension("gif"));
+
+        let accept_all = AcceptedInput {
+            extensions: vec![],
+            multi: true,
+        };
+        assert!(accept_all.accepts_extension("any"));
+    }
 }

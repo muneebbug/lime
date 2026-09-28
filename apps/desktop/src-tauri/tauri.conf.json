@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "desktop",
+  "productName": "Wheel",
   "version": "0.1.0",
   "identifier": "com.aediant.wheel",
   "build": {
@@ -12,13 +12,22 @@
   "app": {
     "windows": [
       {
-        "title": "desktop",
+        "label": "main",
+        "title": "Wheel",
         "width": 800,
-        "height": 600
+        "height": 600,
+        "visible": false,
+        "skipTaskbar": true
       }
     ],
+    "trayIcon": {
+      "id": "wheel-tray",
+      "iconPath": "icons/icon.ico",
+      "iconAsTemplate": false,
+      "menuOnLeftClick": false
+    },
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:;"
     }
   },
   "bundle": {
@@ -30,6 +39,10 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "wix": {},
+      "nsis": {}
+    }
   }
 }

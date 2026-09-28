@@ -1,51 +1,29 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useEffect } from "react";
+import { WheelOverlay } from "./windows/overlay/WheelOverlay";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
-
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
-
-  return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
-  );
+/** Route to the correct window based on URL search params */
+function getWindowType(): string {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("window") ?? "overlay";
 }
 
-export default App;
+export function App() {
+  const windowType = getWindowType();
+
+  useEffect(() => {
+    // Prevent default context menu globally
+    document.addEventListener("contextmenu", (e) => e.preventDefault());
+  }, []);
+
+  switch (windowType) {
+    case "overlay":
+      return <WheelOverlay />;
+    case "tool":
+      // Tool windows loaded in M3+
+      return <div className="p-8 text-white">Tool window (M3+)</div>;
+    case "settings":
+      return <div className="p-8 text-white">Settings (M6+)</div>;
+    default:
+      return <WheelOverlay />;
+  }
+}

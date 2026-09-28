@@ -1,0 +1,19 @@
+[package]
+name = "wheel-engines"
+version = "0.1.0"
+edition = "2021"
+description = "Wheel: image, PDF, video, metadata conversion engines"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+wheel-core = { path = "../wheel-core" }
+
+# Image processing
+image = "0.25"
+
+# Added in M2+: pdfium-render, printpdf, docx-rs, etc.

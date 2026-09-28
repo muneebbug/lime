@@ -1,0 +1,27 @@
+# Rust
+/target
+Cargo.lock
+
+# Node
+node_modules
+.pnpm-debug.log*
+
+# Vite / build
+dist
+dist-ssr
+*.local
+
+# Tauri
+/apps/desktop/src-tauri/target
+
+# IDE / OS
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+Thumbs.db
