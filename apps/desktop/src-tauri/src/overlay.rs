@@ -25,9 +25,6 @@ pub fn create_overlay_window(app: &AppHandle) -> anyhow::Result<()> {
     .resizable(false)
     .inner_size(400.0, 400.0)
     .visible(false)
-    .focused(false)
-    // Disable Tauri's built-in drag-drop so our IDropTarget handles it
-    .disable_drag_drop_handler()
     .build()?;
 
     // On Windows, apply additional extended window styles for no-activate

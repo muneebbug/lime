@@ -1,5 +1,6 @@
 import { useEffect, useCallback, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { invoke } from "@tauri-apps/api/core";
 import { motion, AnimatePresence } from "motion/react";
 import { useWheelStore } from "../../store/wheelStore";
@@ -35,125 +36,181 @@ export function WheelOverlay() {
     const unlisteners: Array<() => void> = [];
 
     const handleFilesDropped = (files: string[], x: number, y: number) => {
-      const exts =
-        store.dragExtensions.length > 0
-          ? store.dragExtensions
-          : files.map((f) => f.split(".").pop()?.toLowerCase() ?? "").filter(Boolean);
-      const visible = filterActions(store.actions, store.currentPage, exts);
-      const idx = hitTestWedge(x, y, visible.length, 200, 200);
-      const wedgeId = idx !== null ? visible[idx]?.id : store.hoveredWedge;
-      if (!wedgeId) {
-        store.clearDragState();
+      const state = useWheelStore.getState();
+      const dropFiles = files.length > 0 ? files : state.dragFiles;
+      if (dropFiles.length === 0) {
+        console.warn("No files in drop event");
+        state.clearDragState();
         return;
       }
 
+      const exts =
+        state.dragExtensions.length > 0
+          ? state.dragExtensions
+          : dropFiles.map((f) => f.split(".").pop()?.toLowerCase() ?? "").filter(Boolean);
+      const visible = filterActions(state.actions, state.currentPage, exts);
+      const idx = hitTestWedge(x, y, visible.length, 200, 200);
+      const wedgeId = idx !== null ? visible[idx]?.id : state.hoveredWedge;
+
+      if (!wedgeId) {
+        console.warn("No wedge selected at drop position:", x, y);
+        state.clearDragState();
+        return;
+      }
+
+      console.log("Dispatching dropped action:", wedgeId, dropFiles);
       invoke("dispatch_action", {
         request: {
           action_id: wedgeId,
-          files,
+          files: dropFiles,
           params: {},
         },
       })
         .then((jobId) => {
-          console.log("Action dispatched:", jobId);
+          console.log("Action dispatched successfully:", jobId);
         })
         .catch((e) => console.error("Dispatch failed:", e));
 
-      store.clearDragState();
+      state.clearDragState();
     };
 
-    // Drag armed — position pre-computed in Rust; overlay already shown
+    // Drag armed from low-level hook — window positioned and shown
     listen<DragArmedEvent>("drag-armed", ({ payload }) => {
-      store.setDragState([], [], payload.x, payload.y);
+      useWheelStore.getState().setDragState([], [], payload.x, payload.y);
     }).then((u) => unlisteners.push(u));
 
     // Cursor move from low-level mouse hook
     listen<{ x: number; y: number }>("cursor-move", ({ payload }) => {
-      if (!store.isDragging) return;
-      const dx = payload.x - store.cursorX;
-      const dy = payload.y - store.cursorY;
+      const state = useWheelStore.getState();
+      if (!state.isDragging) return;
+      const dx = payload.x - state.cursorX;
+      const dy = payload.y - state.cursorY;
       const clientX = 200 + dx;
       const clientY = 200 + dy;
-      store.setCursor(clientX, clientY);
-      const visible = filterActions(store.actions, store.currentPage, store.dragExtensions);
+      state.setCursor(clientX, clientY);
+      const visible = filterActions(state.actions, state.currentPage, state.dragExtensions);
       const idx = hitTestWedge(clientX, clientY, visible.length, 200, 200);
-      store.setHoveredWedge(idx !== null ? visible[idx]?.id ?? null : null);
+      state.setHoveredWedge(idx !== null ? visible[idx]?.id ?? null : null);
     }).then((u) => unlisteners.push(u));
 
-    // OLE DragEnter — files confirmed, set context
+    // Native Tauri 2 Webview drag drop event listener
+    try {
+      const appWindow = getCurrentWebviewWindow();
+      appWindow
+        .onDragDropEvent((event) => {
+          const payload = event.payload;
+          const dpr = window.devicePixelRatio || 1;
+
+          if (payload.type === "enter") {
+            const files = payload.paths ?? [];
+            const extensions = files
+              .map((f) => f.split(".").pop()?.toLowerCase() ?? "")
+              .filter(Boolean);
+            const px = payload.position.x / dpr;
+            const py = payload.position.y / dpr;
+            useWheelStore.getState().setDragState(files, extensions, px, py);
+          } else if (payload.type === "over") {
+            const px = payload.position.x / dpr;
+            const py = payload.position.y / dpr;
+            const state = useWheelStore.getState();
+            state.setCursor(px, py);
+            const visible = filterActions(state.actions, state.currentPage, state.dragExtensions);
+            const idx = hitTestWedge(px, py, visible.length, 200, 200);
+            state.setHoveredWedge(idx !== null ? visible[idx]?.id ?? null : null);
+          } else if (payload.type === "drop") {
+            const files = payload.paths ?? [];
+            const px = payload.position.x / dpr;
+            const py = payload.position.y / dpr;
+            handleFilesDropped(files, px, py);
+          } else if (payload.type === "leave") {
+            useWheelStore.getState().setHoveredWedge(null);
+          }
+        })
+        .then((u) => unlisteners.push(u))
+        .catch(console.error);
+    } catch (e) {
+      console.error("Failed to attach onDragDropEvent:", e);
+    }
+
+    // HTML5 dragover & drop fallback for Chromium WebView2
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "copy";
+      }
+      const state = useWheelStore.getState();
+      const x = e.clientX;
+      const y = e.clientY;
+      state.setCursor(x, y);
+      const visible = filterActions(state.actions, state.currentPage, state.dragExtensions);
+      const idx = hitTestWedge(x, y, visible.length, 200, 200);
+      state.setHoveredWedge(idx !== null ? visible[idx]?.id ?? null : null);
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      const files: string[] = [];
+      if (e.dataTransfer?.files) {
+        for (let i = 0; i < e.dataTransfer.files.length; i++) {
+          const file = e.dataTransfer.files[i] as any;
+          if (file.path) {
+            files.push(file.path);
+          }
+        }
+      }
+      handleFilesDropped(files, e.clientX, e.clientY);
+    };
+
+    window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("drop", handleDrop);
+    unlisteners.push(() => window.removeEventListener("dragover", handleDragOver));
+    unlisteners.push(() => window.removeEventListener("drop", handleDrop));
+
+    // Custom OLE events from Rust IDropTarget fallback
     listen<DropEnterEvent>("drop-enter", ({ payload }) => {
-      store.setDragState(payload.files, payload.extensions, payload.x, payload.y);
+      useWheelStore.getState().setDragState(payload.files, payload.extensions, payload.x, payload.y);
     }).then((u) => unlisteners.push(u));
 
-    // OLE DragOver — update cursor for hit testing
     listen<{ x: number; y: number }>("drop-over", ({ payload }) => {
-      store.setCursor(payload.x, payload.y);
-      const visible = filterActions(store.actions, store.currentPage, store.dragExtensions);
+      const state = useWheelStore.getState();
+      state.setCursor(payload.x, payload.y);
+      const visible = filterActions(state.actions, state.currentPage, state.dragExtensions);
       const idx = hitTestWedge(payload.x, payload.y, visible.length, 200, 200);
-      store.setHoveredWedge(idx !== null ? visible[idx]?.id ?? null : null);
+      state.setHoveredWedge(idx !== null ? visible[idx]?.id ?? null : null);
     }).then((u) => unlisteners.push(u));
 
-    // OLE DragLeave — clear
     listen("drop-leave", () => {
-      store.setHoveredWedge(null);
+      useWheelStore.getState().setHoveredWedge(null);
     }).then((u) => unlisteners.push(u));
 
-    // OLE Drop — dispatch the action
     listen<DropFilesEvent>("drop-files", ({ payload }) => {
       handleFilesDropped(payload.files, payload.x, payload.y);
     }).then((u) => unlisteners.push(u));
 
-    // Built-in Tauri file drag drop fallback listeners
-    listen<{ paths: string[]; position: { x: number; y: number } }>(
-      "tauri://drag-drop",
-      ({ payload }) => {
-        handleFilesDropped(
-          payload.paths ?? [],
-          payload.position?.x ?? 200,
-          payload.position?.y ?? 200
-        );
-      }
-    ).then((u) => unlisteners.push(u));
-
-    listen<{ paths: string[]; position: { x: number; y: number } }>(
-      "tauri://drag-enter",
-      ({ payload }) => {
-        const files = payload.paths ?? [];
-        const extensions = files
-          .map((f) => f.split(".").pop()?.toLowerCase() ?? "")
-          .filter(Boolean);
-        store.setDragState(
-          files,
-          extensions,
-          payload.position?.x ?? 200,
-          payload.position?.y ?? 200
-        );
-      }
-    ).then((u) => unlisteners.push(u));
-
     // Drag cancelled (button released outside or Escape)
     listen("drag-cancelled", () => {
-      store.clearDragState();
+      useWheelStore.getState().clearDragState();
     }).then((u) => unlisteners.push(u));
 
     // Keyboard: Tab/Space to toggle page while dragging
     const handleKey = (e: KeyboardEvent) => {
-      if (store.isDragging) {
+      const state = useWheelStore.getState();
+      if (state.isDragging) {
         if (e.key === "Tab" || e.key === " ") {
           e.preventDefault();
-          store.togglePage();
+          state.togglePage();
         } else if (e.key === "Escape") {
-          store.clearDragState();
+          state.clearDragState();
         }
       }
     };
     window.addEventListener("keydown", handleKey);
+    unlisteners.push(() => window.removeEventListener("keydown", handleKey));
 
     return () => {
       unlisteners.forEach((u) => u());
-      window.removeEventListener("keydown", handleKey);
     };
-  }, [store]);
+  }, []);
 
   const handleWedgeDrop = useCallback(
     async (actionId: string, files: string[]) => {
@@ -168,9 +225,9 @@ export function WheelOverlay() {
       } catch (e) {
         console.error("Dispatch error:", e);
       }
-      store.clearDragState();
+      useWheelStore.getState().clearDragState();
     },
-    [store]
+    []
   );
 
   return (
