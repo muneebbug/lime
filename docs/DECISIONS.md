@@ -120,6 +120,26 @@ Checked via `cargo info window-vibrancy`.
 
 ---
 
+## M3 — Tool Windows Framework + Crop + Compress + Metadata
+
+### D020: Shared frameless Win11 window chrome (`ToolWindowLayout`)
+**Decision:** Standardize all tool windows on `ToolWindowLayout` with rounded corners (Win11 style), warm radial gradient tint, circular close (X) button on left, centered draggable header with `data-tauri-drag-region`, and dual-action footer (Reset on left, primary action on right).
+**Rationale:** Provides visual consistency across all tool windows matching the macOS/Win11 hybrid aesthetic specified in Section 7.2. Escape and Enter hotkeys operate uniformly across tools.
+
+### D021: SVG-based interactive crop overlay with pixel synchronization
+**Decision:** Implement the crop window using an interactive SVG crop mask and 8 draggable corner/edge handles that maintain two-way synchronization with explicit pixel inputs (W, H, X, Y) and aspect ratio presets (Free, 1:1, 16:9, 9:16, 4:3, 3:4).
+**Rationale:** SVG provides high performance without adding heavy canvas dependencies, and allows standard DOM event handling and crisp scaling across arbitrary display DPIs.
+
+### D022: Binary-search quality optimization for target-size compression
+**Decision:** Implement image compression in `wheel-engines` supporting both preset modes (Balanced: 78% quality; Strong: 60% quality with downscaling) and a binary search over quality/scale when a target file size is specified.
+**Rationale:** Users frequently need to hit strict upload size constraints (e.g. email or Discord attachments under 2MB). Binary search converges in ~5-6 iterations without arbitrary guesswork.
+
+### D023: `kamadak-exif` for local EXIF/GPS parsing and clean pixel stripping
+**Decision:** Use `kamadak-exif` (version 0.6) for structured metadata inspection and provide both "Strip GPS Only" and "Strip All Metadata" options. Full metadata stripping re-encodes pure pixel data, guaranteeing zero leaked metadata headers.
+**Rationale:** Privacy-sensitive users require complete assurance that location and personal device details are purged before sharing files. Pure Rust implementation runs locally without network calls.
+
+---
+
 ## Pending / Open Questions
 
 - **Model download (Remove BG):** RMBG-1.4 ONNX model is ~176MB. Will be downloaded on

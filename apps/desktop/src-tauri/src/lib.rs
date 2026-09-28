@@ -91,6 +91,10 @@ pub fn run() {
             commands::delete_history_item,
             commands::open_in_folder,
             commands::open_file,
+            commands::crop_image_file,
+            commands::compress_image_file,
+            commands::get_image_metadata,
+            commands::strip_image_metadata,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

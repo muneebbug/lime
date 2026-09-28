@@ -11,8 +11,10 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
+chrono = { workspace = true }
 wheel-core = { path = "../wheel-core" }
 
 # Image processing
 image = "0.25"
 lopdf = { version = "0.45", default-features = false, features = ["embed_image"] }
+kamadak-exif = "0.6"

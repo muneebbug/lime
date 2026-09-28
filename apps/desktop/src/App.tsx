@@ -1,14 +1,28 @@
 import { useEffect } from "react";
 import { WheelOverlay } from "./windows/overlay/WheelOverlay";
+import { CropTool } from "./windows/tools/CropTool";
+import { CompressTool } from "./windows/tools/CompressTool";
+import { MetadataTool } from "./windows/tools/MetadataTool";
+import { ToolWindowLayout } from "./windows/tools/ToolWindowLayout";
 
 /** Route to the correct window based on URL search params */
-function getWindowType(): string {
+function getWindowParams() {
   const params = new URLSearchParams(window.location.search);
-  return params.get("window") ?? "overlay";
+  const windowType = params.get("window") ?? "overlay";
+  const toolId = params.get("tool") ?? "";
+  const rawFiles = params.get("files") ?? "[]";
+  let files: string[] = [];
+  try {
+    files = JSON.parse(rawFiles);
+  } catch {
+    files = [];
+  }
+  return { windowType, toolId, files };
 }
 
 export function App() {
-  const windowType = getWindowType();
+  const { windowType, toolId, files } = getWindowParams();
+  const firstFile = files[0] ?? "";
 
   useEffect(() => {
     // Prevent default context menu globally
@@ -18,11 +32,34 @@ export function App() {
   switch (windowType) {
     case "overlay":
       return <WheelOverlay />;
+
     case "tool":
-      // Tool windows loaded in M3+
-      return <div className="p-8 text-white">Tool window (M3+)</div>;
+      switch (toolId) {
+        case "tool.crop":
+          return <CropTool filePath={firstFile} />;
+        case "tool.compress":
+          return <CompressTool filePath={firstFile} />;
+        case "tool.metadata":
+          return <MetadataTool filePath={firstFile} />;
+        default:
+          return (
+            <ToolWindowLayout
+              title={toolId || "Tool Window"}
+              primaryActionLabel="Done"
+              onReset={() => {}}
+              onPrimaryAction={() => {}}
+            >
+              <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 gap-2">
+                <span className="text-sm">Tool window for: <code className="text-orange-400">{toolId}</code></span>
+                <span className="text-xs text-zinc-600 truncate max-w-sm">{firstFile}</span>
+              </div>
+            </ToolWindowLayout>
+          );
+      }
+
     case "settings":
       return <div className="p-8 text-white">Settings (M6+)</div>;
+
     default:
       return <WheelOverlay />;
   }

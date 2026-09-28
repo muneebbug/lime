@@ -435,3 +435,209 @@ pub async fn open_file(path: String) -> Result<(), String> {
 
     Ok(())
 }
+
+/// Crop an image using specific pixel bounds
+#[tauri::command]
+pub async fn crop_image_file(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    input_path: String,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+    output_path: Option<String>,
+) -> Result<String, String> {
+    let input = PathBuf::from(&input_path);
+    if !input.exists() {
+        return Err(format!("Input file does not exist: {}", input_path));
+    }
+
+    let output_settings = {
+        let out = state.settings.lock().await.output.clone();
+        out
+    };
+
+    let target_out = match output_path {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let ext = input.extension().and_then(|e| e.to_str()).unwrap_or("png");
+            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
+            wheel_core::output::resolve_output_path(
+                &input,
+                ext,
+                if output_settings.suffix.is_empty() { ".cropped" } else { &output_settings.suffix },
+                &output_settings.policy,
+                fixed_folder,
+                output_settings.overwrite_source,
+            )
+        }
+    };
+
+    let params = wheel_engines::image_tool::CropParams { x, y, width, height };
+    let input_clone = input.clone();
+    let out_clone = target_out.clone();
+
+    let res = tokio::task::spawn_blocking(move || {
+        wheel_engines::image_tool::crop_image(&input_clone, &out_clone, &params)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    // Record job in history
+    let mut job = wheel_core::Job::new("tool.crop", vec![input], serde_json::json!({ "x": x, "y": y, "width": width, "height": height }));
+    job.status = wheel_core::job::JobStatus::Completed;
+    job.progress = 1.0;
+    job.outputs = vec![res.clone()];
+    let _ = state.history.insert_job(&job);
+
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder()
+        .title("Wheel — Crop complete")
+        .body(format!("Cropped image saved to {:?}", res.file_name().unwrap_or_default()))
+        .show();
+
+    Ok(res.to_string_lossy().to_string())
+}
+
+/// Compress an image using balanced or strong presets or target size
+#[tauri::command]
+pub async fn compress_image_file(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    input_path: String,
+    preset: String,
+    target_size_kb: Option<u64>,
+    output_path: Option<String>,
+) -> Result<String, String> {
+    let input = PathBuf::from(&input_path);
+    if !input.exists() {
+        return Err(format!("Input file does not exist: {}", input_path));
+    }
+
+    let output_settings = {
+        let out = state.settings.lock().await.output.clone();
+        out
+    };
+
+    let target_out = match output_path {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let ext = input.extension().and_then(|e| e.to_str()).unwrap_or("jpg");
+            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
+            wheel_core::output::resolve_output_path(
+                &input,
+                ext,
+                if output_settings.suffix.is_empty() { ".min" } else { &output_settings.suffix },
+                &output_settings.policy,
+                fixed_folder,
+                output_settings.overwrite_source,
+            )
+        }
+    };
+
+    let comp_preset = match preset.to_lowercase().as_str() {
+        "strong" => wheel_engines::image_tool::CompressionPreset::Strong,
+        _ => wheel_engines::image_tool::CompressionPreset::Balanced,
+    };
+
+    let params = wheel_engines::image_tool::CompressParams {
+        preset: comp_preset,
+        target_size_kb,
+    };
+
+    let input_clone = input.clone();
+    let out_clone = target_out.clone();
+
+    let res = tokio::task::spawn_blocking(move || {
+        wheel_engines::image_tool::compress_image(&input_clone, &out_clone, &params)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    // Record job in history
+    let mut job = wheel_core::Job::new("tool.compress", vec![input], serde_json::json!({ "preset": preset, "target_size_kb": target_size_kb }));
+    job.status = wheel_core::job::JobStatus::Completed;
+    job.progress = 1.0;
+    job.outputs = vec![res.clone()];
+    let _ = state.history.insert_job(&job);
+
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder()
+        .title("Wheel — Compression complete")
+        .body(format!("Compressed file saved to {:?}", res.file_name().unwrap_or_default()))
+        .show();
+
+    Ok(res.to_string_lossy().to_string())
+}
+
+/// Retrieve structured metadata for an image/document
+#[tauri::command]
+pub async fn get_image_metadata(input_path: String) -> Result<wheel_engines::metadata::FileMetadataReport, String> {
+    let p = PathBuf::from(&input_path);
+    wheel_engines::metadata::read_metadata(&p).map_err(|e| e.to_string())
+}
+
+/// Strip metadata or GPS tags from an image
+#[tauri::command]
+pub async fn strip_image_metadata(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    input_path: String,
+    strip_gps_only: bool,
+    output_path: Option<String>,
+) -> Result<String, String> {
+    let input = PathBuf::from(&input_path);
+    if !input.exists() {
+        return Err(format!("Input file does not exist: {}", input_path));
+    }
+
+    let output_settings = {
+        let out = state.settings.lock().await.output.clone();
+        out
+    };
+
+    let target_out = match output_path {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let ext = input.extension().and_then(|e| e.to_str()).unwrap_or("jpg");
+            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
+            let suffix = if strip_gps_only { ".nogps" } else { ".clean" };
+            wheel_core::output::resolve_output_path(
+                &input,
+                ext,
+                suffix,
+                &output_settings.policy,
+                fixed_folder,
+                output_settings.overwrite_source,
+            )
+        }
+    };
+
+    let input_clone = input.clone();
+    let out_clone = target_out.clone();
+
+    let res = tokio::task::spawn_blocking(move || {
+        wheel_engines::metadata::strip_metadata(&input_clone, &out_clone, strip_gps_only)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    // Record job in history
+    let mut job = wheel_core::Job::new("tool.metadata", vec![input], serde_json::json!({ "strip_gps_only": strip_gps_only }));
+    job.status = wheel_core::job::JobStatus::Completed;
+    job.progress = 1.0;
+    job.outputs = vec![res.clone()];
+    let _ = state.history.insert_job(&job);
+
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder()
+        .title("Wheel — Metadata stripped")
+        .body(format!("Cleaned file saved to {:?}", res.file_name().unwrap_or_default()))
+        .show();
+
+    Ok(res.to_string_lossy().to_string())
+}
