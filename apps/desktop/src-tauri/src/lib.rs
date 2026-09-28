@@ -101,6 +101,10 @@ pub fn run() {
             commands::get_rmbg_model_status,
             commands::download_rmbg_model,
             commands::delete_rmbg_model,
+            commands::redact_image_file,
+            commands::annotate_image_file,
+            commands::convert_media_file,
+            commands::get_ffmpeg_status,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

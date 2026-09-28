@@ -293,6 +293,27 @@ async fn run_instant_action(
                         break;
                     }
                 }
+            } else if matches!(target_ext.as_str(), "mp4" | "webm" | "mov" | "mkv" | "gif" | "mp3" | "wav" | "flac" | "m4a") {
+                let input_clone = input.clone();
+                let output_clone = output_path.clone();
+                let fmt_clone = target_ext.clone();
+
+                let result = tokio::task::spawn_blocking(move || {
+                    wheel_engines::media::convert_media(&input_clone, &output_clone, &fmt_clone)
+                })
+                .await;
+
+                match result {
+                    Ok(Ok(path)) => outputs.push(path),
+                    Ok(Err(e)) => {
+                        error = Some(e.to_string());
+                        break;
+                    }
+                    Err(e) => {
+                        error = Some(e.to_string());
+                        break;
+                    }
+                }
             } else {
                 error = Some(format!("Unsupported format: {}", target_ext));
                 break;
@@ -901,3 +922,198 @@ pub async fn download_rmbg_model(app: tauri::AppHandle) -> Result<String, String
 pub async fn delete_rmbg_model() -> Result<(), String> {
     wheel_engines::remove_bg::delete_model().map_err(|e| e.to_string())
 }
+
+/// Irreversibly redact regions of an image file
+#[tauri::command]
+pub async fn redact_image_file(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    input_path: String,
+    regions: Vec<wheel_engines::redact::RedactRegion>,
+    output_path: Option<String>,
+) -> Result<String, String> {
+    let input = PathBuf::from(&input_path);
+    if !input.exists() {
+        return Err(format!("Input file does not exist: {}", input_path));
+    }
+
+    let output_settings = {
+        let out = state.settings.lock().await.output.clone();
+        out
+    };
+
+    let target_out = match output_path {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let ext = input.extension().and_then(|e| e.to_str()).unwrap_or("png");
+            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
+            wheel_core::output::resolve_output_path(
+                &input,
+                ext,
+                if output_settings.suffix.is_empty() { ".redacted" } else { &output_settings.suffix },
+                &output_settings.policy,
+                fixed_folder,
+                output_settings.overwrite_source,
+            )
+        }
+    };
+
+    let input_clone = input.clone();
+    let out_clone = target_out.clone();
+    let regions_count = regions.len();
+
+    let res = tokio::task::spawn_blocking(move || {
+        wheel_engines::redact::redact_image(&input_clone, &out_clone, &regions)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    // Record job in history
+    let mut job = wheel_core::Job::new("tool.redact", vec![input], serde_json::json!({ "regions_count": regions_count }));
+    job.status = wheel_core::job::JobStatus::Completed;
+    job.progress = 1.0;
+    job.outputs = vec![res.clone()];
+    let _ = state.history.insert_job(&job);
+
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder()
+        .title("Wheel — Redaction complete")
+        .body(format!("Redacted image saved to {:?}", res.file_name().unwrap_or_default()))
+        .show();
+
+    Ok(res.to_string_lossy().to_string())
+}
+
+/// Apply annotation overlay onto an image file
+#[tauri::command]
+pub async fn annotate_image_file(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    input_path: String,
+    overlay_base64: String,
+    output_path: Option<String>,
+) -> Result<String, String> {
+    let input = PathBuf::from(&input_path);
+    if !input.exists() {
+        return Err(format!("Input file does not exist: {}", input_path));
+    }
+
+    let output_settings = {
+        let out = state.settings.lock().await.output.clone();
+        out
+    };
+
+    let target_out = match output_path {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let ext = input.extension().and_then(|e| e.to_str()).unwrap_or("png");
+            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
+            wheel_core::output::resolve_output_path(
+                &input,
+                ext,
+                if output_settings.suffix.is_empty() { ".annotated" } else { &output_settings.suffix },
+                &output_settings.policy,
+                fixed_folder,
+                output_settings.overwrite_source,
+            )
+        }
+    };
+
+    let input_clone = input.clone();
+    let out_clone = target_out.clone();
+
+    let res = tokio::task::spawn_blocking(move || {
+        wheel_engines::annotate::apply_annotation_overlay_base64(&input_clone, &out_clone, &overlay_base64)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    // Record job in history
+    let mut job = wheel_core::Job::new("tool.annotate", vec![input], serde_json::json!({}));
+    job.status = wheel_core::job::JobStatus::Completed;
+    job.progress = 1.0;
+    job.outputs = vec![res.clone()];
+    let _ = state.history.insert_job(&job);
+
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder()
+        .title("Wheel — Annotation complete")
+        .body(format!("Annotated image saved to {:?}", res.file_name().unwrap_or_default()))
+        .show();
+
+    Ok(res.to_string_lossy().to_string())
+}
+
+/// Convert media file (video/audio) using safe FFmpeg argument arrays
+#[tauri::command]
+pub async fn convert_media_file(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    input_path: String,
+    target_format: String,
+    output_path: Option<String>,
+) -> Result<String, String> {
+    let input = PathBuf::from(&input_path);
+    if !input.exists() {
+        return Err(format!("Input file does not exist: {}", input_path));
+    }
+
+    let output_settings = {
+        let out = state.settings.lock().await.output.clone();
+        out
+    };
+
+    let target_out = match output_path {
+        Some(p) => PathBuf::from(p),
+        None => {
+            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
+            wheel_core::output::resolve_output_path(
+                &input,
+                &target_format,
+                &output_settings.suffix,
+                &output_settings.policy,
+                fixed_folder,
+                output_settings.overwrite_source,
+            )
+        }
+    };
+
+    let input_clone = input.clone();
+    let out_clone = target_out.clone();
+    let fmt_clone = target_format.clone();
+
+    let res = tokio::task::spawn_blocking(move || {
+        wheel_engines::media::convert_media(&input_clone, &out_clone, &fmt_clone)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    // Record job in history
+    let mut job = wheel_core::Job::new(
+        format!("media.{}", target_format),
+        vec![input],
+        serde_json::json!({ "format": target_format }),
+    );
+    job.status = wheel_core::job::JobStatus::Completed;
+    job.progress = 1.0;
+    job.outputs = vec![res.clone()];
+    let _ = state.history.insert_job(&job);
+
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder()
+        .title("Wheel — Media conversion complete")
+        .body(format!("Converted media saved to {:?}", res.file_name().unwrap_or_default()))
+        .show();
+
+    Ok(res.to_string_lossy().to_string())
+}
+
+/// Retrieve FFmpeg detection status
+#[tauri::command]
+pub async fn get_ffmpeg_status() -> Result<wheel_engines::media::FfmpegStatus, String> {
+    Ok(wheel_engines::media::get_ffmpeg_status())
+}
+

@@ -5,4 +5,6 @@ pub mod metadata;
 pub mod bg;
 pub mod edit;
 pub mod remove_bg;
-// M5+: pub mod video;
+pub mod annotate;
+pub mod redact;
+pub mod media;

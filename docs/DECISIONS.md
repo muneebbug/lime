@@ -152,7 +152,17 @@ Checked via `cargo info window-vibrancy`.
 
 ### D026: RMBG-1.4 model manager with streaming download and split comparison UI
 **Decision:** Implement an on-demand model download manager for RMBG-1.4 (~176 MB) using `ureq` with streaming progress events, cached at `%LOCALAPPDATA%\Wheel\models\rmbg-1.4.onnx`, combined with an interactive Before/After split view slider.
-**Rationale:** Keeps the initial app installer small while empowering users to download the high-accuracy neural model once on demand. A saliency-based fallback segmentation engine provides instantaneous previews even before model download completes.
+### D027: Irreversible pixel burn redaction architecture
+**Decision:** Overwrite pixel memory permanently in Rust (`wheel-engines::redact`) using pure black RGB(0,0,0), irreversible 16x16 block averaging (pixelation), or destructive heavy Gaussian blur. Never output reversible vector masks or CSS-obscured elements. Expose an explicit Amber/Red warning badge informing users that redactions are non-reversible and EXIF/location metadata is stripped upon export.
+**Rationale:** Standard PDF/image annotation overlays frequently fail security audits because underlying pixels remain intact or recoverable. Direct raster memory destruction eliminates any possibility of recovery.
+
+### D028: Full-resolution annotation compositing via lossless overlay streaming
+**Decision:** Implement drawing tools (pen, semi-transparent highlighter, arrows, boxes, text, and numbered auto-incrementing step markers) on an HTML5 canvas synchronized to natural image pixels. The rasterized overlay is sent to `wheel-engines::annotate` as lossless PNG bytes and alpha-blended directly onto the source image buffer.
+**Rationale:** Drawing on small screen previews often degrades quality when scaled back to multi-megapixel photos. Rendering coordinates at native natural dimensions ensures DPI-crisp vector rendering and perfect compositing fidelity regardless of camera sensor resolution.
+
+### D029: FFmpeg execution security and multi-path discovery
+**Decision:** Enforce absolute command-line safety for media conversions by passing strict argument arrays (`std::process::Command::arg(...)`) with zero shell string concatenation. Discover FFmpeg across three prioritized locations: `%LOCALAPPDATA%\Wheel\bin\ffmpeg.exe`, application directory sidecar, and system PATH. Implement high-fidelity GIF creation using a two-pass palette pipeline (`fps=15,scale=540:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse`).
+**Rationale:** Defends against path injection or malicious file name execution while delivering clean GIF animation and high-fidelity video/audio transcoding.
 
 ---
 
