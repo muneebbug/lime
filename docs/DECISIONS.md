@@ -164,6 +164,22 @@ Checked via `cargo info window-vibrancy`.
 **Decision:** Enforce absolute command-line safety for media conversions by passing strict argument arrays (`std::process::Command::arg(...)`) with zero shell string concatenation. Discover FFmpeg across three prioritized locations: `%LOCALAPPDATA%\Wheel\bin\ffmpeg.exe`, application directory sidecar, and system PATH. Implement high-fidelity GIF creation using a two-pass palette pipeline (`fps=15,scale=540:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse`).
 **Rationale:** Defends against path injection or malicious file name execution while delivering clean GIF animation and high-fidelity video/audio transcoding.
 
+### D030: Raycast-style Settings architecture and live schema persistence
+**Decision:** Implement a modular, tabbed desktop settings window (`SettingsWindow.tsx`) with instant schema synchronization (`wheel_core::WheelSettings`), live SQLite history inspection, RMBG-1.4 model management, and FFmpeg capability detection.
+**Rationale:** Ensures users have transparent control over background triggers, output naming policies, and local disk usage without opening raw JSON configuration files.
+
+### D031: Elevation-free Windows 11 Explorer Context Menu integration
+**Decision:** Register Wheel in the Windows Explorer context menu using `HKCU\Software\Classes\*\shell\Wheel` and `HKCU\Software\Classes\Directory\shell\Wheel` via `wheel_win::shell`.
+**Rationale:** Standard system-wide context menu registration requires administrator UAC elevation and complex shell COM extensions. Registering under `HKCU` provides an instantaneous, one-click right-click menu entry on both Windows 10 and 11 without requesting administrative permissions.
+
+### D032: Multi-step Action Preset chaining engine
+**Decision:** Provide a sequential action chain runner in `commands::run_preset` that executes declarative recipes (e.g. Clean Web Asset: strip metadata -> convert to WebP; Cutout PNG: remove background -> convert to PNG). Intermediate outputs are isolated in temporary scratch paths and safely pruned after the terminal output is produced.
+**Rationale:** Enables advanced automation workflows from a single drag-and-drop gesture or palette search command while guaranteeing that intermediate artifacts never clutter the user's workspace.
+
+### D033: Spotlight/Raycast Command Palette floating surface
+**Decision:** Implement a dedicated floating command palette (`640x480`, borderless, always-on-top) supporting fuzzy searching across all tools, conversions, presets, and SQLite history items, with keyboard navigation (`↑`/`↓`, `Enter`, `Esc`).
+**Rationale:** Serves power users who prefer keyboard-centric workflows over mouse gestures and provides quick access to recent conversions and file operations.
+
 ---
 
 ## Pending / Open Questions

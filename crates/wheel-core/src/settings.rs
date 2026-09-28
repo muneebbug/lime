@@ -16,6 +16,8 @@ pub struct WheelSettings {
     pub wheel_ui: WheelUiSettings,
     #[serde(default)]
     pub output: OutputSettings,
+    #[serde(default = "default_presets")]
+    pub presets: Vec<ActionPreset>,
 }
 
 fn default_version() -> u32 {
@@ -30,6 +32,7 @@ impl Default for WheelSettings {
             trigger: Default::default(),
             wheel_ui: Default::default(),
             output: Default::default(),
+            presets: default_presets(),
         }
     }
 }
@@ -40,6 +43,9 @@ impl WheelSettings {
         // Example migration: v0 -> v1
         // if self.version == 0 { ... self.version = 1; }
         self.version = SETTINGS_VERSION;
+        if self.presets.is_empty() {
+            self.presets = default_presets();
+        }
         self
     }
 }
@@ -50,6 +56,7 @@ pub struct GeneralSettings {
     pub language: String,
     pub auto_update: bool,
     pub minimize_to_tray: bool,
+    pub explorer_context_menu: bool,
 }
 
 impl Default for GeneralSettings {
@@ -59,6 +66,7 @@ impl Default for GeneralSettings {
             language: "en".into(),
             auto_update: true,
             minimize_to_tray: true,
+            explorer_context_menu: true,
         }
     }
 }
@@ -182,6 +190,61 @@ impl Default for OutputSettings {
             preserve_metadata: true,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PresetStep {
+    pub action_id: String,
+    #[serde(default)]
+    pub params: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ActionPreset {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub icon: String,
+    pub steps: Vec<PresetStep>,
+    pub enabled: bool,
+}
+
+pub fn default_presets() -> Vec<ActionPreset> {
+    vec![
+        ActionPreset {
+            id: "preset.clean_web".into(),
+            name: "Clean Web Asset".into(),
+            description: "Strip EXIF metadata and convert to WebP".into(),
+            icon: "sparkles".into(),
+            steps: vec![
+                PresetStep { action_id: "tool.metadata".into(), params: serde_json::json!({ "strip": "all" }) },
+                PresetStep { action_id: "convert.webp".into(), params: serde_json::json!({}) },
+            ],
+            enabled: true,
+        },
+        ActionPreset {
+            id: "preset.share_screenshot".into(),
+            name: "Share Screenshot".into(),
+            description: "Add stylish background padding and export as PNG".into(),
+            icon: "image".into(),
+            steps: vec![
+                PresetStep { action_id: "tool.addbg".into(), params: serde_json::json!({ "padding": 40 }) },
+                PresetStep { action_id: "convert.png".into(), params: serde_json::json!({}) },
+            ],
+            enabled: true,
+        },
+        ActionPreset {
+            id: "preset.transparent_png".into(),
+            name: "Cutout PNG".into(),
+            description: "Remove background and export as transparent PNG".into(),
+            icon: "scissors".into(),
+            steps: vec![
+                PresetStep { action_id: "tool.removebg".into(), params: serde_json::json!({ "feather": 2 }) },
+                PresetStep { action_id: "convert.png".into(), params: serde_json::json!({}) },
+            ],
+            enabled: true,
+        },
+    ]
 }
 
 #[cfg(test)]

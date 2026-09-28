@@ -9,6 +9,8 @@ import { RemoveBgTool } from "./windows/tools/RemoveBgTool";
 import { RedactTool } from "./windows/tools/RedactTool";
 import { AnnotateTool } from "./windows/tools/AnnotateTool";
 import { ToolWindowLayout } from "./windows/tools/ToolWindowLayout";
+import { SettingsWindow } from "./windows/settings/SettingsWindow";
+import { CommandPalette } from "./windows/palette/CommandPalette";
 
 /** Route to the correct window based on URL search params */
 function getWindowParams() {
@@ -75,7 +77,10 @@ export function App() {
       }
 
     case "settings":
-      return <div className="p-8 text-white">Settings (M6+)</div>;
+      return <SettingsWindow />;
+
+    case "palette":
+      return <CommandPalette />;
 
     default:
       return <WheelOverlay />;

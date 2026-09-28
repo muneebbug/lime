@@ -1117,3 +1117,157 @@ pub async fn get_ffmpeg_status() -> Result<wheel_engines::media::FfmpegStatus, S
     Ok(wheel_engines::media::get_ffmpeg_status())
 }
 
+/// Open the Settings window
+#[tauri::command]
+pub async fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
+    crate::tray::open_settings_window(&app);
+    Ok(())
+}
+
+/// Open the Command Palette window
+#[tauri::command]
+pub async fn open_palette_window(app: tauri::AppHandle) -> Result<(), String> {
+    crate::tray::open_palette_window(&app);
+    Ok(())
+}
+
+/// Check if Windows Explorer context menu is active
+#[tauri::command]
+pub async fn is_explorer_context_menu_enabled() -> Result<bool, String> {
+    Ok(wheel_win::shell::is_context_menu_registered())
+}
+
+/// Enable or disable Windows Explorer context menu
+#[tauri::command]
+pub async fn set_explorer_context_menu(enabled: bool) -> Result<(), String> {
+    if enabled {
+        wheel_win::shell::register_context_menu(None).map_err(|e| e.to_string())
+    } else {
+        wheel_win::shell::unregister_context_menu().map_err(|e| e.to_string())
+    }
+}
+
+/// Execute a multi-action preset chain
+#[tauri::command]
+pub async fn run_preset(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+    preset_id: String,
+    input_path: String,
+) -> Result<Vec<String>, String> {
+    let input = PathBuf::from(&input_path);
+    if !input.exists() {
+        return Err(format!("Input file does not exist: {}", input_path));
+    }
+
+    let preset = {
+        let s = state.settings.lock().await;
+        s.presets.iter().find(|p| p.id == preset_id).cloned()
+    }
+    .ok_or_else(|| format!("Preset not found: {}", preset_id))?;
+
+    info!("Executing preset '{}' on {:?}", preset.name, input);
+
+    let mut current_input = input.clone();
+    let mut intermediate_files: Vec<PathBuf> = Vec::new();
+
+    let output_settings = {
+        let out = state.settings.lock().await.output.clone();
+        out
+    };
+
+    let steps = preset.steps.clone();
+    let total_steps = steps.len();
+
+    for (step_idx, step) in steps.into_iter().enumerate() {
+        let is_last = step_idx == total_steps - 1;
+        let ext = if step.action_id.starts_with("convert.") {
+            step.action_id.split('.').nth(1).unwrap_or("png").to_string()
+        } else {
+            "png".to_string()
+        };
+
+        let target_out = if is_last {
+            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
+            wheel_core::output::resolve_output_path(
+                &input,
+                &ext,
+                &output_settings.suffix,
+                &output_settings.policy,
+                fixed_folder,
+                output_settings.overwrite_source,
+            )
+        } else {
+            current_input.with_extension(format!("tmp_{}.{}", step_idx, ext))
+        };
+
+        let in_clone = current_input.clone();
+        let out_clone = target_out.clone();
+        let action_id = step.action_id.clone();
+        let params = step.params.clone();
+        let ext_clone = ext.clone();
+
+        let step_res = tokio::task::spawn_blocking(move || -> anyhow::Result<PathBuf> {
+            if action_id == "tool.removebg" || action_id == "tool.remove_bg" {
+                let p = wheel_engines::remove_bg::RemoveBgParams {
+                    feather_radius: params.get("feather").and_then(|v| v.as_u64()).unwrap_or(2) as u32,
+                    bg_color: None,
+                    format: "png".into(),
+                };
+                wheel_engines::remove_bg::remove_background(&in_clone, &out_clone, &p)
+            } else if action_id == "tool.metadata" {
+                wheel_engines::metadata::strip_metadata(&in_clone, &out_clone, true)
+            } else if action_id == "tool.addbg" || action_id == "tool.add_bg" {
+                let p = wheel_engines::bg::AddBgParams {
+                    padding: params.get("padding").and_then(|v| v.as_u64()).unwrap_or(40) as u32,
+                    corner_radius: 16,
+                    shadow_blur: 30,
+                    aspect_ratio: "auto".into(),
+                    color_start: [249, 115, 22, 255],
+                    color_end: [234, 88, 12, 255],
+                    format: "png".into(),
+                };
+                wheel_engines::bg::add_background(&in_clone, &out_clone, &p)
+            } else if let Some(fmt) = wheel_engines::image_convert::OutputFormat::from_extension(&ext_clone) {
+                let p = wheel_engines::image_convert::ConvertParams {
+                    output_format: fmt,
+                    output_path: out_clone.clone(),
+                    quality: 90,
+                };
+                wheel_engines::image_convert::convert_image(&in_clone, &p)
+            } else {
+                anyhow::bail!("Unsupported preset action step: {}", action_id);
+            }
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| e.to_string())?;
+
+        if !is_last {
+            intermediate_files.push(step_res.clone());
+        }
+        current_input = step_res;
+    }
+
+    // Clean up temporary intermediate files
+    for tmp in intermediate_files {
+        let _ = std::fs::remove_file(tmp);
+    }
+
+    // Record job in history
+    let mut job = wheel_core::Job::new(format!("preset.{}", preset.id), vec![input], serde_json::json!({ "name": preset.name }));
+    job.status = wheel_core::job::JobStatus::Completed;
+    job.progress = 1.0;
+    job.outputs = vec![current_input.clone()];
+    let _ = state.history.insert_job(&job);
+
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app.notification().builder()
+        .title("Wheel — Preset Complete")
+        .body(format!("{} finished: {:?}", preset.name, current_input.file_name().unwrap_or_default()))
+        .show();
+
+    Ok(vec![current_input.to_string_lossy().to_string()])
+}
+
+
