@@ -1,0 +1,12 @@
+{
+  "name": "wheel-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "pnpm --filter desktop tauri dev",
+    "build": "pnpm --filter desktop tauri build",
+    "lint": "pnpm --filter desktop run lint",
+    "typecheck": "pnpm --filter desktop run typecheck",
+    "deps:check": "pnpm --filter desktop outdated"
+  }
+}
