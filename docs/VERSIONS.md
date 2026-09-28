@@ -46,6 +46,7 @@ Date checked: 2026-09-28
 | image | 0.25.x | |
 | uuid | 1.26.1 | |
 | chrono | 0.4.45 | |
+| lopdf | 0.45.0 | PDF generation (embed_image) |
 | anyhow | 1.0.104 | |
 
 ## Update Commands

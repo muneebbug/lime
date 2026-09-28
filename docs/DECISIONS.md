@@ -100,10 +100,28 @@ Checked via `cargo info window-vibrancy`.
 
 ---
 
+## M2 — Conversions & Engines
+
+### D016: `lopdf` for multi-image to PDF generation and raster image extraction
+**Decision:** Use `lopdf` (version 0.45, feature `embed_image`) to assemble single and multi-page PDFs from arbitrary image inputs and to extract embedded raster images from PDFs.
+**Rationale:** `lopdf` provides pure Rust PDF document creation, direct XObject stream generation, and lossless JPEG embedding via DCTDecode streams without relying on external native binaries or GPL tools.
+
+### D017: Bundled SQLite via `rusqlite` for persistent job history
+**Decision:** Store job execution history in `%LOCALAPPDATA%\Wheel\history.db` using `rusqlite` with the `bundled` feature.
+**Rationale:** The `bundled` feature builds an isolated SQLite engine directly into the binary with zero runtime OS dependencies or DLL requirements. WAL journal mode ensures high concurrency and fast writes without UI lag.
+
+### D018: Native Windows Recycle Bin integration via `trash`
+**Decision:** When `output.recycle_source` is enabled, source files are sent to the Windows Recycle Bin using the `trash` crate (version 5.2).
+**Rationale:** Invoking the Windows Shell `IFileOperation` API via `trash` ensures all file removals are completely undoable by the user via Windows Explorer (`Ctrl+Z`), preserving user trust.
+
+### D019: WinRT `Windows.Data.Pdf` in `wheel-win`
+**Decision:** Configure `Data_Pdf`, `Storage`, and `Storage_Streams` features in `wheel-win` for native Windows 10/11 PDF Direct2D rendering.
+**Rationale:** Windows 10/11 includes a high-performance vector PDF rendering engine in WinRT. Exposing it in `wheel-win` avoids shipping bloated external C++ rendering libraries like Poppler.
+
+---
+
 ## Pending / Open Questions
 
-- **HEIC/AVIF encoding:** The `image` crate's HEIC/AVIF support depends on native codec
-  availability. Will evaluate `libheif-rs` and WIC (via `windows` crate) for M2.
 - **Model download (Remove BG):** RMBG-1.4 ONNX model is ~176MB. Will be downloaded on
   first use with a progress UI and SHA-256 verification in M4.
 - **Code signing:** Windows code signing requires a certificate. The Tauri bundler supports

@@ -16,6 +16,7 @@ pub struct AppState {
     pub settings: Arc<Mutex<WheelSettings>>,
     pub registry: Arc<ActionRegistry>,
     pub job_queue: Arc<JobQueue>,
+    pub history: Arc<wheel_core::HistoryDb>,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -41,12 +42,24 @@ pub fn run() {
     let (job_queue, _event_rx) = JobQueue::new(4);
     let job_queue = Arc::new(job_queue);
 
+    // Set up persistent SQLite history
+    let local_app_data = std::env::var("LOCALAPPDATA")
+        .or_else(|_| std::env::var("APPDATA"))
+        .unwrap_or_else(|_| ".".to_string());
+    let db_path = std::path::PathBuf::from(local_app_data).join("Wheel").join("history.db");
+    let history = wheel_core::HistoryDb::open(&db_path).unwrap_or_else(|e| {
+        tracing::warn!("Failed to open persistent history at {:?}: {}, falling back to in-memory", db_path, e);
+        wheel_core::HistoryDb::open_in_memory().expect("in-memory db must succeed")
+    });
+    let history = Arc::new(history);
+
     let settings = Arc::new(Mutex::new(WheelSettings::default()));
 
     let state = AppState {
         settings: Arc::clone(&settings),
         registry: Arc::clone(&registry),
         job_queue: Arc::clone(&job_queue),
+        history: Arc::clone(&history),
     };
 
     tauri::Builder::default()
@@ -73,6 +86,11 @@ pub fn run() {
             commands::hide_overlay,
             commands::dispatch_action,
             commands::get_jobs,
+            commands::get_history,
+            commands::clear_history,
+            commands::delete_history_item,
+            commands::open_in_folder,
+            commands::open_file,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

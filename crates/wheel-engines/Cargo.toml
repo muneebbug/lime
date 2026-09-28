@@ -15,5 +15,4 @@ wheel-core = { path = "../wheel-core" }
 
 # Image processing
 image = "0.25"
-
-# Added in M2+: pdfium-render, printpdf, docx-rs, etc.
+lopdf = { version = "0.45", default-features = false, features = ["embed_image"] }

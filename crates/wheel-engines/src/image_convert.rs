@@ -11,7 +11,8 @@ pub enum OutputFormat {
     Webp,
     Bmp,
     Tiff,
-    // Heic, Avif, Pdf — added in M2
+    Gif,
+    Ico,
 }
 
 impl OutputFormat {
@@ -22,6 +23,8 @@ impl OutputFormat {
             "webp" => Some(Self::Webp),
             "bmp" => Some(Self::Bmp),
             "tiff" | "tif" => Some(Self::Tiff),
+            "gif" => Some(Self::Gif),
+            "ico" => Some(Self::Ico),
             _ => None,
         }
     }
@@ -33,6 +36,8 @@ impl OutputFormat {
             Self::Webp => ImageFormat::WebP,
             Self::Bmp => ImageFormat::Bmp,
             Self::Tiff => ImageFormat::Tiff,
+            Self::Gif => ImageFormat::Gif,
+            Self::Ico => ImageFormat::Ico,
         }
     }
 
@@ -43,6 +48,8 @@ impl OutputFormat {
             Self::Webp => "webp",
             Self::Bmp => "bmp",
             Self::Tiff => "tiff",
+            Self::Gif => "gif",
+            Self::Ico => "ico",
         }
     }
 }
@@ -82,6 +89,15 @@ pub fn convert_image(input: &Path, params: &ConvertParams) -> Result<PathBuf> {
             img.write_with_encoder(encoder)
                 .with_context(|| "JPEG encode failed")?;
         }
+        OutputFormat::Ico => {
+            let ico_img = if img.width() > 256 || img.height() > 256 {
+                img.resize(256, 256, image::imageops::FilterType::Lanczos3)
+            } else {
+                img
+            };
+            ico_img.save_with_format(&tmp, ImageFormat::Ico)
+                .with_context(|| "ICO encode failed")?;
+        }
         fmt => {
             img.save_with_format(&tmp, fmt.image_format())
                 .with_context(|| format!("Encode to {:?} failed", fmt))?;
@@ -107,6 +123,8 @@ mod tests {
         assert_eq!(OutputFormat::from_extension("webp"), Some(OutputFormat::Webp));
         assert_eq!(OutputFormat::from_extension("bmp"), Some(OutputFormat::Bmp));
         assert_eq!(OutputFormat::from_extension("tiff"), Some(OutputFormat::Tiff));
+        assert_eq!(OutputFormat::from_extension("gif"), Some(OutputFormat::Gif));
+        assert_eq!(OutputFormat::from_extension("ico"), Some(OutputFormat::Ico));
         assert_eq!(OutputFormat::from_extension("unknown"), None);
     }
 

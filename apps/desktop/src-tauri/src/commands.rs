@@ -105,6 +105,8 @@ pub async fn dispatch_action(
         ActionKind::Instant => {
             // Queue a background job
             let job = wheel_core::Job::new(action_id.clone(), files, request.params);
+            let _ = state.history.insert_job(&job);
+
             let job_id = state
                 .job_queue
                 .enqueue(job)
@@ -148,7 +150,6 @@ fn open_tool_window(
 
     // Reuse existing window if open
     if app.get_webview_window(&window_id).is_some() {
-        // TODO: pass new file context to existing window
         return Ok(());
     }
 
@@ -183,54 +184,123 @@ async fn run_instant_action(
         None => return,
     };
 
+    // Update history db
+    {
+        let state = app.state::<crate::AppState>();
+        let _ = state.history.update_job(&job);
+    }
+
     // Determine target format from action_id (e.g. "convert.png" -> "png")
     let target_ext = action_id.split('.').nth(1).unwrap_or("png").to_string();
 
     let mut outputs = Vec::new();
     let mut error: Option<String> = None;
 
-    for input in &job.inputs {
-        let settings = {
-            // We can't borrow AppState here easily without storing it; use defaults
-            wheel_core::settings::OutputSettings::default()
-        };
+    let output_settings = {
+        let state = app.state::<crate::AppState>();
+        let out = state.settings.lock().await.output.clone();
+        out
+    };
 
-        let output_path = wheel_core::output::resolve_output_path(
-            input,
-            &target_ext,
-            &settings.suffix,
-            &settings.policy,
-            None,
-            settings.overwrite_source,
-        );
-
-        if let Some(fmt) = wheel_engines::image_convert::OutputFormat::from_extension(&target_ext) {
-            let input_clone = input.clone();
+    if target_ext == "pdf" {
+        if !job.inputs.is_empty() {
+            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
+            let output_path = wheel_core::output::resolve_output_path(
+                &job.inputs[0],
+                "pdf",
+                &output_settings.suffix,
+                &output_settings.policy,
+                fixed_folder,
+                output_settings.overwrite_source,
+            );
+            let inputs_clone = job.inputs.clone();
             let output_clone = output_path.clone();
-            let params = wheel_engines::image_convert::ConvertParams {
-                output_format: fmt,
-                output_path: output_clone.clone(),
-                quality: 85,
-            };
 
             let result = tokio::task::spawn_blocking(move || {
-                wheel_engines::image_convert::convert_image(&input_clone, &params)
+                wheel_engines::pdf::images_to_pdf(&inputs_clone, &output_clone)
             })
             .await;
 
             match result {
                 Ok(Ok(path)) => outputs.push(path),
-                Ok(Err(e)) => {
-                    error = Some(e.to_string());
-                    break;
+                Ok(Err(e)) => error = Some(e.to_string()),
+                Err(e) => error = Some(e.to_string()),
+            }
+        }
+    } else {
+        for input in &job.inputs {
+            let input_ext = input
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .trim_start_matches('.')
+                .to_lowercase();
+
+            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
+            let output_path = wheel_core::output::resolve_output_path(
+                input,
+                &target_ext,
+                &output_settings.suffix,
+                &output_settings.policy,
+                fixed_folder,
+                output_settings.overwrite_source,
+            );
+
+            // PDF extraction to images (PNG or JPG)
+            if input_ext == "pdf" && (target_ext == "png" || target_ext == "jpg" || target_ext == "jpeg") {
+                let input_clone = input.clone();
+                let output_clone = output_path.clone();
+                let fmt_clone = target_ext.clone();
+
+                let result = tokio::task::spawn_blocking(move || {
+                    wheel_engines::pdf::pdf_to_images(&input_clone, &output_clone, &fmt_clone)
+                })
+                .await;
+
+                match result {
+                    Ok(Ok(paths)) => outputs.extend(paths),
+                    Ok(Err(e)) => {
+                        error = Some(e.to_string());
+                        break;
+                    }
+                    Err(e) => {
+                        error = Some(e.to_string());
+                        break;
+                    }
                 }
-                Err(e) => {
-                    error = Some(e.to_string());
-                    break;
+            } else if let Some(fmt) = wheel_engines::image_convert::OutputFormat::from_extension(&target_ext) {
+                let input_clone = input.clone();
+                let output_clone = output_path.clone();
+                let params = wheel_engines::image_convert::ConvertParams {
+                    output_format: fmt,
+                    output_path: output_clone.clone(),
+                    quality: 85,
+                };
+
+                let result = tokio::task::spawn_blocking(move || {
+                    wheel_engines::image_convert::convert_image(&input_clone, &params)
+                })
+                .await;
+
+                match result {
+                    Ok(Ok(path)) => outputs.push(path),
+                    Ok(Err(e)) => {
+                        error = Some(e.to_string());
+                        break;
+                    }
+                    Err(e) => {
+                        error = Some(e.to_string());
+                        break;
+                    }
                 }
+            } else {
+                error = Some(format!("Unsupported format: {}", target_ext));
+                break;
             }
         }
     }
+
+    use tauri_plugin_notification::NotificationExt;
 
     if let Some(err) = error {
         queue
@@ -240,10 +310,22 @@ async fn run_instant_action(
             })
             .await;
 
+        if let Some(final_job) = queue.get_job(job_id).await {
+            let state = app.state::<crate::AppState>();
+            let _ = state.history.update_job(&final_job);
+        }
+
         let _ = app.emit(
             "job-failed",
             serde_json::json!({ "job_id": job_id, "error": err }),
         );
+
+        let _ = app
+            .notification()
+            .builder()
+            .title("Wheel — Conversion failed")
+            .body(&err)
+            .show();
     } else {
         queue
             .update_job(job_id, |j| {
@@ -252,6 +334,20 @@ async fn run_instant_action(
                 j.progress = 1.0;
             })
             .await;
+
+        if let Some(final_job) = queue.get_job(job_id).await {
+            let state = app.state::<crate::AppState>();
+            let _ = state.history.update_job(&final_job);
+        }
+
+        // Recycle original input files if configured
+        if output_settings.recycle_source {
+            for input in &job.inputs {
+                if let Err(e) = trash::delete(input) {
+                    tracing::warn!("Failed to recycle source file {:?}: {}", input, e);
+                }
+            }
+        }
 
         let output_strs: Vec<String> = outputs
             .iter()
@@ -263,12 +359,79 @@ async fn run_instant_action(
             serde_json::json!({ "job_id": job_id, "outputs": output_strs }),
         );
 
+        let _ = app
+            .notification()
+            .builder()
+            .title(format!("Wheel — {} complete", target_ext.to_uppercase()))
+            .body(format!("Converted {} file(s) successfully", outputs.len()))
+            .show();
+
         info!("Job {} completed: {:?}", job_id, outputs);
     }
 }
 
-/// Return all jobs in the queue (for history UI)
+/// Return all active jobs in the queue
 #[tauri::command]
 pub async fn get_jobs(state: State<'_, AppState>) -> Result<Vec<wheel_core::Job>, String> {
     Ok(state.job_queue.all_jobs().await)
+}
+
+/// Return persistent recent jobs from SQLite history
+#[tauri::command]
+pub async fn get_history(
+    state: State<'_, AppState>,
+    limit: Option<usize>,
+) -> Result<Vec<wheel_core::Job>, String> {
+    state
+        .history
+        .get_recent_jobs(limit.unwrap_or(50))
+        .map_err(|e| e.to_string())
+}
+
+/// Clear all job history from SQLite
+#[tauri::command]
+pub async fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
+    state.history.clear_history().map_err(|e| e.to_string())
+}
+
+/// Delete a single job from SQLite history
+#[tauri::command]
+pub async fn delete_history_item(
+    state: State<'_, AppState>,
+    id: String,
+) -> Result<(), String> {
+    let uuid = uuid::Uuid::parse_str(&id).map_err(|e| e.to_string())?;
+    state.history.delete_job(uuid).map_err(|e| e.to_string())
+}
+
+/// Reveal a file in Windows Explorer
+#[tauri::command]
+pub async fn open_in_folder(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() {
+        return Err(format!("File does not exist: {}", path));
+    }
+
+    std::process::Command::new("explorer")
+        .arg(format!("/select,{}", path))
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+/// Open a file with the default system application
+#[tauri::command]
+pub async fn open_file(path: String) -> Result<(), String> {
+    let p = std::path::Path::new(&path);
+    if !p.exists() {
+        return Err(format!("File does not exist: {}", path));
+    }
+
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", &path])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
 }
