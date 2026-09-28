@@ -88,7 +88,7 @@ impl JobQueue {
         let jobs_clone = Arc::clone(&jobs);
         let event_tx_clone = event_tx.clone();
 
-        tokio::spawn(async move {
+        let worker = async move {
             use tokio::task::JoinSet;
             let mut set = JoinSet::new();
             let sem = Arc::new(tokio::sync::Semaphore::new(concurrency));
@@ -122,7 +122,23 @@ impl JobQueue {
             }
 
             while set.join_next().await.is_some() {}
-        });
+        };
+
+        if let Ok(handle) = tokio::runtime::Handle::try_current() {
+            handle.spawn(worker);
+        } else {
+            std::thread::Builder::new()
+                .name("wheel-job-worker".into())
+                .spawn(move || {
+                    if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                        .enable_all()
+                        .build()
+                    {
+                        rt.block_on(worker);
+                    }
+                })
+                .expect("failed to spawn worker thread");
+        }
 
         (
             Self {

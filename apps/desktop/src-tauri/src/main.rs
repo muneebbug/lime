@@ -2,5 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    desktop_lib::run()
+    let rt = tokio::runtime::Runtime::new().expect("failed to initialize Tokio runtime");
+    let _guard = rt.enter();
+    desktop_lib::run();
 }
