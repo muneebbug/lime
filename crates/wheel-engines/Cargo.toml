@@ -15,7 +15,7 @@ chrono = { workspace = true }
 wheel-core = { path = "../wheel-core" }
 
 # Image processing
-image = "0.25"
+image = { version = "0.25", features = ["avif"] }
 lopdf = { version = "0.45", default-features = false, features = ["embed_image"] }
 kamadak-exif = "0.6"
 sha2 = "0.10"
