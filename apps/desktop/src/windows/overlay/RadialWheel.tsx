@@ -38,13 +38,13 @@ export const CONVERT_PETALS: PetalData[] = [
     subtitle: "Convert to WEBP",
   },
   {
-    id: "convert.heic",
-    action: "heic",
-    title: "HEIC",
+    id: "convert.jpg",
+    action: "jpg",
+    title: "JPG",
     d: "M 51.7498 19.2707 L 92.5434 36.1680 Q 111.1720 43.8842 116.4816 26.7781 A 119.52000000000001 119.52000000000001 0 0 0 116.4816 -26.7781 Q 111.1720 -43.8842 92.5434 -36.1680 L 51.7498 -19.2707 Q 46.0275 -16.9004 47.4139 -10.8521 A 48.64000000000001 48.64000000000001 0 0 1 47.4139 10.8521 Q 46.0275 16.9004 51.7498 19.2707 Z",
     labelX: 84.5312,
     labelY: 0,
-    subtitle: "Convert to HEIC",
+    subtitle: "Convert to JPG",
   },
   {
     id: "convert.tiff",
@@ -83,13 +83,13 @@ export const CONVERT_PETALS: PetalData[] = [
     subtitle: "Convert to PDF",
   },
   {
-    id: "convert.docx",
-    action: "docx",
-    title: "DOCX",
+    id: "convert.ico",
+    action: "ico",
+    title: "ICO",
     d: "M -22.9662 -50.2191 L -39.8635 -91.0127 Q -47.5797 -109.6413 -63.4300 -101.2999 A 119.52000000000001 119.52000000000001 0 0 0 -101.2999 -63.4300 Q -109.6413 -47.5797 -91.0127 -39.8635 L -50.2191 -22.9662 Q -44.4968 -20.5960 -41.2003 -25.8531 A 48.64000000000001 48.64000000000001 0 0 1 -25.8531 -41.2003 Q -20.5960 -44.4968 -22.9662 -50.2191 Z",
     labelX: -59.7726,
     labelY: -59.7726,
-    subtitle: "Convert to DOCX",
+    subtitle: "Convert to ICO",
   },
 ];
 
@@ -389,54 +389,21 @@ function RadialWheelInner({
   const scale = wheelSize / 272;
 
   return (
-    <div className="flex flex-col items-center justify-center select-none pointer-events-auto">
-      {/* Top Shortcut Indicator + Category Title */}
-      <div className="flex flex-col items-center gap-1.5 mb-2 pointer-events-none select-none">
-        {currentPage === "convert" ? (
-          <div className="flex flex-col items-center justify-center w-11 h-12 bg-white/95 border border-white/80 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04),inset_0_-2px_0_rgba(0,0,0,0.1)] text-neutral-700">
-            <span className="text-sm font-bold leading-none">⇧</span>
-            <span className="text-[10px] font-medium text-neutral-500 mt-1 uppercase tracking-wider">
-              shift
-            </span>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <div className="flex flex-col items-center justify-center w-11 h-12 bg-white/95 border border-white/80 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04),inset_0_-2px_0_rgba(0,0,0,0.1)] text-neutral-700">
-              <span className="text-sm font-bold leading-none">⇧</span>
-              <span className="text-[10px] font-medium text-neutral-500 mt-1 uppercase tracking-wider">
-                shift
-              </span>
-            </div>
-            <span className="text-neutral-400 font-bold text-xs">+</span>
-            <div className="flex flex-col items-center justify-center w-12 h-12 bg-white/95 border border-white/80 rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.08),0_1px_2px_rgba(0,0,0,0.04),inset_0_-2px_0_rgba(0,0,0,0.1)] text-neutral-700">
-              <span className="text-sm font-bold leading-none">⌥</span>
-              <span className="text-[10px] font-medium text-neutral-500 mt-1 uppercase tracking-wider">
-                option
-              </span>
-            </div>
-          </div>
-        )}
-        <span className="text-xs font-semibold text-neutral-700/90 tracking-wide">
-          {currentPage === "convert" ? "Convert formats" : "Advanced tools"}
-        </span>
-      </div>
-
-      {/* Main Circular Radial Wheel SVG */}
-      <div
-        className="relative"
-        style={{ width: wheelSize, height: wheelSize }}
-        onMouseMove={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          const mx = e.clientX - rect.left;
-          const my = e.clientY - rect.top;
-          const idx = hitTestWedge(
-            mx,
-            my,
-            currentPage,
-            wheelSize / 2,
-            wheelSize / 2,
-            scale
-          );
+    <div
+      className="relative select-none pointer-events-auto"
+      style={{ width: wheelSize, height: wheelSize }}
+      onMouseMove={(e) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const idx = hitTestWedge(
+          mx,
+          my,
+          currentPage,
+          wheelSize / 2,
+          wheelSize / 2,
+          scale
+        );
           const nextId = idx !== null ? activePetals[idx]?.id ?? null : null;
           if (nextId !== hoveredWedge) {
             if (soundEnabled && nextId !== null) {
@@ -715,18 +682,6 @@ function RadialWheelInner({
             )}
           </g>
         </svg>
-      </div>
-
-      {/* Action Subtitle Below the Wheel */}
-      <div className="h-6 flex items-center justify-center mt-2 pointer-events-none select-none">
-        <span className="text-xs font-medium text-neutral-600 tracking-wide transition-opacity duration-150">
-          {hoveredPetal
-            ? hoveredPetal.subtitle
-            : currentPage === "convert"
-            ? "Convert formats"
-            : "Advanced tools"}
-        </span>
-      </div>
     </div>
   );
 }
