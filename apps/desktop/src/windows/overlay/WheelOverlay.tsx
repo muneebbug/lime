@@ -128,10 +128,8 @@ export function WheelOverlay() {
     lastDropPosRef.current = { x, y };
     const state = useWheelStore.getState();
     const visible = filterActions(state.actions, state.currentPage, state.dragExtensions, contextFilterEnabled);
-    const scale = wheelSize / 320;
-    const outerR = 148 * scale;
-    const innerR = 76 * scale;
-    const idx = hitTestWedge(x, y, visible.length, 200, 200, outerR, innerR);
+    const scale = wheelSize / 272;
+    const idx = hitTestWedge(x, y, state.currentPage, 200, 200, scale);
     const newHovered = idx !== null ? visible[idx]?.id ?? null : null;
 
     if (newHovered !== lastHoveredRef.current) {
@@ -176,10 +174,8 @@ export function WheelOverlay() {
       const dropX = x && x > 0 ? x : lastDropPosRef.current.x;
       const dropY = y && y > 0 ? y : lastDropPosRef.current.y;
 
-      const scale = wheelSize / 320;
-      const outerR = 148 * scale;
-      const innerR = 76 * scale;
-      const idx = hitTestWedge(dropX, dropY, visible.length, 200, 200, outerR, innerR);
+      const scale = wheelSize / 272;
+      const idx = hitTestWedge(dropX, dropY, state.currentPage, 200, 200, scale);
       const wedgeId = idx !== null ? visible[idx]?.id : (state.hoveredWedge ?? lastHoveredRef.current);
 
       lastHoveredRef.current = null;

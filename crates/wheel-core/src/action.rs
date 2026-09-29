@@ -151,13 +151,15 @@ pub fn default_actions() -> Vec<ActionManifest> {
     // --- Convert actions ---
     let convert_targets = [
         ("convert.png",  "PNG",  "png"),
-        ("convert.jpg",  "JPG",  "jpg"),
         ("convert.webp", "WEBP", "webp"),
-        ("convert.avif", "AVIF", "avif"),
+        ("convert.heic", "HEIC", "heic"),
         ("convert.tiff", "TIFF", "tiff"),
+        ("convert.avif", "AVIF", "avif"),
         ("convert.bmp",  "BMP",  "bmp"),
-        ("convert.ico",  "ICO",  "ico"),
         ("convert.pdf",  "PDF",  "pdf"),
+        ("convert.docx", "DOCX", "docx"),
+        ("convert.jpg",  "JPG",  "jpg"),
+        ("convert.ico",  "ICO",  "ico"),
     ];
 
     for (i, (id, title, _fmt)) in convert_targets.iter().enumerate() {
@@ -223,10 +225,10 @@ mod tests {
     #[test]
     fn test_default_actions_populated() {
         let actions = default_actions();
-        assert_eq!(actions.len(), 16);
+        assert_eq!(actions.len(), 18);
         let convert_count = actions.iter().filter(|a| a.category == ActionCategory::Convert).count();
         let tools_count = actions.iter().filter(|a| a.category == ActionCategory::Tools).count();
-        assert_eq!(convert_count, 8);
+        assert_eq!(convert_count, 10);
         assert_eq!(tools_count, 8);
     }
 
@@ -242,7 +244,7 @@ mod tests {
         assert!(registry.get("nonexistent").is_none());
 
         let converts: Vec<_> = registry.for_category(&ActionCategory::Convert).collect();
-        assert_eq!(converts.len(), 8);
+        assert_eq!(converts.len(), 10);
 
         let image_actions: Vec<_> = registry.compatible(&["png"]).collect();
         assert!(!image_actions.is_empty());
