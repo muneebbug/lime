@@ -314,22 +314,6 @@ export function SettingsWindow() {
                     }}
                   />
                 </SettingRow>
-
-                <SettingRow
-                  title="Automatic Updates"
-                  description="Check for new application releases automatically in the background"
-                >
-                  <ToggleSwitch
-                    checked={settings.general.auto_update}
-                    onChange={(checked) => {
-                      const updated = {
-                        ...settings,
-                        general: { ...settings.general, auto_update: checked },
-                      };
-                      handleSaveSettings(updated);
-                    }}
-                  />
-                </SettingRow>
               </SettingSection>
 
               <SettingSection title="Windows Explorer Integration">
