@@ -231,6 +231,13 @@ Checked via `cargo info window-vibrancy`.
 4. **Visual Indicator:** The center pill displays active page labels (`CONVERT` / `TOOLS`) and pagination dots.
 **Rationale:** Transparent overlay windows with `WS_EX_NOACTIVATE` do not receive keyboard focus while dragging out of Explorer, causing local DOM key listeners to be ignored. Holding the left button during drag also prevents normal left-clicking. Low-level mouse and keyboard hooks provide effortless, single-hand wheel switching via the scroll wheel, rocker click, or keyboard.
 
+### D041: Default conversion wheel page reset policy on drag initiation
+**Decision:** Always initialize and reset the radial wheel to Page 1 (`"convert"`) whenever a drag gesture begins or terminates:
+1. In `useWheelStore`, update `setDragState` so that transitioning from inactive to active drag resets `currentPage` to `"convert"`.
+2. Update `clearDragState` to reset `currentPage` to `"convert"` whenever a drag completes, drops, or is cancelled.
+3. In `WheelOverlay.tsx`, explicitly set `currentPage` to `"convert"` on `drag-armed` and component mount.
+**Rationale:** While users can toggle to Wheel 2 (`"tools"`) during an active drag via scroll wheel, rocker click, or Tab/Space, subsequent file drag operations should start on the primary conversion wheel by default rather than preserving stale navigation state from prior interactions.
+
 ---
 
 ## Pending / Open Questions

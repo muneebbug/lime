@@ -50,6 +50,7 @@ export function WheelOverlay() {
 
   useEffect(() => {
     loadActions();
+    useWheelStore.getState().setPage("convert");
   }, [loadActions]);
 
   const triggerAction = useCallback((actionId: string, files: string[]) => {
@@ -184,7 +185,9 @@ export function WheelOverlay() {
     listen<DragArmedEvent>("drag-armed", ({ payload }) => {
       lastHoveredRef.current = null;
       lastDropPosRef.current = { x: 200, y: 200 };
-      useWheelStore.getState().setDragState([], [], payload.x, payload.y);
+      const store = useWheelStore.getState();
+      store.setPage("convert");
+      store.setDragState([], [], payload.x, payload.y);
     }).then((u) => unlisteners.push(u));
 
     // Native Tauri 2 Webview drag drop event listener
