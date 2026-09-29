@@ -238,53 +238,33 @@ function playHoverTick() {
   } catch {}
 }
 
-function ToolIcon({ type }: { type: string }) {
+function ToolIcon({
+  type,
+  stroke = "#222428",
+}: {
+  type: string;
+  stroke?: string;
+}) {
   switch (type) {
     case "compress":
       return (
-        <svg
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M4 14h6v6M10 14L3 21M20 10h-6V4M14 10l7-7" />
-        </svg>
+        <g fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 14h6v6" />
+          <path d="M10 14L3 21" />
+          <path d="M20 10h-6V4" />
+          <path d="M14 10l7-7" />
+        </g>
       );
     case "metadata":
       return (
-        <svg
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-          <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-          <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-          <line x1="2" x2="22" y1="2" y2="22" />
-        </svg>
+        <g fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12.5 2.5a2 2 0 0 0-1.4-.5H4a2 2 0 0 0-2 2v7.1a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z" />
+          <circle cx="7.5" cy="7.5" r="1.5" fill={stroke} />
+        </g>
       );
     case "edit":
       return (
-        <svg
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <g fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <line x1="4" y1="21" x2="4" y2="14" />
           <line x1="4" y1="10" x2="4" y2="3" />
           <line x1="12" y1="21" x2="12" y2="12" />
@@ -294,58 +274,30 @@ function ToolIcon({ type }: { type: string }) {
           <line x1="1" y1="14" x2="7" y2="14" />
           <line x1="9" y1="8" x2="15" y2="8" />
           <line x1="17" y1="16" x2="23" y2="16" />
-        </svg>
+        </g>
       );
     case "addbg":
       return (
-        <svg
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <g fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
           <circle cx="8.5" cy="8.5" r="1.5" />
           <polyline points="21 15 16 10 5 21" />
-        </svg>
+        </g>
       );
     case "crop":
       return (
-        <svg
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
+        <g fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M6 2v14a2 2 0 0 0 2 2h14" />
           <path d="M18 22V8a2 2 0 0 0-2-2H2" />
-        </svg>
+        </g>
       );
     case "redact":
       return (
-        <svg
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-          <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-          <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-          <line x1="2" x2="22" y1="2" y2="22" />
-        </svg>
+        <g fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="9.5" width="18" height="5" rx="1.5" fill={stroke} />
+          <line x1="3" y1="5.5" x2="17" y2="5.5" />
+          <line x1="3" y1="18.5" x2="13" y2="18.5" />
+        </g>
       );
     default:
       return null;
@@ -560,17 +512,17 @@ function RadialWheelInner({
 
                 {petal.icon && (
                   <g
-                    transform={`translate(${petal.icon.x + 1}, ${petal.icon.y + 1})`}
+                    transform={`translate(${petal.icon.x}, ${petal.icon.y}) scale(${petal.icon.width / 24})`}
                     className="wheel-tool-icon preview-tool-icon"
                     style={{
-                      color: isHighlighted ? "#ffffff" : "#222428",
-                      transformOrigin: `${petal.icon.x + 9}px ${petal.icon.y + 9}px`,
-                      transform: isHighlighted ? "scale(1.025)" : "scale(1)",
-                      transition: "color 0.12s ease, transform 0.12s ease",
                       pointerEvents: "none",
+                      userSelect: "none",
                     }}
                   >
-                    <ToolIcon type={petal.icon.type} />
+                    <ToolIcon
+                      type={petal.icon.type}
+                      stroke={isHighlighted ? "#ffffff" : "#222428"}
+                    />
                   </g>
                 )}
 

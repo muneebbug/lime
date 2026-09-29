@@ -1,7 +1,144 @@
 use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
-use lopdf::{dictionary, Object, Stream, Document};
+use lopdf::{dictionary, Document, Object, ObjectId, Stream};
 use tracing::info;
+
+/// Load an image file and create its PDF Image XObject(s).
+/// If the image has transparency (alpha channel < 255), this creates:
+/// 1. A 1-channel DeviceGray soft mask (`/SMask`) XObject for the alpha channel.
+/// 2. A 3-channel DeviceRGB image XObject flattened onto pure white (`[255, 255, 255]`)
+///    with `/Matte [1 1 1]` and `/SMask` referencing the mask.
+///
+/// This eliminates black background artifacts and dark fringe halos on transparent PNGs,
+/// ensuring crisp rendering in all PDF viewers, printers, and thumbnail generators.
+fn load_image_xobject(
+    doc: &mut Document,
+    input: &Path,
+) -> Result<(ObjectId, i64, i64)> {
+    let buffer = std::fs::read(input)
+        .with_context(|| format!("Failed to read image file {:?}", input))?;
+
+    let is_jpeg = image::guess_format(&buffer)
+        .map(|fmt| fmt == image::ImageFormat::Jpeg)
+        .unwrap_or(false);
+
+    // Fast-path for JPEGs: direct DCT stream without recompression
+    if is_jpeg {
+        if let Ok(img_stream) = lopdf::xobject::image(input) {
+            let width = img_stream
+                .dict
+                .get(b"Width")
+                .map_err(|e| anyhow::anyhow!("Missing Width in image dict: {:?}", e))?
+                .as_i64()
+                .map_err(|e| anyhow::anyhow!("Invalid Width in image dict: {:?}", e))?;
+            let height = img_stream
+                .dict
+                .get(b"Height")
+                .map_err(|e| anyhow::anyhow!("Missing Height in image dict: {:?}", e))?
+                .as_i64()
+                .map_err(|e| anyhow::anyhow!("Invalid Height in image dict: {:?}", e))?;
+            let img_id = doc.add_object(img_stream);
+            return Ok((img_id, width, height));
+        }
+    }
+
+    // Decode image using the image crate, with FFmpeg fallback for uncommon codecs
+    let img = match image::load_from_memory(&buffer) {
+        Ok(loaded) => loaded,
+        Err(_) => {
+            if let Some(ffmpeg) = crate::media::find_ffmpeg_path() {
+                let temp_dir = std::env::temp_dir().join("wheel_temp");
+                let _ = std::fs::create_dir_all(&temp_dir);
+                let tmp_png = temp_dir.join(format!(
+                    "pdf_decode_{}.png",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_nanos()
+                ));
+                let status = std::process::Command::new(ffmpeg)
+                    .arg("-y")
+                    .arg("-i")
+                    .arg(input)
+                    .arg(&tmp_png)
+                    .status();
+                if let Ok(st) = status {
+                    if st.success() {
+                        let loaded = image::open(&tmp_png);
+                        let _ = std::fs::remove_file(&tmp_png);
+                        if let Ok(l) = loaded {
+                            l
+                        } else {
+                            anyhow::bail!("Failed to read decoded frame for {:?}", input);
+                        }
+                    } else {
+                        let _ = std::fs::remove_file(&tmp_png);
+                        anyhow::bail!("FFmpeg failed to decode {:?}", input);
+                    }
+                } else {
+                    let _ = std::fs::remove_file(&tmp_png);
+                    anyhow::bail!("Failed to run FFmpeg for {:?}", input);
+                }
+            } else {
+                image::open(input).with_context(|| format!("Failed to open image {:?}", input))?
+            }
+        }
+    };
+
+    let width = img.width() as i64;
+    let height = img.height() as i64;
+    let rgba = img.to_rgba8();
+    let has_transparency = rgba.pixels().any(|p| p[3] < 255);
+
+    if has_transparency {
+        // 1. Create Soft Mask (SMask) 8-bit grayscale stream
+        let alpha_bytes: Vec<u8> = rgba.pixels().map(|p| p[3]).collect();
+        let smask_dict = dictionary! {
+            "Type" => "XObject",
+            "Subtype" => "Image",
+            "Width" => width,
+            "Height" => height,
+            "ColorSpace" => "DeviceGray",
+            "BitsPerComponent" => 8,
+            "Matte" => vec![1.into(), 1.into(), 1.into()],
+        };
+        let mut smask_stream = Stream::new(smask_dict, alpha_bytes);
+        let _ = smask_stream.compress();
+        let smask_id = doc.add_object(smask_stream);
+
+        // 2. Blend RGB image onto pure white [255, 255, 255]
+        let rgb = crate::image_convert::flatten_to_rgb(&img, [255, 255, 255]);
+        let img_dict = dictionary! {
+            "Type" => "XObject",
+            "Subtype" => "Image",
+            "Width" => width,
+            "Height" => height,
+            "ColorSpace" => "DeviceRGB",
+            "BitsPerComponent" => 8,
+            "SMask" => smask_id,
+        };
+        let mut img_stream = Stream::new(img_dict, rgb.into_raw());
+        let _ = img_stream.compress();
+        let img_id = doc.add_object(img_stream);
+
+        Ok((img_id, width, height))
+    } else {
+        let rgb = img.to_rgb8();
+        let img_dict = dictionary! {
+            "Type" => "XObject",
+            "Subtype" => "Image",
+            "Width" => width,
+            "Height" => height,
+            "ColorSpace" => "DeviceRGB",
+            "BitsPerComponent" => 8,
+        };
+        let mut img_stream = Stream::new(img_dict, rgb.into_raw());
+        let _ = img_stream.compress();
+        let img_id = doc.add_object(img_stream);
+
+        Ok((img_id, width, height))
+    }
+}
 
 /// Convert one or more images into a single PDF document.
 /// Each image is placed on its own page matching its pixel dimensions.
@@ -17,36 +154,7 @@ pub fn images_to_pdf(inputs: &[PathBuf], output_path: &Path) -> Result<PathBuf> 
     let mut page_ids = Vec::new();
 
     for (i, input) in inputs.iter().enumerate() {
-        let img_stream = match lopdf::xobject::image(input) {
-            Ok(s) => s,
-            Err(_) => {
-                // Fallback: load with image crate, convert to RGB8, and serialize to PNG buffer for lopdf
-                let img = image::open(input)
-                    .with_context(|| format!("Failed to open image {:?}", input))?;
-                let rgb = img.to_rgb8();
-                let mut buf = std::io::Cursor::new(Vec::new());
-                rgb.write_to(&mut buf, image::ImageFormat::Png)
-                    .with_context(|| "Failed to buffer image as PNG")?;
-                lopdf::xobject::image_from(buf.into_inner())
-                    .with_context(|| "Failed to convert image buffer to PDF XObject")?
-            }
-        };
-
-        let width = img_stream
-            .dict
-            .get(b"Width")
-            .map_err(|e| anyhow::anyhow!("Missing Width in image dict: {:?}", e))?
-            .as_i64()
-            .map_err(|e| anyhow::anyhow!("Invalid Width in image dict: {:?}", e))?;
-
-        let height = img_stream
-            .dict
-            .get(b"Height")
-            .map_err(|e| anyhow::anyhow!("Missing Height in image dict: {:?}", e))?
-            .as_i64()
-            .map_err(|e| anyhow::anyhow!("Invalid Height in image dict: {:?}", e))?;
-
-        let img_id = doc.add_object(img_stream);
+        let (img_id, width, height) = load_image_xobject(&mut doc, input)?;
         let img_name = format!("Im{}", i);
 
         // Content stream: paint image onto page with full dimensions
@@ -108,7 +216,21 @@ pub fn pdf_to_images(
     let mut outputs = Vec::new();
     let mut image_count = 0;
 
+    // Track IDs used as SMask so they are not extracted as standalone gray images
+    let mut smask_ids = std::collections::HashSet::new();
     for (_obj_id, object) in doc.objects.iter() {
+        if let Object::Stream(ref stream) = *object {
+            if let Ok(Object::Reference(ref_id)) = stream.dict.get(b"SMask") {
+                smask_ids.insert(*ref_id);
+            }
+        }
+    }
+
+    for (obj_id, object) in doc.objects.iter() {
+        if smask_ids.contains(obj_id) {
+            continue;
+        }
+
         if let Object::Stream(ref stream) = *object {
             let is_image = stream
                 .dict
@@ -150,6 +272,17 @@ pub fn pdf_to_images(
                         .with_context(|| format!("Failed to save PNG from JPEG stream to {:?}", out_path))?;
                     outputs.push(out_path);
                 } else if let Ok(decompressed) = stream.decompressed_content() {
+                    // Check if there is an associated SMask for alpha reconstruction
+                    let smask_alpha = if let Ok(Object::Reference(smask_id)) = stream.dict.get(b"SMask") {
+                        if let Ok(Object::Stream(smask_stream)) = doc.get_object(*smask_id) {
+                            smask_stream.decompressed_content().ok()
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
                     let color_space = stream.dict.get(b"ColorSpace").ok();
                     let is_gray = match color_space {
                         Some(Object::Name(ref name)) => name == b"DeviceGray",
@@ -161,6 +294,21 @@ pub fn pdf_to_images(
                             gray_buf.save(&out_path)
                                 .with_context(|| format!("Failed to save gray image to {:?}", out_path))?;
                             outputs.push(out_path);
+                        }
+                    } else if let Some(alpha) = smask_alpha {
+                        if decompressed.len() >= (width * height * 3) as usize && alpha.len() >= (width * height) as usize {
+                            let mut rgba_raw = Vec::with_capacity((width * height * 4) as usize);
+                            for idx in 0..(width * height) as usize {
+                                rgba_raw.push(decompressed[idx * 3]);
+                                rgba_raw.push(decompressed[idx * 3 + 1]);
+                                rgba_raw.push(decompressed[idx * 3 + 2]);
+                                rgba_raw.push(alpha[idx]);
+                            }
+                            if let Some(rgba_buf) = image::RgbaImage::from_raw(width, height, rgba_raw) {
+                                rgba_buf.save(&out_path)
+                                    .with_context(|| format!("Failed to save RGBA image to {:?}", out_path))?;
+                                outputs.push(out_path);
+                            }
                         }
                     } else if decompressed.len() >= (width * height * 3) as usize {
                         if let Some(rgb_buf) = image::RgbImage::from_raw(width, height, decompressed[..(width * height * 3) as usize].to_vec()) {
@@ -237,5 +385,56 @@ mod tests {
         for f in extracted {
             let _ = std::fs::remove_file(f);
         }
+    }
+
+    #[test]
+    fn test_transparent_png_to_pdf_preserves_clean_white_background_and_smask() {
+        let dir = std::env::temp_dir().join("wheel_pdf_transparency_tests");
+        let _ = std::fs::create_dir_all(&dir);
+
+        let png_path = dir.join("lime_slice.png");
+        let pdf_path = dir.join("lime_slice.pdf");
+
+        // Create an image with transparent background (alpha = 0) and solid green center
+        let mut img = RgbaImage::new(40, 40);
+        for (x, y, p) in img.enumerate_pixels_mut() {
+            if (x >= 10 && x < 30) && (y >= 10 && y < 30) {
+                *p = Rgba([150, 255, 0, 255]); // Lime green
+            } else {
+                *p = Rgba([0, 0, 0, 0]); // Fully transparent with black RGB
+            }
+        }
+        img.save(&png_path).unwrap();
+
+        let result = images_to_pdf(&[png_path.clone()], &pdf_path).unwrap();
+        assert_eq!(result, pdf_path);
+
+        // Load document and verify SMask exists
+        let loaded = Document::load(&pdf_path).expect("failed to load PDF");
+        let mut found_smask = false;
+        let mut found_white_preblend = false;
+
+        for (_id, obj) in loaded.objects.iter() {
+            if let Object::Stream(ref stream) = *obj {
+                if stream.dict.get(b"SMask").is_ok() {
+                    found_smask = true;
+                    // Check decompressed content: the transparent pixel at (0, 0) MUST be [255, 255, 255] (white), NOT [0, 0, 0] (black)
+                    if let Ok(decompressed) = stream.decompressed_content() {
+                        let r = decompressed[0];
+                        let g = decompressed[1];
+                        let b = decompressed[2];
+                        if r == 255 && g == 255 && b == 255 {
+                            found_white_preblend = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        assert!(found_smask, "Expected an SMask XObject for transparent PNG");
+        assert!(found_white_preblend, "Expected transparent pixels to be pre-blended against pure white, not black!");
+
+        let _ = std::fs::remove_file(png_path);
+        let _ = std::fs::remove_file(pdf_path);
     }
 }
