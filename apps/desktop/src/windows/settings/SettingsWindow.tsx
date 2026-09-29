@@ -469,27 +469,6 @@ export function SettingsWindow() {
             <div className="max-w-xl">
               <SettingSection title="Wheel Layout & Display">
                 <SettingRow
-                  title="Interface Theme"
-                  description="Color appearance of the radial wheel overlay"
-                >
-                  <SegmentedControl
-                    value={settings.wheel_ui.theme}
-                    options={[
-                      { label: "System", value: "system" },
-                      { label: "Dark", value: "dark" },
-                      { label: "Light", value: "light" },
-                    ]}
-                    onChange={(val) => {
-                      const updated = {
-                        ...settings,
-                        wheel_ui: { ...settings.wheel_ui, theme: val },
-                      };
-                      handleSaveSettings(updated);
-                    }}
-                  />
-                </SettingRow>
-
-                <SettingRow
                   title="Default Start Page"
                   description="Which radial wheel page is displayed when a drag starts"
                 >
