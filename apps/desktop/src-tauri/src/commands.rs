@@ -22,7 +22,9 @@ pub async fn get_actions(state: State<'_, AppState>) -> Result<Vec<ActionManifes
 /// Return the current settings
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> Result<WheelSettings, String> {
-    let settings = state.settings.lock().await.clone();
+    let mut settings = state.settings.lock().await.clone();
+    settings.general.launch_at_login = wheel_win::shell::is_launch_at_login_registered();
+    settings.general.explorer_context_menu = wheel_win::shell::is_context_menu_registered();
     Ok(settings)
 }
 
@@ -41,6 +43,22 @@ pub async fn save_settings(
     wheel_win::hooks::set_always_show(migrated.trigger.always_show);
     wheel_win::hooks::set_modifier(migrated.trigger.modifier.clone());
     wheel_win::hooks::set_paused(migrated.trigger.paused);
+
+    // Synchronize Windows startup registration (Launch at Windows Login)
+    if let Err(e) = wheel_win::shell::set_launch_at_login(migrated.general.launch_at_login) {
+        tracing::warn!("Failed to synchronize launch at login: {}", e);
+    }
+
+    // Synchronize Windows Explorer context menu registration
+    if migrated.general.explorer_context_menu {
+        if let Err(e) = wheel_win::shell::register_context_menu(None) {
+            tracing::warn!("Failed to register context menu: {}", e);
+        }
+    } else {
+        if let Err(e) = wheel_win::shell::unregister_context_menu() {
+            tracing::warn!("Failed to unregister context menu: {}", e);
+        }
+    }
 
     // Broadcast settings update to frontend windows
     let _ = app.emit("settings-updated", &migrated);
@@ -267,15 +285,30 @@ async fn run_instant_action(
         out
     };
 
+    let chosen_folder: Option<PathBuf> = if output_settings.policy == wheel_core::OutputPolicy::AskEachTime {
+        tokio::task::spawn_blocking(wheel_win::shell::pick_folder)
+            .await
+            .ok()
+            .and_then(|r| r.ok())
+            .flatten()
+    } else {
+        None
+    };
+
+    let effective_folder = if output_settings.policy == wheel_core::OutputPolicy::AskEachTime {
+        chosen_folder.as_deref()
+    } else {
+        output_settings.fixed_folder.as_ref().map(std::path::Path::new)
+    };
+
     if target_ext == "pdf" {
         if !job.inputs.is_empty() {
-            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
             let output_path = wheel_core::output::resolve_output_path(
                 &job.inputs[0],
                 "pdf",
                 &output_settings.suffix,
                 &output_settings.policy,
-                fixed_folder,
+                effective_folder,
                 output_settings.overwrite_source,
             );
             let inputs_clone = job.inputs.clone();
@@ -301,13 +334,12 @@ async fn run_instant_action(
                 .trim_start_matches('.')
                 .to_lowercase();
 
-            let fixed_folder = output_settings.fixed_folder.as_ref().map(std::path::Path::new);
             let output_path = wheel_core::output::resolve_output_path(
                 input,
                 &target_ext,
                 &output_settings.suffix,
                 &output_settings.policy,
-                fixed_folder,
+                effective_folder,
                 output_settings.overwrite_source,
             );
 
@@ -341,9 +373,14 @@ async fn run_instant_action(
                     output_path: output_clone.clone(),
                     quality: 85,
                 };
+                let preserve_meta = output_settings.preserve_metadata;
 
-                let result = tokio::task::spawn_blocking(move || {
-                    wheel_engines::image_convert::convert_image(&input_clone, &params)
+                let result = tokio::task::spawn_blocking(move || -> anyhow::Result<PathBuf> {
+                    let out = wheel_engines::image_convert::convert_image(&input_clone, &params)?;
+                    if !preserve_meta {
+                        let _ = wheel_engines::metadata::strip_metadata(&out, &out, false);
+                    }
+                    Ok(out)
                 })
                 .await;
 
@@ -433,6 +470,11 @@ async fn run_instant_action(
                     tracing::warn!("Failed to recycle source file {:?}: {}", input, e);
                 }
             }
+        }
+
+        // Copy converted outputs to clipboard if policy is set to clipboard
+        if output_settings.policy == wheel_core::OutputPolicy::Clipboard {
+            let _ = wheel_win::shell::copy_files_to_clipboard(&outputs);
         }
 
         let output_strs: Vec<String> = outputs
@@ -1210,6 +1252,31 @@ pub async fn set_explorer_context_menu(enabled: bool) -> Result<(), String> {
     } else {
         wheel_win::shell::unregister_context_menu().map_err(|e| e.to_string())
     }
+}
+
+/// Prompt the user to pick a folder using the native Windows dialog
+#[tauri::command]
+pub async fn pick_folder() -> Result<Option<String>, String> {
+    tokio::task::spawn_blocking(wheel_win::shell::pick_folder)
+        .await
+        .map_err(|e| e.to_string())?
+        .map(|opt| opt.map(|p| p.to_string_lossy().to_string()))
+        .map_err(|e| e.to_string())
+}
+
+/// Open the %LOCALAPPDATA%\Wheel data directory in Windows Explorer
+#[tauri::command]
+pub async fn open_data_folder() -> Result<(), String> {
+    let local_app_data = std::env::var("LOCALAPPDATA")
+        .or_else(|_| std::env::var("APPDATA"))
+        .unwrap_or_else(|_| ".".to_string());
+    let path = std::path::PathBuf::from(local_app_data).join("Wheel");
+    let _ = std::fs::create_dir_all(&path);
+    std::process::Command::new("explorer")
+        .arg(&path)
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Execute a multi-action preset chain

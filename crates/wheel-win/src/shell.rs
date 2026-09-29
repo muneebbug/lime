@@ -124,6 +124,104 @@ pub fn unregister_context_menu() -> Result<()> {
     Ok(())
 }
 
+/// Check if Wheel is registered to run at Windows login under HKCU
+pub fn is_launch_at_login_registered() -> bool {
+    let status = std::process::Command::new("reg")
+        .args(["query", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "Wheel"])
+        .output();
+
+    match status {
+        Ok(out) => out.status.success(),
+        Err(_) => false,
+    }
+}
+
+/// Register or unregister Wheel in the Windows startup registry (HKCU Run key)
+pub fn set_launch_at_login(enabled: bool) -> Result<()> {
+    if enabled {
+        let exe = std::env::current_exe().context("Failed to get current executable path")?;
+        let exe_str = exe.to_string_lossy();
+        let cmd_str = format!("\"{}\"", exe_str);
+
+        info!("Registering startup run key for Wheel: {}", cmd_str);
+        let status = std::process::Command::new("reg")
+            .args([
+                "add",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                "/v",
+                "Wheel",
+                "/t",
+                "REG_SZ",
+                "/d",
+                &cmd_str,
+                "/f",
+            ])
+            .status()?;
+
+        if !status.success() {
+            anyhow::bail!("Failed to register Wheel in Windows startup registry");
+        }
+    } else {
+        info!("Unregistering startup run key for Wheel");
+        let _ = std::process::Command::new("reg")
+            .args([
+                "delete",
+                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
+                "/v",
+                "Wheel",
+                "/f",
+            ])
+            .status();
+    }
+    Ok(())
+}
+
+/// Copy file paths to Windows clipboard
+pub fn copy_files_to_clipboard(paths: &[std::path::PathBuf]) -> Result<()> {
+    if paths.is_empty() {
+        return Ok(());
+    }
+
+    let escaped_items = paths
+        .iter()
+        .map(|p| format!("'{}'", p.to_string_lossy().replace('\'', "''")))
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let script = format!("Set-Clipboard -Path @({})", escaped_items);
+
+    let status = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .status();
+
+    if let Err(e) = status {
+        tracing::warn!("Failed to set clipboard: {}", e);
+    }
+    Ok(())
+}
+
+/// Prompt the user to select a folder using a native Windows folder browser dialog
+pub fn pick_folder() -> Result<Option<std::path::PathBuf>> {
+    let script = r#"
+Add-Type -AssemblyName System.Windows.Forms
+$dialog = New-Object System.Windows.Forms.FolderBrowserDialog
+$dialog.Description = "Select Wheel Output Folder"
+$dialog.ShowNewFolderButton = $true
+if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    [Console]::Out.Write($dialog.SelectedPath)
+}
+"#;
+    let output = std::process::Command::new("powershell")
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .output()?;
+    let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if path_str.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(std::path::PathBuf::from(path_str)))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

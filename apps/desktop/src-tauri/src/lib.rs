@@ -121,6 +121,8 @@ pub fn run() {
             commands::is_explorer_context_menu_enabled,
             commands::set_explorer_context_menu,
             commands::run_preset,
+            commands::pick_folder,
+            commands::open_data_folder,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -140,6 +142,29 @@ pub fn run() {
 
             info!("{} setup complete", APP_NAME);
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { .. } = event {
+                let app = window.app_handle();
+                let state = app.state::<AppState>();
+                let minimize_to_tray = {
+                    if let Ok(guard) = state.settings.try_lock() {
+                        guard.general.minimize_to_tray
+                    } else {
+                        true
+                    }
+                };
+
+                if !minimize_to_tray {
+                    let other_visible = app.webview_windows().into_iter().any(|(label, w)| {
+                        label != window.label() && label != "overlay" && w.is_visible().unwrap_or(false)
+                    });
+                    if !other_visible {
+                        tracing::info!("Closing last window with minimize_to_tray=false, exiting Wheel");
+                        app.exit(0);
+                    }
+                }
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -234,11 +259,16 @@ async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>
                     }
                 } else {
                     // Released inside overlay: OLE drop will handle action dispatch.
-                    // Keep overlay visible for a brief moment so the drop completes,
-                    // then auto-hide after 350ms.
+                    // Keep overlay visible for confirmation timeout so the drop completes,
+                    // then auto-hide.
                     let overlay_clone = app.get_webview_window("overlay");
+                    let settings_clone = Arc::clone(&settings);
                     tauri::async_runtime::spawn(async move {
-                        tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+                        let timeout = {
+                            let s = settings_clone.lock().await;
+                            s.trigger.confirm_timeout_ms.max(50) as u64
+                        };
+                        tokio::time::sleep(std::time::Duration::from_millis(timeout)).await;
                         wheel_win::hooks::set_drag_armed(false);
                         if let Some(overlay) = overlay_clone {
                             let _ = overlay.hide();

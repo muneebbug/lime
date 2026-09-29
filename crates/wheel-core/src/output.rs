@@ -45,8 +45,8 @@ pub fn resolve_output_path(
         return disambiguate(&parent, &new_stem, target_ext);
     }
 
-    // If the file already exists, disambiguate
-    if candidate.exists() {
+    // If the file already exists and overwrite is forbidden, disambiguate
+    if !overwrite_source && candidate.exists() {
         return disambiguate(&parent, &new_stem, target_ext);
     }
 

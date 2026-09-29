@@ -26,6 +26,7 @@ export function CommandPalette() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [actions, setActions] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
+  const [settings, setSettings] = useState<any>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -48,6 +49,13 @@ export function CommandPalette() {
         setHistory(hist);
       } catch (e) {
         console.error("Failed to load history", e);
+      }
+
+      try {
+        const s = await invoke<any>("get_settings");
+        setSettings(s);
+      } catch (e) {
+        console.error("Failed to load settings in palette", e);
       }
     }
     loadData();
@@ -89,33 +97,40 @@ export function CommandPalette() {
       });
     }
 
-    // 3. Preset Chains
-    items.push({
-      id: "preset.clean_web",
-      title: "Preset: Clean Web Asset",
-      subtitle: "Strip EXIF metadata + Convert to optimized WebP",
-      category: "presets",
-      icon: <Sparkles size={14} className="text-purple-400" />,
-      actionId: "preset.clean_web",
-    });
+    // 3. Preset Chains (only enabled presets from settings)
+    const activePresets = settings?.presets ?? [
+      {
+        id: "preset.clean_web",
+        name: "Clean Web Asset",
+        description: "Strip EXIF metadata + Convert to optimized WebP",
+        enabled: true,
+      },
+      {
+        id: "preset.share_screenshot",
+        name: "Share Screenshot",
+        description: "Add stylish background canvas padding + PNG export",
+        enabled: true,
+      },
+      {
+        id: "preset.transparent_png",
+        name: "Cutout PNG",
+        description: "Remove background + export transparent PNG",
+        enabled: true,
+      },
+    ];
 
-    items.push({
-      id: "preset.share_screenshot",
-      title: "Preset: Share Screenshot",
-      subtitle: "Add stylish background canvas padding + PNG export",
-      category: "presets",
-      icon: <Sparkles size={14} className="text-purple-400" />,
-      actionId: "preset.share_screenshot",
-    });
-
-    items.push({
-      id: "preset.transparent_png",
-      title: "Preset: Cutout PNG",
-      subtitle: "Remove background + export transparent PNG",
-      category: "presets",
-      icon: <Sparkles size={14} className="text-purple-400" />,
-      actionId: "preset.transparent_png",
-    });
+    for (const p of activePresets) {
+      if (p.enabled !== false) {
+        items.push({
+          id: p.id,
+          title: `Preset: ${p.name}`,
+          subtitle: p.description,
+          category: "presets",
+          icon: <Sparkles size={14} className="text-purple-400" />,
+          actionId: p.id,
+        });
+      }
+    }
 
     // 4. Recent Files from History
     for (const h of history) {
@@ -134,7 +149,7 @@ export function CommandPalette() {
     }
 
     return items;
-  }, [actions, history]);
+  }, [actions, history, settings]);
 
   // Filter based on query
   const filteredItems = useMemo(() => {

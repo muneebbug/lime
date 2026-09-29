@@ -15,6 +15,7 @@ import {
   Download,
   Trash2,
   FileCheck2,
+  FolderOpen,
 } from "lucide-react";
 import {
   CaptionButtons,
@@ -46,6 +47,7 @@ export function SettingsWindow() {
   const [searchQuery, setSearchQuery] = useState("");
   const [settings, setSettings] = useState<any>(null);
   const [historyCount, setHistoryCount] = useState<number>(0);
+  const [historyList, setHistoryList] = useState<any[]>([]);
   const [ffmpegStatus, setFfmpegStatus] = useState<any>(null);
   const [rmbgStatus, setRmbgStatus] = useState<any>(null);
   const [isSaved, setIsSaved] = useState<boolean>(false);
@@ -70,7 +72,8 @@ export function SettingsWindow() {
       }
 
       try {
-        const hist = await invoke<any[]>("get_history", { limit: 100 });
+        const hist = await invoke<any[]>("get_history", { limit: 50 });
+        setHistoryList(hist);
         setHistoryCount(hist.length);
       } catch (e) {
         console.error("Failed to load history count", e);
@@ -122,9 +125,20 @@ export function SettingsWindow() {
   const handleClearHistory = async () => {
     try {
       await invoke("clear_history");
+      setHistoryList([]);
       setHistoryCount(0);
     } catch (e) {
       console.error("Failed to clear history", e);
+    }
+  };
+
+  const handleDeleteHistoryItem = async (id: string) => {
+    try {
+      await invoke("delete_history_item", { id });
+      setHistoryList((prev) => prev.filter((item) => item.id !== id));
+      setHistoryCount((prev) => Math.max(0, prev - 1));
+    } catch (e) {
+      console.error("Failed to delete history item", e);
     }
   };
 
@@ -585,22 +599,46 @@ export function SettingsWindow() {
                     title="Fixed Folder Path"
                     description="Absolute directory path where output files will be written"
                   >
-                    <input
-                      type="text"
-                      value={settings.output.fixed_folder || ""}
-                      onChange={(e) => {
-                        const updated = {
-                          ...settings,
-                          output: {
-                            ...settings.output,
-                            fixed_folder: e.target.value.trim() || null,
-                          },
-                        };
-                        handleSaveSettings(updated);
-                      }}
-                      placeholder="C:\Users\...\Pictures\Wheel"
-                      className="w-56 px-2.5 py-1 text-xs bg-[#242424] border border-white/[0.08] focus:border-white/30 rounded-lg text-white font-mono outline-none"
-                    />
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={settings.output.fixed_folder || ""}
+                        onChange={(e) => {
+                          const updated = {
+                            ...settings,
+                            output: {
+                              ...settings.output,
+                              fixed_folder: e.target.value.trim() || null,
+                            },
+                          };
+                          handleSaveSettings(updated);
+                        }}
+                        placeholder="C:\Users\...\Pictures\Wheel"
+                        className="w-48 px-2.5 py-1 text-xs bg-[#242424] border border-white/[0.08] focus:border-white/30 rounded-lg text-white font-mono outline-none"
+                      />
+                      <WheelButton
+                        variant="secondary"
+                        onClick={async () => {
+                          try {
+                            const folder = await invoke<string | null>("pick_folder");
+                            if (folder) {
+                              const updated = {
+                                ...settings,
+                                output: {
+                                  ...settings.output,
+                                  fixed_folder: folder,
+                                },
+                              };
+                              handleSaveSettings(updated);
+                            }
+                          } catch (e) {
+                            console.error("Failed to pick folder", e);
+                          }
+                        }}
+                      >
+                        Browse...
+                      </WheelButton>
+                    </div>
                   </SettingRow>
                 )}
 
@@ -798,6 +836,64 @@ export function SettingsWindow() {
                   </WheelButton>
                 </SettingRow>
               </SettingSection>
+
+              {historyList.length > 0 && (
+                <SettingSection title="Recent Activity">
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                    {historyList.map((item) => {
+                      const outPath = item.outputs?.[0] || item.inputs?.[0] || "";
+                      const fileName = outPath.split(/[/\\]/).pop() || outPath;
+                      const timeStr = item.created_at
+                        ? new Date(item.created_at).toLocaleTimeString()
+                        : "";
+                      return (
+                        <div
+                          key={item.id}
+                          className="p-2.5 bg-[#242424] border border-white/[0.06] rounded-xl flex items-center justify-between gap-3 text-xs"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="font-medium text-neutral-200 truncate"
+                                title={outPath}
+                              >
+                                {fileName}
+                              </span>
+                              <span className="text-[10px] text-neutral-400 bg-white/[0.06] px-1.5 py-0.5 rounded font-mono shrink-0">
+                                {item.action_id}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-neutral-500 mt-0.5 truncate">
+                              {timeStr} • {outPath}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            {outPath && (
+                              <button
+                                onClick={() =>
+                                  invoke("open_in_folder", { path: outPath })
+                                }
+                                className="p-1.5 text-neutral-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] rounded-lg transition-colors cursor-pointer"
+                                title="Reveal in File Explorer"
+                              >
+                                <FolderOpen size={13} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleDeleteHistoryItem(item.id)}
+                              className="p-1.5 text-neutral-400 hover:text-red-400 bg-white/[0.04] hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                              title="Delete record"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </SettingSection>
+              )}
             </div>
           )}
 
@@ -821,10 +917,19 @@ export function SettingsWindow() {
                   <div className="h-px bg-white/[0.04]" />
 
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-neutral-400">Local Data Storage</span>
-                    <span className="font-mono text-neutral-400 text-[11px] truncate max-w-xs">
-                      %LOCALAPPDATA%\Wheel\
-                    </span>
+                    <div>
+                      <div className="text-neutral-400">Local Data Storage</div>
+                      <div className="font-mono text-neutral-400 text-[11px] truncate max-w-xs mt-0.5">
+                        %LOCALAPPDATA%\Wheel\
+                      </div>
+                    </div>
+                    <WheelButton
+                      variant="secondary"
+                      onClick={() => invoke("open_data_folder")}
+                    >
+                      <FolderOpen size={12} className="inline mr-1" />
+                      Open Folder
+                    </WheelButton>
                   </div>
                 </div>
               </SettingSection>

@@ -9,17 +9,40 @@ interface RadialWheelProps {
   onTogglePage: () => void;
   onWedgeHover: (id: string | null) => void;
   onWedgeDrop: (actionId: string, files: string[]) => void;
+  size?: number;
+  contextFilterEnabled?: boolean;
+  soundEnabled?: boolean;
 }
 
-const WHEEL_SIZE = 320;
-const INNER_RADIUS = 76;
-const OUTER_RADIUS = 148;
-const CENTER_RADIUS = 52;
+const DEFAULT_WHEEL_SIZE = 320;
+const BASE_INNER_RADIUS = 76;
+const BASE_OUTER_RADIUS = 148;
+const BASE_CENTER_RADIUS = 52;
+
+function playHoverTick() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(1400, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.02);
+    gain.gain.setValueAtTime(0.04, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.02);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.025);
+  } catch {}
+}
 
 export function filterActions(
   actions: ActionManifest[],
   page: WheelPage,
-  extensions: string[]
+  extensions: string[],
+  contextFilterEnabled = true
 ): ActionManifest[] {
   const categoryActions = actions
     .filter((a) => {
@@ -33,8 +56,8 @@ export function filterActions(
     return [];
   }
 
-  // Context filter: if extensions exist, show actions that accept them
-  if (extensions.length > 0) {
+  // Context filter: if enabled and extensions exist, show actions that accept them
+  if (contextFilterEnabled && extensions.length > 0) {
     const cleanExts = extensions.map((e) => e.toLowerCase().trim().replace(/^\./, ""));
     const matched = categoryActions.filter((a) => {
       if (a.accepts.extensions.length === 0) return true;
@@ -49,7 +72,14 @@ export function filterActions(
   return categoryActions.slice(0, 8);
 }
 
-function wedgeGeometry(index: number, total: number, outerR: number, innerR: number) {
+function wedgeGeometry(
+  index: number,
+  total: number,
+  outerR: number,
+  innerR: number,
+  cx: number,
+  cy: number
+) {
   const angleStep = (2 * Math.PI) / total;
   // Start at top (-90°)
   const startAngle = index * angleStep - Math.PI / 2;
@@ -59,8 +89,6 @@ function wedgeGeometry(index: number, total: number, outerR: number, innerR: num
 
   const sa = startAngle + gap / 2;
   const ea = endAngle - gap / 2;
-  const cx = WHEEL_SIZE / 2;
-  const cy = WHEEL_SIZE / 2;
 
   const x1 = cx + outerR * Math.cos(sa);
   const y1 = cy + outerR * Math.sin(sa);
@@ -94,13 +122,15 @@ export function hitTestWedge(
   cursorY: number,
   totalWedges: number,
   wheelCenterX: number,
-  wheelCenterY: number
+  wheelCenterY: number,
+  outerRadius = BASE_OUTER_RADIUS,
+  innerRadius = BASE_INNER_RADIUS
 ): number | null {
   const dx = cursorX - wheelCenterX;
   const dy = cursorY - wheelCenterY;
   const dist = Math.sqrt(dx * dx + dy * dy);
 
-  if (dist < INNER_RADIUS || dist > OUTER_RADIUS) return null;
+  if (dist < innerRadius || dist > outerRadius) return null;
 
   const angle = Math.atan2(dy, dx) + Math.PI / 2; // offset so 0 is top
   const normalized = ((angle % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
@@ -116,22 +146,30 @@ function RadialWheelInner({
   onTogglePage,
   onWedgeHover,
   onWedgeDrop,
+  size = DEFAULT_WHEEL_SIZE,
+  contextFilterEnabled = true,
+  soundEnabled = false,
 }: RadialWheelProps) {
   const actions = useWheelStore((s) => s.actions);
   const visibleActions = useMemo(
-    () => filterActions(actions, currentPage, extensions),
-    [actions, currentPage, extensions]
+    () => filterActions(actions, currentPage, extensions, contextFilterEnabled),
+    [actions, currentPage, extensions, contextFilterEnabled]
   );
 
-  const cx = WHEEL_SIZE / 2;
-  const cy = WHEEL_SIZE / 2;
+  const wheelSize = size || DEFAULT_WHEEL_SIZE;
+  const scale = wheelSize / DEFAULT_WHEEL_SIZE;
+  const outerR = BASE_OUTER_RADIUS * scale;
+  const innerR = BASE_INNER_RADIUS * scale;
+  const centerR = BASE_CENTER_RADIUS * scale;
+  const cx = wheelSize / 2;
+  const cy = wheelSize / 2;
 
   const wedgeGeometries = useMemo(() => {
     return visibleActions.map((action, i) => ({
       action,
-      ...wedgeGeometry(i, visibleActions.length, OUTER_RADIUS, INNER_RADIUS),
+      ...wedgeGeometry(i, visibleActions.length, outerR, innerR, cx, cy),
     }));
-  }, [visibleActions]);
+  }, [visibleActions, outerR, innerR, cx, cy]);
 
   const hoveredAction = useMemo(
     () => visibleActions.find((a) => a.id === hoveredWedge),
@@ -141,14 +179,17 @@ function RadialWheelInner({
   return (
     <div
       className="relative select-none"
-      style={{ width: WHEEL_SIZE, height: WHEEL_SIZE }}
+      style={{ width: wheelSize, height: wheelSize }}
       onMouseMove={(e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
-        const idx = hitTestWedge(mx, my, visibleActions.length, cx, cy);
+        const idx = hitTestWedge(mx, my, visibleActions.length, cx, cy, outerR, innerR);
         const nextId = idx !== null ? visibleActions[idx]?.id ?? null : null;
         if (nextId !== hoveredWedge) {
+          if (soundEnabled && nextId !== null) {
+            playHoverTick();
+          }
           onWedgeHover(nextId);
         }
       }}
@@ -172,8 +213,8 @@ function RadialWheelInner({
       />
 
       <svg
-        width={WHEEL_SIZE}
-        height={WHEEL_SIZE}
+        width={wheelSize}
+        height={wheelSize}
         className="absolute inset-0"
         style={{
           filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.5))",
@@ -197,7 +238,7 @@ function RadialWheelInner({
         <circle
           cx={cx}
           cy={cy}
-          r={OUTER_RADIUS + 2}
+          r={outerR + 2}
           fill="none"
           stroke="hsla(0,0%,100%,0.08)"
           strokeWidth="1"
@@ -206,7 +247,7 @@ function RadialWheelInner({
         <circle
           cx={cx}
           cy={cy}
-          r={INNER_RADIUS - 2}
+          r={innerR - 2}
           fill="none"
           stroke="hsla(0,0%,100%,0.06)"
           strokeWidth="1"
@@ -261,10 +302,10 @@ function RadialWheelInner({
       <div
         className="absolute flex flex-col items-center justify-center rounded-full cursor-pointer pointer-events-auto"
         style={{
-          left: cx - CENTER_RADIUS,
-          top: cy - CENTER_RADIUS,
-          width: CENTER_RADIUS * 2,
-          height: CENTER_RADIUS * 2,
+          left: cx - centerR,
+          top: cy - centerR,
+          width: centerR * 2,
+          height: centerR * 2,
           background: hoveredAction
             ? "linear-gradient(135deg, hsla(22,95%,50%,0.95), hsla(355,85%,52%,0.95))"
             : "hsla(240,15%,15%,0.92)",

@@ -44,14 +44,39 @@ export function WheelOverlay() {
 
   const overlayRef = useRef<HTMLDivElement>(null);
   const [toast, setToast] = useState<ToastInfo | null>(null);
+  const [wheelSettings, setWheelSettings] = useState<any>(null);
 
   const lastHoveredRef = useRef<string | null>(null);
   const lastDropPosRef = useRef<{ x: number; y: number }>({ x: 200, y: 200 });
   const isDroppingRef = useRef(false);
 
+  const wheelSize = wheelSettings?.wheel_ui?.size || 320;
+  const contextFilterEnabled = wheelSettings?.wheel_ui?.context_filter_enabled ?? true;
+  const soundEnabled = wheelSettings?.wheel_ui?.sound_enabled ?? false;
+  const reducedMotion = wheelSettings?.wheel_ui?.reduced_motion ?? false;
+
   useEffect(() => {
     loadActions();
-    useWheelStore.getState().setPage("convert");
+    invoke<any>("get_settings")
+      .then((s) => {
+        setWheelSettings(s);
+        if (s?.wheel_ui?.start_page) {
+          useWheelStore.getState().setPage(s.wheel_ui.start_page);
+        }
+      })
+      .catch(console.error);
+
+    const unlisten = listen("settings-updated", (event: any) => {
+      const s = event.payload;
+      setWheelSettings(s);
+      if (s?.wheel_ui?.start_page) {
+        useWheelStore.getState().setPage(s.wheel_ui.start_page);
+      }
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
   }, [loadActions]);
 
   const triggerAction = useCallback((actionId: string, files: string[]) => {
@@ -71,6 +96,8 @@ export function WheelOverlay() {
 
     lastHoveredRef.current = null;
     useWheelStore.getState().clearDragState();
+    const startPage = wheelSettings?.wheel_ui?.start_page || "convert";
+    useWheelStore.getState().setPage(startPage);
 
     invoke("dispatch_action", {
       request: {
@@ -95,20 +122,23 @@ export function WheelOverlay() {
           invoke("hide_overlay");
         }, 5000);
       });
-  }, []);
+  }, [wheelSettings]);
 
   const handlePointerMove = useCallback((x: number, y: number) => {
     lastDropPosRef.current = { x, y };
     const state = useWheelStore.getState();
-    const visible = filterActions(state.actions, state.currentPage, state.dragExtensions);
-    const idx = hitTestWedge(x, y, visible.length, 200, 200);
+    const visible = filterActions(state.actions, state.currentPage, state.dragExtensions, contextFilterEnabled);
+    const scale = wheelSize / 320;
+    const outerR = 148 * scale;
+    const innerR = 76 * scale;
+    const idx = hitTestWedge(x, y, visible.length, 200, 200, outerR, innerR);
     const newHovered = idx !== null ? visible[idx]?.id ?? null : null;
 
     if (newHovered !== lastHoveredRef.current) {
       lastHoveredRef.current = newHovered;
       state.setHoveredWedge(newHovered);
     }
-  }, []);
+  }, [contextFilterEnabled, wheelSize]);
 
   const handlePointerLeave = useCallback(() => {
     if (lastHoveredRef.current !== null) {
@@ -141,12 +171,15 @@ export function WheelOverlay() {
         state.dragExtensions.length > 0
           ? state.dragExtensions
           : dropFiles.map((f) => f.split(".").pop()?.toLowerCase() ?? "").filter(Boolean);
-      const visible = filterActions(state.actions, state.currentPage, exts);
+      const visible = filterActions(state.actions, state.currentPage, exts, contextFilterEnabled);
 
       const dropX = x && x > 0 ? x : lastDropPosRef.current.x;
       const dropY = y && y > 0 ? y : lastDropPosRef.current.y;
 
-      const idx = hitTestWedge(dropX, dropY, visible.length, 200, 200);
+      const scale = wheelSize / 320;
+      const outerR = 148 * scale;
+      const innerR = 76 * scale;
+      const idx = hitTestWedge(dropX, dropY, visible.length, 200, 200, outerR, innerR);
       const wedgeId = idx !== null ? visible[idx]?.id : (state.hoveredWedge ?? lastHoveredRef.current);
 
       lastHoveredRef.current = null;
@@ -327,15 +360,19 @@ export function WheelOverlay() {
         {isDragging && (
           <motion.div
             key="wheel"
-            initial={{ scale: 0.5, opacity: 0 }}
+            initial={reducedMotion ? { opacity: 0 } : { scale: 0.5, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0.4, opacity: 0 }}
-            transition={{
-              type: "spring",
-              stiffness: 400,
-              damping: 30,
-              duration: 0.15,
-            }}
+            exit={reducedMotion ? { opacity: 0 } : { scale: 0.4, opacity: 0 }}
+            transition={
+              reducedMotion
+                ? { duration: 0.05 }
+                : {
+                    type: "spring",
+                    stiffness: 400,
+                    damping: 30,
+                    duration: 0.15,
+                  }
+            }
           >
             <RadialWheel
               files={dragFiles}
@@ -345,6 +382,9 @@ export function WheelOverlay() {
               onWedgeHover={setHoveredWedge}
               onWedgeDrop={handleWedgeDrop}
               hoveredWedge={hoveredWedge}
+              size={wheelSize}
+              contextFilterEnabled={contextFilterEnabled}
+              soundEnabled={soundEnabled}
             />
           </motion.div>
         )}
