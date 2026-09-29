@@ -201,42 +201,42 @@ export function RedactTool({ filePath }: RedactToolProps) {
     >
       <div className="flex flex-col h-full w-full overflow-hidden">
         {/* Top Control Bar: Mode selection & Warning */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-2.5 bg-zinc-900/60 border-b border-white/5 backdrop-blur-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2.5 bg-[#181818] border-b border-white/[0.06]">
           {/* Modes */}
-          <div className="flex items-center gap-1.5 p-1 bg-zinc-950/60 rounded-xl border border-white/10">
+          <div className="flex items-center gap-0.5 p-0.5 bg-[#242424] rounded-lg border border-white/[0.08]">
             <button
               onClick={() => setActiveMode("black_bar")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                 activeMode === "black_bar"
-                  ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
+                  ? "bg-white/[0.14] text-white shadow-sm font-semibold"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
               }`}
             >
-              <Square size={13} className="fill-current" />
+              <Square size={12} className="fill-current" />
               <span>Black Bar</span>
             </button>
 
             <button
               onClick={() => setActiveMode("pixelate")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                 activeMode === "pixelate"
-                  ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
+                  ? "bg-white/[0.14] text-white shadow-sm font-semibold"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
               }`}
             >
-              <Grid3X3 size={13} />
+              <Grid3X3 size={12} />
               <span>Pixelate</span>
             </button>
 
             <button
               onClick={() => setActiveMode("blur")}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                 activeMode === "blur"
-                  ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
+                  ? "bg-white/[0.14] text-white shadow-sm font-semibold"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
               }`}
             >
-              <EyeOff size={13} />
+              <EyeOff size={12} />
               <span>Heavy Blur</span>
             </button>
           </div>
@@ -246,28 +246,28 @@ export function RedactTool({ filePath }: RedactToolProps) {
             <button
               onClick={handleUndo}
               disabled={regions.length === 0}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:text-white bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-neutral-300 hover:text-white bg-[#242424] hover:bg-[#2c2c2c] border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
               title="Undo last box (Ctrl+Z)"
             >
-              <Undo2 size={13} />
+              <Undo2 size={12} />
               <span>Undo</span>
             </button>
 
             <button
               onClick={handleClear}
               disabled={regions.length === 0}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-400 hover:text-red-400 bg-white/5 hover:bg-red-500/10 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-neutral-400 hover:text-red-400 bg-[#242424] hover:bg-red-500/10 border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
               title="Clear all redactions"
             >
-              <Trash2 size={13} />
+              <Trash2 size={12} />
               <span>Clear</span>
             </button>
           </div>
         </div>
 
         {/* Warning Banner */}
-        <div className="flex items-center gap-2 px-6 py-2 bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs">
-          <AlertTriangle size={14} className="shrink-0 text-amber-400" />
+        <div className="flex items-center gap-2 px-5 py-2 bg-amber-500/10 border-b border-amber-500/20 text-amber-300 text-xs">
+          <AlertTriangle size={13} className="shrink-0 text-amber-400" />
           <span>
             <strong>Irreversible pixel burn</strong>: Redactions permanently overwrite pixel data. All EXIF & location metadata will be stripped.
           </span>
@@ -276,7 +276,7 @@ export function RedactTool({ filePath }: RedactToolProps) {
         {/* Main Canvas Area */}
         <div
           ref={containerRef}
-          className="relative flex-1 flex items-center justify-center p-6 select-none overflow-hidden bg-black/40"
+          className="relative flex-1 flex items-center justify-center p-6 select-none overflow-hidden bg-[#141414]"
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}

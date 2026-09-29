@@ -257,11 +257,20 @@ Checked via `cargo info window-vibrancy`.
 4. **Action Filtering Fallback:** In `apps/desktop/src/windows/overlay/RadialWheel.tsx`, if extension-based filtering leaves 0 actions (e.g. dragging non-image files or folders), gracefully fall back to displaying the first 8 actions in the requested category so the 2nd page never renders 0 wedges or an empty wheel.
 **Rationale:** High-precision mouse wheels and trackpads emit multiple scroll ticks per detent, causing immediate toggle flapping (`convert -> tools -> convert`) without debounce. Furthermore, when non-image files are dragged, strict extension filtering yielded 0 actions on the Tools page, giving the appearance of an invisible or unopened 2nd page. Fallback rendering and debounced dual-route IPC guarantee seamless, reliable wheel flipping across any hardware or input type.
 
+### D045: Raycast on Windows Design System Unification
+**Decision:** Standardize all desktop windows (Settings, Command Palette, and Tool Windows) on the Raycast on Windows visual design system:
+1. **Shared Raycast Primitives (`apps/desktop/src/ui/RaycastUI.tsx`):** Implement `RaycastCaptionButtons` (native Windows minimize, maximize, and red hover close controls), `RaycastToggle` (subtle dark pill switch with smooth thumb transition), `RaycastHotkeyPill` (split action/shortcut button with reset button), `RaycastSelect` (dark dropdown with chevron indicator), `RaycastSegmented` (discrete segmented control container), `RaycastButton` (primary Raycast orange-red `#ff6339`, secondary `#262626`, and pro badges), `RaycastRow`, and `RaycastSection`.
+2. **Settings Window (`SettingsWindow.tsx`):** Rebuild the settings window to match the Raycast on Windows layout: dark charcoal frame (`#181818`), top search input bar (`#222222`), user profile card ("Muneeb Ur Rehman - Account"), left navigation items with crisp icons and cyan Pro badges, and content panel (`#1e1e1e`) with appearance themes, hotkey configuration, system tray toggles, and feature sections.
+3. **Tool Windows Framework (`ToolWindowLayout.tsx`):** Overhaul the tool window chrome with Raycast titlebar, tool badge, file chip, native caption buttons, and the iconic Raycast bottom Action Bar featuring the primary orange-red action button (`↵` kbd) and secondary shortcut buttons.
+4. **Tool Windows & Command Palette:** Update `CropTool`, `CompressTool`, `AddBgTool`, `RemoveBgTool`, `MetadataTool`, `EditTool`, `AnnotateTool`, `RedactTool`, and `CommandPalette` to utilize Raycast elevated cards (`#242424`), subtle borders (`rgba(255, 255, 255, 0.06)`), and unified typography.
+**Rationale:** Creates a cohesive, high-end desktop experience matching the native Windows 11 Raycast aesthetic requested by the user, providing immediate visual familiarity, keyboard-centric power features, and clean information hierarchy.
+
 ---
 
 ## Pending / Open Questions
 
 - **Code signing:** Windows code signing requires a certificate. The Tauri bundler supports
   it via env vars. We'll document the process in M7 without purchasing one for dev builds.
+
 
 

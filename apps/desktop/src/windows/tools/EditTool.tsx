@@ -123,7 +123,7 @@ export function EditTool({ filePath }: EditToolProps) {
     <ToolWindowLayout
       title="Edit Image"
       subtitle={fileName}
-      icon={<Sliders size={16} />}
+      icon={<Sliders size={16} className="text-[#ff6339]" />}
       primaryActionLabel="Apply Adjustments"
       isProcessing={isProcessing}
       successResultPath={successPath}
@@ -132,35 +132,35 @@ export function EditTool({ filePath }: EditToolProps) {
     >
       <div className="flex flex-col h-full gap-4">
         {/* Controls Toolbar: Transform & Adjustments */}
-        <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 text-xs">
+        <div className="flex flex-col gap-3.5 p-4 rounded-xl bg-[#242424] border border-white/[0.06] text-xs shadow-sm">
           {/* Top row: Rotation & Flips + Resize inputs */}
-          <div className="flex items-center justify-between gap-3 pb-2 border-b border-white/5">
+          <div className="flex items-center justify-between gap-3 pb-3 border-b border-white/[0.06]">
             {/* Rotate & Flip buttons */}
             <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider mr-1">
+              <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider mr-1">
                 Transform:
               </span>
               <button
                 onClick={() => handleRotate(-90)}
-                className="p-1.5 rounded-lg bg-zinc-950 border border-white/10 hover:bg-white/5 text-zinc-300 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg bg-[#1c1c1c] border border-white/[0.08] hover:bg-white/[0.08] text-neutral-300 transition-colors cursor-pointer"
                 title="Rotate 90° CCW"
               >
                 <RotateCcw size={14} />
               </button>
               <button
                 onClick={() => handleRotate(90)}
-                className="p-1.5 rounded-lg bg-zinc-950 border border-white/10 hover:bg-white/5 text-zinc-300 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg bg-[#1c1c1c] border border-white/[0.08] hover:bg-white/[0.08] text-neutral-300 transition-colors cursor-pointer"
                 title="Rotate 90° CW"
               >
                 <RotateCw size={14} />
               </button>
-              <div className="w-px h-5 bg-white/10 mx-1" />
+              <div className="w-px h-5 bg-white/[0.08] mx-1" />
               <button
                 onClick={() => setFlipH(!flipH)}
                 className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
                   flipH
-                    ? "bg-orange-500/20 border-orange-500 text-orange-300"
-                    : "bg-zinc-950 border-white/10 hover:bg-white/5 text-zinc-300"
+                    ? "bg-white/[0.14] border-white/30 text-white font-medium shadow-sm"
+                    : "bg-[#1c1c1c] border-white/[0.08] hover:bg-white/[0.08] text-neutral-300"
                 }`}
                 title="Flip Horizontal"
               >
@@ -170,8 +170,8 @@ export function EditTool({ filePath }: EditToolProps) {
                 onClick={() => setFlipV(!flipV)}
                 className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
                   flipV
-                    ? "bg-orange-500/20 border-orange-500 text-orange-300"
-                    : "bg-zinc-950 border-white/10 hover:bg-white/5 text-zinc-300"
+                    ? "bg-white/[0.14] border-white/30 text-white font-medium shadow-sm"
+                    : "bg-[#1c1c1c] border-white/[0.08] hover:bg-white/[0.08] text-neutral-300"
                 }`}
                 title="Flip Vertical"
               >
@@ -181,32 +181,32 @@ export function EditTool({ filePath }: EditToolProps) {
 
             {/* Resize inputs */}
             <div className="flex items-center gap-2">
-              <span className="text-[11px] text-zinc-500 font-semibold uppercase tracking-wider">
+              <span className="text-[11px] text-neutral-400 font-medium uppercase tracking-wider">
                 Resize:
               </span>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <input
                   type="number"
                   value={resizeW}
                   onChange={(e) => handleWidthChange(parseInt(e.target.value) || 1)}
-                  className="w-16 px-1.5 py-0.5 rounded bg-zinc-950 border border-white/10 text-right font-mono text-[11px] text-zinc-200 focus:outline-none focus:border-orange-500"
+                  className="w-18 px-2 py-1 rounded-lg bg-[#1c1c1c] border border-white/[0.08] text-right font-mono text-xs text-neutral-200 focus:outline-none focus:border-white/30"
                 />
-                <span className="text-zinc-600">×</span>
+                <span className="text-neutral-500 font-mono">×</span>
                 <input
                   type="number"
                   value={resizeH}
                   onChange={(e) => handleHeightChange(parseInt(e.target.value) || 1)}
-                  className="w-16 px-1.5 py-0.5 rounded bg-zinc-950 border border-white/10 text-right font-mono text-[11px] text-zinc-200 focus:outline-none focus:border-orange-500"
+                  className="w-18 px-2 py-1 rounded-lg bg-[#1c1c1c] border border-white/[0.08] text-right font-mono text-xs text-neutral-200 focus:outline-none focus:border-white/30"
                 />
                 <button
                   onClick={() => setLockAspect(!lockAspect)}
-                  className="p-1 rounded text-zinc-400 hover:text-zinc-200 cursor-pointer ml-0.5"
+                  className="p-1 rounded text-neutral-400 hover:text-neutral-200 cursor-pointer ml-0.5"
                   title={lockAspect ? "Aspect ratio locked" : "Aspect ratio unlocked"}
                 >
                   {lockAspect ? (
-                    <Lock size={12} className="text-orange-400" />
+                    <Lock size={13} className="text-[#ff6339]" />
                   ) : (
-                    <Unlock size={12} className="text-zinc-600" />
+                    <Unlock size={13} className="text-neutral-500" />
                   )}
                 </button>
               </div>
@@ -214,14 +214,14 @@ export function EditTool({ filePath }: EditToolProps) {
           </div>
 
           {/* Adjustment Sliders Grid */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-4 gap-4 pt-1">
             {/* Brightness */}
-            <div className="flex flex-col gap-1">
-              <div className="flex justify-between text-[11px] text-zinc-400 font-medium">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex justify-between text-[11px] text-neutral-400 font-medium">
                 <span className="flex items-center gap-1">
-                  <Sun size={12} /> Brightness
+                  <Sun size={12} className="text-neutral-400" /> Brightness
                 </span>
-                <span className="font-mono text-zinc-200">{brightness > 0 ? `+${brightness}` : brightness}</span>
+                <span className="font-mono text-neutral-200">{brightness > 0 ? `+${brightness}` : brightness}</span>
               </div>
               <input
                 type="range"
@@ -229,17 +229,17 @@ export function EditTool({ filePath }: EditToolProps) {
                 max={100}
                 value={brightness}
                 onChange={(e) => setBrightness(parseInt(e.target.value) || 0)}
-                className="accent-orange-500 cursor-pointer h-1.5 bg-zinc-950 rounded"
+                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#181818] rounded"
               />
             </div>
 
             {/* Contrast */}
-            <div className="flex flex-col gap-1">
-              <div className="flex justify-between text-[11px] text-zinc-400 font-medium">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex justify-between text-[11px] text-neutral-400 font-medium">
                 <span className="flex items-center gap-1">
-                  <Contrast size={12} /> Contrast
+                  <Contrast size={12} className="text-neutral-400" /> Contrast
                 </span>
-                <span className="font-mono text-zinc-200">{contrast > 0 ? `+${contrast}` : contrast}</span>
+                <span className="font-mono text-neutral-200">{contrast > 0 ? `+${contrast}` : contrast}</span>
               </div>
               <input
                 type="range"
@@ -247,15 +247,15 @@ export function EditTool({ filePath }: EditToolProps) {
                 max={100}
                 value={contrast}
                 onChange={(e) => setContrast(parseInt(e.target.value) || 0)}
-                className="accent-orange-500 cursor-pointer h-1.5 bg-zinc-950 rounded"
+                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#181818] rounded"
               />
             </div>
 
             {/* Saturation */}
-            <div className="flex flex-col gap-1">
-              <div className="flex justify-between text-[11px] text-zinc-400 font-medium">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex justify-between text-[11px] text-neutral-400 font-medium">
                 <span>Saturation</span>
-                <span className="font-mono text-zinc-200">{saturation > 0 ? `+${saturation}` : saturation}</span>
+                <span className="font-mono text-neutral-200">{saturation > 0 ? `+${saturation}` : saturation}</span>
               </div>
               <input
                 type="range"
@@ -263,17 +263,17 @@ export function EditTool({ filePath }: EditToolProps) {
                 max={100}
                 value={saturation}
                 onChange={(e) => setSaturation(parseInt(e.target.value) || 0)}
-                className="accent-orange-500 cursor-pointer h-1.5 bg-zinc-950 rounded"
+                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#181818] rounded"
               />
             </div>
 
             {/* Temperature */}
-            <div className="flex flex-col gap-1">
-              <div className="flex justify-between text-[11px] text-zinc-400 font-medium">
+            <div className="flex flex-col gap-1.5">
+              <div className="flex justify-between text-[11px] text-neutral-400 font-medium">
                 <span className="flex items-center gap-1">
-                  <Thermometer size={12} /> Warmth
+                  <Thermometer size={12} className="text-neutral-400" /> Warmth
                 </span>
-                <span className="font-mono text-zinc-200">{temperature > 0 ? `+${temperature}` : temperature}</span>
+                <span className="font-mono text-neutral-200">{temperature > 0 ? `+${temperature}` : temperature}</span>
               </div>
               <input
                 type="range"
@@ -281,14 +281,14 @@ export function EditTool({ filePath }: EditToolProps) {
                 max={100}
                 value={temperature}
                 onChange={(e) => setTemperature(parseInt(e.target.value) || 0)}
-                className="accent-orange-500 cursor-pointer h-1.5 bg-zinc-950 rounded"
+                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#181818] rounded"
               />
             </div>
           </div>
         </div>
 
         {/* Live Preview Canvas */}
-        <div className="flex-1 min-h-[300px] rounded-xl overflow-hidden bg-zinc-950/80 border border-white/5 flex items-center justify-center p-6 relative">
+        <div className="flex-1 min-h-[300px] rounded-xl overflow-hidden bg-[#181818] border border-white/[0.06] flex items-center justify-center p-6 relative shadow-inner">
           <img
             src={assetUrl}
             alt="Edit preview"

@@ -9,6 +9,7 @@ import {
   SplitSquareVertical,
 } from "lucide-react";
 import { ToolWindowLayout } from "./ToolWindowLayout";
+import { RaycastSegmented, RaycastButton } from "../../ui/RaycastUI";
 
 export interface RemoveBgToolProps {
   filePath: string;
@@ -163,17 +164,17 @@ export function RemoveBgTool({ filePath }: RemoveBgToolProps) {
       onReset={handleReset}
       onPrimaryAction={handleApply}
     >
-      <div className="flex flex-col h-full gap-4">
+      <div className="flex flex-col h-full gap-3 p-3">
         {/* Model status / download banner */}
         {modelStatus && !modelStatus.installed && (
-          <div className="flex items-center justify-between p-3 rounded-xl bg-orange-500/10 border border-orange-500/20 text-xs">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-[#242424] border border-white/[0.08] text-xs">
             <div className="flex items-center gap-2.5">
-              <DownloadCloud size={18} className="text-orange-400 shrink-0" />
+              <DownloadCloud size={18} className="text-[#ff6339] shrink-0" />
               <div>
-                <div className="text-orange-200 font-semibold">
+                <div className="text-neutral-200 font-semibold">
                   RMBG-1.4 Neural Model (~176 MB)
                 </div>
-                <div className="text-orange-300/80 text-[11px]">
+                <div className="text-neutral-400 text-[11px]">
                   Download for high-precision local AI subject isolation.
                 </div>
               </div>
@@ -181,24 +182,24 @@ export function RemoveBgTool({ filePath }: RemoveBgToolProps) {
 
             <div className="flex items-center gap-2">
               {isDownloading ? (
-                <div className="flex items-center gap-2 bg-zinc-950/60 px-3 py-1.5 rounded-lg border border-orange-500/30">
-                  <div className="w-24 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                <div className="flex items-center gap-2 bg-[#1c1c1c] px-3 py-1.5 rounded-lg border border-white/[0.08]">
+                  <div className="w-24 h-1.5 bg-[#333333] rounded-full overflow-hidden">
                     <div
                       style={{ width: `${Math.round(downloadProgress.percent * 100)}%` }}
-                      className="h-full bg-orange-500 transition-all duration-200"
+                      className="h-full bg-[#ff6339] transition-all duration-200"
                     />
                   </div>
-                  <span className="text-[11px] font-mono text-orange-400">
+                  <span className="text-[11px] font-mono text-[#ff6339]">
                     {Math.round(downloadProgress.percent * 100)}%
                   </span>
                 </div>
               ) : (
-                <button
+                <RaycastButton
+                  variant="primary"
                   onClick={handleDownloadModel}
-                  className="px-3 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-400 text-zinc-950 font-semibold text-xs shadow-md transition-colors cursor-pointer"
                 >
                   Download Model
-                </button>
+                </RaycastButton>
               )}
             </div>
           </div>
@@ -212,7 +213,7 @@ export function RemoveBgTool({ filePath }: RemoveBgToolProps) {
             </div>
             <button
               onClick={handleDeleteModel}
-              className="text-zinc-500 hover:text-red-400 p-1 rounded transition-colors cursor-pointer"
+              className="text-neutral-500 hover:text-red-400 p-1 rounded transition-colors cursor-pointer"
               title="Remove model to free disk space"
             >
               <Trash2 size={13} />
@@ -221,11 +222,11 @@ export function RemoveBgTool({ filePath }: RemoveBgToolProps) {
         )}
 
         {/* Controls Toolbar */}
-        <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-zinc-900/60 border border-white/5 text-xs">
+        <div className="flex items-center justify-between gap-4 p-3 rounded-xl bg-[#242424] border border-white/[0.06] text-xs shrink-0">
           {/* Feathering slider */}
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] text-zinc-400 font-medium whitespace-nowrap">
-              Edge Feather:
+          <div className="flex items-center gap-2.5">
+            <span className="text-[11px] text-neutral-400 font-medium whitespace-nowrap">
+              Feather:
             </span>
             <input
               type="range"
@@ -233,68 +234,38 @@ export function RemoveBgTool({ filePath }: RemoveBgToolProps) {
               max={8}
               value={featherRadius}
               onChange={(e) => setFeatherRadius(parseInt(e.target.value) || 0)}
-              className="accent-orange-500 cursor-pointer h-1.5 w-28 bg-zinc-950 rounded"
+              className="accent-[#ff6339] cursor-pointer h-1.5 w-24 bg-[#1c1c1c] rounded"
             />
-            <span className="font-mono text-[11px] text-zinc-200 w-6 text-right">
+            <span className="font-mono text-[11px] text-neutral-200 w-5 text-right">
               {featherRadius}px
             </span>
           </div>
 
           {/* Background Replacement Mode */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-zinc-400 font-medium">Backdrop:</span>
-            <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-white/5">
-              <button
-                onClick={() => setBgMode("transparent")}
-                className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
-                  bgMode === "transparent"
-                    ? "bg-orange-500 text-zinc-950 font-semibold"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                Alpha
-              </button>
-              <button
-                onClick={() => setBgMode("white")}
-                className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
-                  bgMode === "white"
-                    ? "bg-orange-500 text-zinc-950 font-semibold"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                White
-              </button>
-              <button
-                onClick={() => setBgMode("black")}
-                className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
-                  bgMode === "black"
-                    ? "bg-orange-500 text-zinc-950 font-semibold"
-                    : "text-zinc-400 hover:text-zinc-200"
-                }`}
-              >
-                Black
-              </button>
-            </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-neutral-400 font-medium">Backdrop:</span>
+            <RaycastSegmented
+              value={bgMode}
+              options={[
+                { label: "Alpha", value: "transparent" },
+                { label: "White", value: "white" },
+                { label: "Black", value: "black" },
+              ]}
+              onChange={(val) => setBgMode(val as any)}
+            />
           </div>
 
           {/* Format selector */}
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-zinc-400 font-medium">Format:</span>
-            <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-white/5">
-              {(["png", "webp"] as const).map((fmt) => (
-                <button
-                  key={fmt}
-                  onClick={() => setFormat(fmt)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
-                    format === fmt
-                      ? "bg-orange-500 text-zinc-950 font-semibold"
-                      : "text-zinc-400 hover:text-zinc-200"
-                  }`}
-                >
-                  {fmt.toUpperCase()}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-neutral-400 font-medium">Format:</span>
+            <RaycastSegmented
+              value={format}
+              options={[
+                { label: "PNG", value: "png" },
+                { label: "WEBP", value: "webp" },
+              ]}
+              onChange={(val) => setFormat(val as any)}
+            />
           </div>
         </div>
 

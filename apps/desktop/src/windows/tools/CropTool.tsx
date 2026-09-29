@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { Crop, Lock, Unlock } from "lucide-react";
 import { ToolWindowLayout } from "./ToolWindowLayout";
+import { RaycastSegmented } from "../../ui/RaycastUI";
 
 export interface CropToolProps {
   filePath: string;
@@ -215,30 +216,27 @@ export function CropTool({ filePath }: CropToolProps) {
       onReset={handleReset}
       onPrimaryAction={handleApply}
     >
-      <div className="flex flex-col h-full gap-4">
+      <div className="flex flex-col h-full gap-3 p-3">
         {/* Controls bar: Aspect Ratio presets & Pixel Dimensions */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2.5 rounded-xl bg-zinc-900/60 border border-white/5 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 rounded-xl bg-[#242424] border border-white/[0.06] text-xs shrink-0">
           {/* Ratio Segmented Control */}
-          <div className="flex items-center gap-1 bg-zinc-950/60 p-1 rounded-lg border border-white/5">
-            {(["free", "1:1", "16:9", "9:16", "4:3", "3:4"] as AspectRatio[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => applyAspectRatio(r)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer ${
-                  aspectRatio === r
-                    ? "bg-orange-500 text-zinc-950 font-semibold shadow-sm"
-                    : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
-                }`}
-              >
-                {r.toUpperCase()}
-              </button>
-            ))}
-          </div>
+          <RaycastSegmented
+            value={aspectRatio}
+            options={[
+              { label: "Free", value: "free" },
+              { label: "1:1", value: "1:1" },
+              { label: "16:9", value: "16:9" },
+              { label: "9:16", value: "9:16" },
+              { label: "4:3", value: "4:3" },
+              { label: "3:4", value: "3:4" },
+            ]}
+            onChange={(val) => applyAspectRatio(val as AspectRatio)}
+          />
 
           {/* Pixel inputs: W x H and lock indicator */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-zinc-400">
-              <span className="text-[11px] font-mono text-zinc-500">W</span>
+            <div className="flex items-center gap-1.5 text-neutral-400">
+              <span className="text-[11px] font-mono text-neutral-500">W</span>
               <input
                 type="number"
                 value={Math.round(crop.width)}
@@ -251,10 +249,10 @@ export function CropTool({ filePath }: CropToolProps) {
                     }));
                   }
                 }}
-                className="w-16 px-1.5 py-0.5 rounded bg-zinc-950 border border-white/10 text-right font-mono text-zinc-200 focus:outline-none focus:border-orange-500"
+                className="w-16 px-2 py-0.5 rounded-md bg-[#1c1c1c] border border-white/[0.08] text-right font-mono text-neutral-200 text-xs focus:outline-none focus:border-white/30"
               />
-              <span className="text-[11px] text-zinc-600">×</span>
-              <span className="text-[11px] font-mono text-zinc-500">H</span>
+              <span className="text-[11px] text-neutral-600">×</span>
+              <span className="text-[11px] font-mono text-neutral-500">H</span>
               <input
                 type="number"
                 value={Math.round(crop.height)}
@@ -267,16 +265,16 @@ export function CropTool({ filePath }: CropToolProps) {
                     }));
                   }
                 }}
-                className="w-16 px-1.5 py-0.5 rounded bg-zinc-950 border border-white/10 text-right font-mono text-zinc-200 focus:outline-none focus:border-orange-500"
+                className="w-16 px-2 py-0.5 rounded-md bg-[#1c1c1c] border border-white/[0.08] text-right font-mono text-neutral-200 text-xs focus:outline-none focus:border-white/30"
               />
-              <span className="text-[10px] text-zinc-500">px</span>
+              <span className="text-[10px] text-neutral-500">px</span>
             </div>
 
-            <div className="text-zinc-500 pl-1 border-l border-white/10">
+            <div className="text-neutral-500 pl-2 border-l border-white/[0.08]">
               {aspectRatio !== "free" ? (
-                <Lock size={13} className="text-orange-400" />
+                <Lock size={12} className="text-[#ff6339]" />
               ) : (
-                <Unlock size={13} className="text-zinc-600" />
+                <Unlock size={12} className="text-neutral-600" />
               )}
             </div>
           </div>

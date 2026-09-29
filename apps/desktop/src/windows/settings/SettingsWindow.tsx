@@ -1,25 +1,62 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
-  Sliders,
-  MousePointer,
-  Compass,
-  Layers,
-  Wand2,
+  Settings as SettingsIcon,
+  SlidersHorizontal,
+  LayoutGrid,
+  Keyboard,
+  Cloud,
+  Wrench,
+  Users,
   Info,
-  X,
-  Check,
-  Trash2,
   Sparkles,
+  AppWindow,
+  Globe,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Check,
   Download,
   FileCheck2,
+  Moon,
+  Sun,
 } from "lucide-react";
+import {
+  RaycastCaptionButtons,
+  RaycastToggle,
+  RaycastHotkeyPill,
+  RaycastSelect,
+  RaycastSegmented,
+  RaycastButton,
+  RaycastRow,
+  RaycastSection,
+} from "../../ui/RaycastUI";
 
-type SettingsTab = "general" | "trigger" | "wheel" | "actions" | "presets" | "about";
+type SettingsNavId =
+  | "general"
+  | "launcher"
+  | "shortcuts"
+  | "keyboard"
+  | "cloud"
+  | "advanced"
+  | "orgs"
+  | "about"
+  | "ai"
+  | "applications"
+  | "browser";
+
+interface NavItem {
+  id: SettingsNavId;
+  label: string;
+  icon: React.ReactNode;
+  badge?: string;
+  isSpecial?: boolean;
+}
 
 export function SettingsWindow() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>("general");
+  const [activeTab, setActiveTab] = useState<SettingsNavId>("general");
+  const [searchQuery, setSearchQuery] = useState("");
   const [settings, setSettings] = useState<any>(null);
   const [actions, setActions] = useState<any[]>([]);
   const [historyCount, setHistoryCount] = useState<number>(0);
@@ -28,6 +65,13 @@ export function SettingsWindow() {
   const [rmbgStatus, setRmbgStatus] = useState<any>(null);
   const [isSaved, setIsSaved] = useState<boolean>(false);
   const [isDownloadingModel, setIsDownloadingModel] = useState<boolean>(false);
+  const [isRecordingHotkey, setIsRecordingHotkey] = useState(false);
+
+  const [followSystem, setFollowSystem] = useState(true);
+  const [darkTheme, setDarkTheme] = useState("raycast_dark");
+  const [lightTheme, setLightTheme] = useState("raycast_light");
+  const [interfaceSize, setInterfaceSize] = useState("normal");
+  const [showTaskbar, setShowTaskbar] = useState(false);
 
   const appWindow = getCurrentWebviewWindow();
 
@@ -96,15 +140,14 @@ export function SettingsWindow() {
     }
   };
 
-  const handleToggleContextMenu = async () => {
-    const nextState = !contextMenuEnabled;
+  const handleToggleContextMenu = async (enabled: boolean) => {
     try {
-      await invoke("set_explorer_context_menu", { enabled: nextState });
-      setContextMenuEnabled(nextState);
+      await invoke("set_explorer_context_menu", { enabled });
+      setContextMenuEnabled(enabled);
       if (settings) {
         const updated = {
           ...settings,
-          general: { ...settings.general, explorer_context_menu: nextState },
+          general: { ...settings.general, explorer_context_menu: enabled },
         };
         handleSaveSettings(updated);
       }
@@ -135,231 +178,373 @@ export function SettingsWindow() {
     }
   };
 
-  const handleClose = async () => {
-    try {
-      await appWindow.close();
-    } catch (e) {
-      console.error("Failed to close window", e);
-    }
-  };
+  const navItems: NavItem[] = [
+    {
+      id: "general",
+      label: "General",
+      icon: <SettingsIcon size={15} />,
+    },
+    {
+      id: "launcher",
+      label: "Launcher & Drag",
+      icon: <SlidersHorizontal size={15} />,
+    },
+    {
+      id: "shortcuts",
+      label: "Radial Wheel",
+      icon: <LayoutGrid size={15} />,
+    },
+    {
+      id: "keyboard",
+      label: "Keyboard & Formats",
+      icon: <Keyboard size={15} />,
+    },
+    {
+      id: "cloud",
+      label: "Presets & Workflows",
+      icon: <Cloud size={15} />,
+      badge: "Pro",
+    },
+    {
+      id: "advanced",
+      label: "Advanced",
+      icon: <Wrench size={15} />,
+    },
+    {
+      id: "orgs",
+      label: "Extensions",
+      icon: <Users size={15} />,
+    },
+    {
+      id: "about",
+      label: "About",
+      icon: <Info size={15} />,
+    },
+  ];
+
+  const specialNavItems: NavItem[] = [
+    {
+      id: "ai",
+      label: "AI & Neural Models",
+      icon: <Sparkles size={15} className="text-white" />,
+      badge: "Pro",
+      isSpecial: true,
+    },
+    {
+      id: "applications",
+      label: "Applications",
+      icon: <AppWindow size={15} className="text-emerald-400" />,
+    },
+    {
+      id: "browser",
+      label: "Browser & Media",
+      icon: <Globe size={15} className="text-blue-400" />,
+    },
+  ];
+
+  const filteredNavItems = useMemo(() => {
+    if (!searchQuery.trim()) return navItems;
+    return navItems.filter((item) =>
+      item.label.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [navItems, searchQuery]);
 
   if (!settings) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-zinc-950 text-zinc-400">
-        <span className="text-sm">Loading Wheel Settings...</span>
+      <div className="flex h-screen w-screen items-center justify-center bg-[#181818] text-neutral-400 select-none">
+        <span className="text-xs">Loading Settings...</span>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 font-sans select-none overflow-hidden rounded-2xl border border-white/10 shadow-2xl backdrop-blur-2xl">
-      {/* Background warm ambient accent */}
-      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_30%_-20%,rgba(249,115,22,0.15),transparent_65%)]" />
-
-      {/* Header Bar */}
+    <div className="flex flex-col h-screen w-screen bg-[#181818] text-neutral-200 font-sans select-none overflow-hidden rounded-xl border border-white/[0.08] shadow-2xl">
+      {/* Top Titlebar */}
       <header
         data-tauri-drag-region
-        className="relative z-10 flex items-center justify-between px-5 py-3 border-b border-white/10 bg-zinc-900/50 cursor-move"
+        className="h-10 flex items-center justify-between px-4 border-b border-white/[0.06] bg-[#181818] select-none cursor-move shrink-0 z-20"
       >
-        <div className="flex items-center gap-3 pointer-events-none">
-          <div className="w-6 h-6 rounded-lg bg-orange-500/20 border border-orange-500/40 flex items-center justify-center text-orange-400">
-            <Compass size={14} />
+        <div className="flex items-center gap-4">
+          <span className="text-[13px] font-medium text-neutral-300 pointer-events-none">
+            Settings
+          </span>
+
+          {/* Navigation arrows like in Raycast on Windows */}
+          <div className="flex items-center gap-0.5 text-neutral-500">
+            <button
+              onClick={() => setActiveTab("general")}
+              className="p-1 hover:text-neutral-300 hover:bg-white/[0.04] rounded transition-colors cursor-pointer"
+              title="Back"
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <button
+              onClick={() => setActiveTab("about")}
+              className="p-1 hover:text-neutral-300 hover:bg-white/[0.04] rounded transition-colors cursor-pointer"
+              title="Forward"
+            >
+              <ChevronRight size={14} />
+            </button>
           </div>
-          <span className="text-sm font-semibold text-zinc-200">Wheel Settings</span>
         </div>
 
         <div className="flex items-center gap-3">
           {isSaved && (
             <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium animate-pulse">
-              <Check size={13} />
+              <Check size={12} strokeWidth={2.5} />
               Saved
             </span>
           )}
-          <button
-            onClick={handleClose}
-            className="w-7 h-7 rounded-full flex items-center justify-center bg-white/5 hover:bg-red-500/20 hover:text-red-400 border border-white/10 transition-colors text-zinc-400 cursor-pointer"
-            title="Close (Esc)"
-          >
-            <X size={14} />
-          </button>
+
+          <RaycastCaptionButtons />
         </div>
       </header>
 
-      {/* Main Body: Sidebar + Tab Content */}
-      <div className="flex flex-1 overflow-hidden relative z-10">
-        {/* Navigation Sidebar */}
-        <aside className="w-56 border-r border-white/10 bg-zinc-900/30 p-3 flex flex-col gap-1">
-          <button
-            onClick={() => setActiveTab("general")}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-              activeTab === "general"
-                ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
-            }`}
-          >
-            <Sliders size={15} />
-            <span>General</span>
-          </button>
+      {/* Main Body: Sidebar + Settings Content */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar */}
+        <aside className="w-60 border-r border-white/[0.06] bg-[#181818] flex flex-col p-2.5 shrink-0 overflow-y-auto">
+          {/* Search Box */}
+          <div className="relative mb-3">
+            <Search
+              size={13}
+              className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none"
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search settings..."
+              className="w-full pl-8 pr-3 py-1.5 bg-[#222222] border border-white/[0.06] focus:border-white/20 text-xs rounded-lg text-neutral-200 placeholder:text-neutral-500 outline-none transition-colors"
+            />
+          </div>
 
-          <button
-            onClick={() => setActiveTab("trigger")}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-              activeTab === "trigger"
-                ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
-            }`}
-          >
-            <MousePointer size={15} />
-            <span>Trigger & Drag</span>
-          </button>
+          {/* User Profile Card matching screenshot */}
+          <div className="flex items-center gap-2.5 px-2 py-2 mb-2 rounded-lg bg-transparent hover:bg-white/[0.03] transition-colors cursor-default">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#ff6339] via-purple-600 to-pink-500 p-[1.5px] shrink-0">
+              <div className="w-full h-full rounded-full bg-[#181818] flex items-center justify-center text-[10px] font-bold text-white tracking-wider">
+                MR
+              </div>
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="text-xs font-semibold text-neutral-200 truncate">
+                Muneeb Ur Rehman
+              </span>
+              <span className="text-[10px] text-neutral-500">Account</span>
+            </div>
+          </div>
 
-          <button
-            onClick={() => setActiveTab("wheel")}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-              activeTab === "wheel"
-                ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
-            }`}
-          >
-            <Compass size={15} />
-            <span>Radial Wheel</span>
-          </button>
+          {/* Sidebar Nav Items */}
+          <nav className="flex flex-col gap-0.5">
+            {filteredNavItems.map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer text-left ${
+                    isActive
+                      ? "bg-white/[0.1] text-white font-medium"
+                      : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    <span className={isActive ? "text-white" : "text-neutral-400"}>
+                      {item.icon}
+                    </span>
+                    <span>{item.label}</span>
+                  </div>
 
-          <button
-            onClick={() => setActiveTab("actions")}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-              activeTab === "actions"
-                ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
-            }`}
-          >
-            <Layers size={15} />
-            <span>Actions & Formats</span>
-          </button>
+                  {item.badge && (
+                    <span className="text-[10px] font-semibold text-[#38bdf8] bg-[#38bdf8]/15 px-1.5 py-0.5 rounded-full">
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
 
-          <button
-            onClick={() => setActiveTab("presets")}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-              activeTab === "presets"
-                ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
-            }`}
-          >
-            <Wand2 size={15} />
-            <span>Presets & Chains</span>
-          </button>
+            <div className="h-px bg-white/[0.04] my-2" />
 
-          <div className="flex-1" />
+            {specialNavItems.map((item) => {
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer text-left ${
+                    isActive
+                      ? "bg-white/[0.1] text-white font-medium"
+                      : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5">
+                    {item.isSpecial ? (
+                      <div className="w-5 h-5 rounded-md bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center shrink-0">
+                        {item.icon}
+                      </div>
+                    ) : (
+                      <span className="shrink-0">{item.icon}</span>
+                    )}
+                    <span>{item.label}</span>
+                  </div>
 
-          <button
-            onClick={() => setActiveTab("about")}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium transition-colors cursor-pointer ${
-              activeTab === "about"
-                ? "bg-white/10 text-white"
-                : "text-zinc-500 hover:text-zinc-300 hover:bg-white/5"
-            }`}
-          >
-            <Info size={15} />
-            <span>About & Diagnostics</span>
-          </button>
+                  {item.badge && (
+                    <span className="text-[10px] font-semibold text-[#38bdf8] bg-[#38bdf8]/15 px-1.5 py-0.5 rounded-full">
+                      {item.badge}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
         </aside>
 
-        {/* Tab Content Panel */}
-        <main className="flex-1 p-6 overflow-y-auto">
-          {/* 1. GENERAL TAB */}
+        {/* Right Settings Content */}
+        <main className="flex-1 bg-[#1e1e1e] p-7 overflow-y-auto">
+          {/* TAB 1: GENERAL */}
           {activeTab === "general" && (
-            <div className="max-w-xl space-y-6">
-              <div>
-                <h2 className="text-base font-semibold text-zinc-100">General Preferences</h2>
-                <p className="text-xs text-zinc-400">Configure startup behavior, Explorer menus, and file output handling.</p>
-              </div>
-
-              {/* Startup & Shell */}
-              <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 space-y-4">
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div>
-                    <span className="text-sm font-medium text-zinc-200">Start Wheel at Login</span>
-                    <p className="text-xs text-zinc-500">Automatically run in the background upon Windows boot.</p>
-                  </div>
-                  <input
-                    type="checkbox"
+            <div className="max-w-xl">
+              <RaycastSection>
+                <RaycastRow title="Open at Login">
+                  <RaycastToggle
                     checked={settings.general.launch_at_login}
-                    onChange={(e) => {
+                    onChange={(checked) => {
                       const updated = {
                         ...settings,
-                        general: { ...settings.general, launch_at_login: e.target.checked },
+                        general: { ...settings.general, launch_at_login: checked },
                       };
                       handleSaveSettings(updated);
                     }}
-                    className="w-4 h-4 accent-orange-500 rounded cursor-pointer"
                   />
-                </label>
+                </RaycastRow>
 
-                <div className="h-px bg-white/5" />
+                <RaycastRow title="Show in System Tray">
+                  <RaycastToggle
+                    checked={true}
+                    onChange={() => {}}
+                  />
+                </RaycastRow>
 
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div>
-                    <span className="text-sm font-medium text-zinc-200">Windows Explorer Context Menu</span>
-                    <p className="text-xs text-zinc-500">Show "Open with Wheel" in Windows 10/11 right-click menus.</p>
-                  </div>
-                  <input
-                    type="checkbox"
+                <RaycastRow title="Automatically Show the Taskbar">
+                  <RaycastToggle
+                    checked={showTaskbar}
+                    onChange={setShowTaskbar}
+                  />
+                </RaycastRow>
+
+                <RaycastRow title="Raycast Hotkey">
+                  <RaycastHotkeyPill
+                    sublabel="Replace Start Menu ⊞"
+                    label={settings.trigger.modifier ? `${settings.trigger.modifier.toUpperCase()} Space` : "Shift Drag"}
+                    isRecording={isRecordingHotkey}
+                    onClick={() => {
+                      setIsRecordingHotkey(!isRecordingHotkey);
+                      setTimeout(() => setIsRecordingHotkey(false), 3000);
+                    }}
+                    onReset={() => {
+                      const updated = {
+                        ...settings,
+                        trigger: { ...settings.trigger, modifier: "shift" },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </RaycastRow>
+              </RaycastSection>
+
+              {/* Appearance Section */}
+              <RaycastSection title="Appearance">
+                <RaycastRow title="Follow System Appearance">
+                  <RaycastToggle
+                    checked={followSystem}
+                    onChange={setFollowSystem}
+                  />
+                </RaycastRow>
+
+                <RaycastRow title="Dark Theme">
+                  <RaycastSelect
+                    value={darkTheme}
+                    options={[
+                      { label: "Raycast Dark", value: "raycast_dark", icon: <Moon size={12} /> },
+                      { label: "Midnight Black", value: "midnight", icon: <Moon size={12} /> },
+                      { label: "Charcoal Slate", value: "charcoal", icon: <Moon size={12} /> },
+                    ]}
+                    onChange={setDarkTheme}
+                  />
+                </RaycastRow>
+
+                <RaycastRow title="Light Theme">
+                  <RaycastSelect
+                    value={lightTheme}
+                    options={[
+                      { label: "Raycast Light", value: "raycast_light", icon: <Sun size={12} /> },
+                      { label: "Pure White", value: "pure_white", icon: <Sun size={12} /> },
+                    ]}
+                    onChange={setLightTheme}
+                  />
+                </RaycastRow>
+
+                <RaycastRow
+                  title="Theme Studio"
+                  description="Edit or create themes for Raycast"
+                >
+                  <RaycastButton variant="pro">
+                    Upgrade to Pro
+                  </RaycastButton>
+                </RaycastRow>
+
+                <RaycastRow
+                  title="Interface Size"
+                  description="Adjust the size of the Raycast interface"
+                >
+                  <RaycastSegmented
+                    value={interfaceSize}
+                    options={[
+                      { label: <span className="text-[10px]">Aa</span>, value: "small", title: "Compact" },
+                      { label: <span className="text-xs">Aa</span>, value: "normal", title: "Standard" },
+                      { label: <span className="text-sm font-semibold">Aa</span>, value: "large", title: "Large" },
+                    ]}
+                    onChange={setInterfaceSize}
+                  />
+                </RaycastRow>
+              </RaycastSection>
+
+              {/* Windows Shell Integration Section */}
+              <RaycastSection title="Windows Integration">
+                <RaycastRow
+                  title="Explorer Context Menu"
+                  description="Show 'Open with Wheel' in Windows 10/11 right-click context menus"
+                >
+                  <RaycastToggle
                     checked={contextMenuEnabled}
                     onChange={handleToggleContextMenu}
-                    className="w-4 h-4 accent-orange-500 rounded cursor-pointer"
                   />
-                </label>
-              </div>
+                </RaycastRow>
 
-              {/* Output Directory Policy */}
-              <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 space-y-4">
-                <h3 className="text-sm font-medium text-zinc-200">Output Location Policy</h3>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => {
+                <RaycastRow
+                  title="Send Source to Recycle Bin"
+                  description="Safely recycle original files after conversion (reversible)"
+                >
+                  <RaycastToggle
+                    checked={settings.output.recycle_source}
+                    onChange={(checked) => {
                       const updated = {
                         ...settings,
-                        output: { ...settings.output, policy: "next_to_source" },
+                        output: { ...settings.output, recycle_source: checked },
                       };
                       handleSaveSettings(updated);
                     }}
-                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                      settings.output.policy === "next_to_source"
-                        ? "border-orange-500/60 bg-orange-500/10 text-orange-200"
-                        : "border-white/5 bg-zinc-950/40 text-zinc-400 hover:border-white/10"
-                    }`}
-                  >
-                    <span className="block text-xs font-semibold">Next to Source File</span>
-                    <span className="block text-[11px] text-zinc-500 mt-1">Saves in the same folder with optional suffix</span>
-                  </button>
+                  />
+                </RaycastRow>
 
-                  <button
-                    onClick={() => {
-                      const updated = {
-                        ...settings,
-                        output: { ...settings.output, policy: "fixed_folder" },
-                      };
-                      handleSaveSettings(updated);
-                    }}
-                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                      settings.output.policy === "fixed_folder"
-                        ? "border-orange-500/60 bg-orange-500/10 text-orange-200"
-                        : "border-white/5 bg-zinc-950/40 text-zinc-400 hover:border-white/10"
-                    }`}
-                  >
-                    <span className="block text-xs font-semibold">Fixed Folder</span>
-                    <span className="block text-[11px] text-zinc-500 mt-1">Directs all conversions into a designated directory</span>
-                  </button>
-                </div>
-
-                {/* Suffix Input */}
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-1.5">File Name Suffix</label>
+                <RaycastRow
+                  title="File Output Suffix"
+                  description="Appended to converted files (leave blank to save as clean filename)"
+                >
                   <input
                     type="text"
                     value={settings.output.suffix}
-                    placeholder=".converted (leave blank for clean name)"
                     onChange={(e) => {
                       const updated = {
                         ...settings,
@@ -367,368 +552,331 @@ export function SettingsWindow() {
                       };
                       handleSaveSettings(updated);
                     }}
-                    className="w-full px-3 py-1.5 text-xs bg-zinc-950 border border-white/10 rounded-xl text-white outline-none focus:border-orange-500"
+                    placeholder=".converted"
+                    className="w-32 px-2.5 py-1 text-xs bg-[#242424] border border-white/[0.08] focus:border-white/30 rounded-lg text-white font-mono outline-none text-right"
                   />
-                </div>
-
-                <div className="h-px bg-white/5" />
-
-                {/* Recycle Bin & Overwrite Source */}
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div>
-                    <span className="text-sm font-medium text-zinc-200">Send Source to Recycle Bin</span>
-                    <p className="text-xs text-zinc-500">Recycle original file after successful conversion (reversible).</p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={settings.output.recycle_source}
-                    onChange={(e) => {
-                      const updated = {
-                        ...settings,
-                        output: { ...settings.output, recycle_source: e.target.checked },
-                      };
-                      handleSaveSettings(updated);
-                    }}
-                    className="w-4 h-4 accent-orange-500 rounded cursor-pointer"
-                  />
-                </label>
-              </div>
+                </RaycastRow>
+              </RaycastSection>
             </div>
           )}
 
-          {/* 2. TRIGGER TAB */}
-          {activeTab === "trigger" && (
-            <div className="max-w-xl space-y-6">
-              <div>
-                <h2 className="text-base font-semibold text-zinc-100">Trigger & Gesture</h2>
-                <p className="text-xs text-zinc-400">Configure mouse drag thresholds and modifier key activation.</p>
-              </div>
-
-              <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-2">Activation Modifier Key</label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {["shift", "ctrl", "alt", "none"].map((mod) => (
-                      <button
-                        key={mod}
-                        onClick={() => {
-                          const updated = {
-                            ...settings,
-                            trigger: { ...settings.trigger, modifier: mod },
-                          };
-                          handleSaveSettings(updated);
-                        }}
-                        className={`py-2 px-3 rounded-xl text-xs font-medium border capitalize cursor-pointer transition-all ${
-                          settings.trigger.modifier === mod
-                            ? "bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/20"
-                            : "bg-zinc-950/40 border-white/5 text-zinc-400 hover:border-white/10"
-                        }`}
-                      >
-                        {mod === "none" ? "None (Any Drag)" : mod}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="h-px bg-white/5" />
-
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="font-medium text-zinc-200">Movement Threshold</span>
-                    <span className="text-orange-400 font-mono">{settings.trigger.movement_threshold_px} px</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="3"
-                    max="24"
-                    value={settings.trigger.movement_threshold_px}
-                    onChange={(e) => {
+          {/* TAB 2: LAUNCHER & DRAG */}
+          {activeTab === "launcher" && (
+            <div className="max-w-xl">
+              <RaycastSection title="Trigger Preferences">
+                <RaycastRow
+                  title="Activation Modifier Key"
+                  description="Modifier key held while dragging to summon the radial menu"
+                >
+                  <RaycastSegmented
+                    value={settings.trigger.modifier}
+                    options={[
+                      { label: "Shift", value: "shift" },
+                      { label: "Ctrl", value: "ctrl" },
+                      { label: "Alt", value: "alt" },
+                      { label: "None", value: "none" },
+                    ]}
+                    onChange={(val) => {
                       const updated = {
                         ...settings,
-                        trigger: { ...settings.trigger, movement_threshold_px: Number(e.target.value) },
+                        trigger: { ...settings.trigger, modifier: val },
                       };
                       handleSaveSettings(updated);
                     }}
-                    className="w-full accent-orange-500 cursor-pointer"
                   />
-                  <p className="text-[11px] text-zinc-500 mt-1">Minimum drag distance in pixels before Wheel triggers.</p>
-                </div>
+                </RaycastRow>
 
-                <div className="h-px bg-white/5" />
-
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div>
-                    <span className="text-sm font-medium text-zinc-200">Pause Wheel Globally</span>
-                    <p className="text-xs text-zinc-500">Temporarily disable the radial overlay trigger without exiting.</p>
+                <RaycastRow
+                  title="Movement Threshold"
+                  description="Minimum cursor movement before drag triggers"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs text-neutral-300">
+                      {settings.trigger.movement_threshold_px} px
+                    </span>
+                    <input
+                      type="range"
+                      min="3"
+                      max="24"
+                      value={settings.trigger.movement_threshold_px}
+                      onChange={(e) => {
+                        const updated = {
+                          ...settings,
+                          trigger: { ...settings.trigger, movement_threshold_px: Number(e.target.value) },
+                        };
+                        handleSaveSettings(updated);
+                      }}
+                      className="w-28 accent-[#ff6339] cursor-pointer"
+                    />
                   </div>
-                  <input
-                    type="checkbox"
+                </RaycastRow>
+
+                <RaycastRow
+                  title="Pause Wheel Globally"
+                  description="Temporarily silence the radial gesture without quitting the app"
+                >
+                  <RaycastToggle
                     checked={settings.trigger.paused}
-                    onChange={(e) => {
+                    onChange={(checked) => {
                       const updated = {
                         ...settings,
-                        trigger: { ...settings.trigger, paused: e.target.checked },
+                        trigger: { ...settings.trigger, paused: checked },
                       };
                       handleSaveSettings(updated);
                     }}
-                    className="w-4 h-4 accent-orange-500 rounded cursor-pointer"
                   />
-                </label>
-              </div>
+                </RaycastRow>
+              </RaycastSection>
             </div>
           )}
 
-          {/* 3. WHEEL TAB */}
-          {activeTab === "wheel" && (
-            <div className="max-w-xl space-y-6">
-              <div>
-                <h2 className="text-base font-semibold text-zinc-100">Radial Wheel Geometry</h2>
-                <p className="text-xs text-zinc-400">Tailor the visual dimensions, slot density, and behavior of the overlay.</p>
-              </div>
-
-              <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-zinc-400 mb-2">Slot Count per Page</label>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[6, 8, 10, 12].map((count) => (
-                      <button
-                        key={count}
-                        onClick={() => {
-                          const updated = {
-                            ...settings,
-                            wheel_ui: { ...settings.wheel_ui, slot_count: count },
-                          };
-                          handleSaveSettings(updated);
-                        }}
-                        className={`py-2 px-3 rounded-xl text-xs font-medium border cursor-pointer transition-all ${
-                          settings.wheel_ui.slot_count === count
-                            ? "bg-orange-500 text-white border-orange-500 shadow-md shadow-orange-500/20"
-                            : "bg-zinc-950/40 border-white/5 text-zinc-400 hover:border-white/10"
-                        }`}
-                      >
-                        {count} Wedges
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="h-px bg-white/5" />
-
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5">
-                    <span className="font-medium text-zinc-200">Wheel Diameter</span>
-                    <span className="text-orange-400 font-mono">{settings.wheel_ui.size} px</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="260"
-                    max="440"
-                    step="10"
-                    value={settings.wheel_ui.size}
-                    onChange={(e) => {
+          {/* TAB 3: RADIAL WHEEL */}
+          {activeTab === "shortcuts" && (
+            <div className="max-w-xl">
+              <RaycastSection title="Wheel Geometry">
+                <RaycastRow
+                  title="Slot Count per Page"
+                  description="Number of radial wedges displayed per page"
+                >
+                  <RaycastSegmented
+                    value={String(settings.wheel_ui.slot_count)}
+                    options={[
+                      { label: "6", value: "6" },
+                      { label: "8", value: "8" },
+                      { label: "10", value: "10" },
+                      { label: "12", value: "12" },
+                    ]}
+                    onChange={(val) => {
                       const updated = {
                         ...settings,
-                        wheel_ui: { ...settings.wheel_ui, size: Number(e.target.value) },
+                        wheel_ui: { ...settings.wheel_ui, slot_count: Number(val) },
                       };
                       handleSaveSettings(updated);
                     }}
-                    className="w-full accent-orange-500 cursor-pointer"
                   />
-                </div>
+                </RaycastRow>
 
-                <div className="h-px bg-white/5" />
-
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div>
-                    <span className="text-sm font-medium text-zinc-200">Context Filtering</span>
-                    <p className="text-xs text-zinc-500">Automatically dim or hide formats incompatible with dragged files.</p>
+                <RaycastRow
+                  title="Wheel Diameter"
+                  description="Outer pixel diameter of the radial wheel"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs text-neutral-300">
+                      {settings.wheel_ui.size} px
+                    </span>
+                    <input
+                      type="range"
+                      min="260"
+                      max="440"
+                      step="10"
+                      value={settings.wheel_ui.size}
+                      onChange={(e) => {
+                        const updated = {
+                          ...settings,
+                          wheel_ui: { ...settings.wheel_ui, size: Number(e.target.value) },
+                        };
+                        handleSaveSettings(updated);
+                      }}
+                      className="w-28 accent-[#ff6339] cursor-pointer"
+                    />
                   </div>
-                  <input
-                    type="checkbox"
+                </RaycastRow>
+
+                <RaycastRow
+                  title="Context Filtering"
+                  description="Automatically hide or dim formats incompatible with dragged files"
+                >
+                  <RaycastToggle
                     checked={settings.wheel_ui.context_filter_enabled}
-                    onChange={(e) => {
+                    onChange={(checked) => {
                       const updated = {
                         ...settings,
-                        wheel_ui: { ...settings.wheel_ui, context_filter_enabled: e.target.checked },
+                        wheel_ui: { ...settings.wheel_ui, context_filter_enabled: checked },
                       };
                       handleSaveSettings(updated);
                     }}
-                    className="w-4 h-4 accent-orange-500 rounded cursor-pointer"
                   />
-                </label>
+                </RaycastRow>
 
-                <div className="h-px bg-white/5" />
-
-                <label className="flex items-center justify-between cursor-pointer">
-                  <div>
-                    <span className="text-sm font-medium text-zinc-200">Audio Haptic Feedback</span>
-                    <p className="text-xs text-zinc-500">Play subtle tick sound when hovering over radial wedges.</p>
-                  </div>
-                  <input
-                    type="checkbox"
+                <RaycastRow
+                  title="Audio Haptic Feedback"
+                  description="Play subtle mechanical tick sounds on wedge hover"
+                >
+                  <RaycastToggle
                     checked={settings.wheel_ui.sound_enabled}
-                    onChange={(e) => {
+                    onChange={(checked) => {
                       const updated = {
                         ...settings,
-                        wheel_ui: { ...settings.wheel_ui, sound_enabled: e.target.checked },
+                        wheel_ui: { ...settings.wheel_ui, sound_enabled: checked },
                       };
                       handleSaveSettings(updated);
                     }}
-                    className="w-4 h-4 accent-orange-500 rounded cursor-pointer"
                   />
-                </label>
-              </div>
+                </RaycastRow>
+              </RaycastSection>
             </div>
           )}
 
-          {/* 4. ACTIONS TAB */}
-          {activeTab === "actions" && (
-            <div className="max-w-xl space-y-6">
-              <div>
-                <h2 className="text-base font-semibold text-zinc-100">Actions & Formats</h2>
-                <p className="text-xs text-zinc-400">Manage available tools and conversion formats displayed on the wheel.</p>
-              </div>
-
-              <div className="bg-zinc-900/40 border border-white/5 rounded-2xl divide-y divide-white/5">
-                {actions.map((act) => (
-                  <div key={act.id} className="p-3.5 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-orange-400 text-xs font-bold">
-                        {act.title.slice(0, 3).toUpperCase()}
-                      </div>
-                      <div>
-                        <span className="text-xs font-semibold text-zinc-200">{act.title}</span>
-                        <span className="block text-[11px] text-zinc-500 capitalize">{act.category} • {act.kind}</span>
-                      </div>
-                    </div>
-
-                    <span className="text-xs text-emerald-400 font-medium">Active</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 5. PRESETS TAB */}
-          {activeTab === "presets" && (
-            <div className="max-w-xl space-y-6">
-              <div>
-                <h2 className="text-base font-semibold text-zinc-100">Automated Action Chains</h2>
-                <p className="text-xs text-zinc-400">Sequential multi-step recipes executed in a single drop.</p>
-              </div>
-
-              <div className="grid gap-3">
-                {(settings.presets || []).map((preset: any) => (
-                  <div
-                    key={preset.id}
-                    className="bg-zinc-900/40 border border-white/5 hover:border-orange-500/40 rounded-2xl p-4 transition-all"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-orange-500/20 text-orange-400 flex items-center justify-center">
-                          <Sparkles size={14} />
+          {/* TAB 4: KEYBOARD & ACTIONS */}
+          {activeTab === "keyboard" && (
+            <div className="max-w-xl">
+              <RaycastSection title="Registered Wheel Actions">
+                <div className="bg-[#242424] border border-white/[0.06] rounded-xl divide-y divide-white/[0.04] overflow-hidden">
+                  {actions.map((act) => (
+                    <div key={act.id} className="p-3 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-7 h-7 rounded-lg bg-[#2e2e2e] border border-white/[0.08] flex items-center justify-center text-[#ff6339] text-xs font-bold font-mono">
+                          {act.title.slice(0, 3).toUpperCase()}
                         </div>
                         <div>
-                          <span className="text-sm font-semibold text-zinc-200">{preset.name}</span>
-                          <p className="text-xs text-zinc-500">{preset.description}</p>
+                          <span className="text-xs font-medium text-neutral-200 block">
+                            {act.title}
+                          </span>
+                          <span className="text-[11px] text-neutral-500 capitalize">
+                            {act.category} • {act.kind}
+                          </span>
                         </div>
                       </div>
 
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-zinc-400">
-                        {preset.steps.length} Steps
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded font-medium">
+                          Enabled
+                        </span>
+                      </div>
                     </div>
-
-                    <div className="mt-3 flex items-center gap-1.5 overflow-x-auto text-[11px] text-zinc-400">
-                      {preset.steps.map((st: any, i: number) => (
-                        <React.Fragment key={i}>
-                          <span className="px-2 py-1 bg-black/40 rounded border border-white/5 font-mono text-orange-300">
-                            {st.action_id}
-                          </span>
-                          {i < preset.steps.length - 1 && <span className="text-zinc-600">→</span>}
-                        </React.Fragment>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </RaycastSection>
             </div>
           )}
 
-          {/* 6. ABOUT TAB */}
-          {activeTab === "about" && (
-            <div className="max-w-xl space-y-6">
-              <div>
-                <h2 className="text-base font-semibold text-zinc-100">System & Diagnostics</h2>
-                <p className="text-xs text-zinc-400">Engine statuses, local history persistence, and neural models.</p>
-              </div>
+          {/* TAB 5: PRESETS & WORKFLOWS */}
+          {activeTab === "cloud" && (
+            <div className="max-w-xl">
+              <RaycastSection title="Multi-Step Recipes">
+                <div className="space-y-2.5">
+                  {(settings.presets || []).map((preset: any) => (
+                    <div
+                      key={preset.id}
+                      className="p-3.5 bg-[#242424] border border-white/[0.06] rounded-xl flex items-center justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-neutral-200">
+                            {preset.name}
+                          </span>
+                          <span className="text-[10px] text-neutral-400 bg-white/[0.06] px-1.5 py-0.5 rounded">
+                            {preset.steps.length} steps
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-neutral-500 mt-0.5">
+                          {preset.description}
+                        </p>
+                      </div>
 
-              {/* Status summary */}
-              <div className="bg-zinc-900/40 border border-white/5 rounded-2xl p-4 space-y-3">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400">Wheel Core Engine</span>
-                  <span className="font-mono text-zinc-200">v0.1.0 (Windows x86_64)</span>
+                      <RaycastButton variant="secondary">
+                        Edit
+                      </RaycastButton>
+                    </div>
+                  ))}
                 </div>
+              </RaycastSection>
+            </div>
+          )}
 
-                <div className="h-px bg-white/5" />
+          {/* TAB 6: ADVANCED */}
+          {activeTab === "advanced" && (
+            <div className="max-w-xl">
+              <RaycastSection title="Diagnostics & Maintenance">
+                <RaycastRow
+                  title="Local SQLite History"
+                  description={`${historyCount} operations stored in local database`}
+                >
+                  <RaycastButton
+                    variant="danger"
+                    disabled={historyCount === 0}
+                    onClick={handleClearHistory}
+                  >
+                    Clear History
+                  </RaycastButton>
+                </RaycastRow>
 
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400">SQLite History DB</span>
-                  <span className="font-mono text-zinc-200">{historyCount} Records</span>
-                </div>
+                <RaycastRow
+                  title="FFmpeg Sidecar Status"
+                  description={ffmpegStatus?.installed ? ffmpegStatus.version || "Installed" : "Not detected in system PATH"}
+                >
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded ${ffmpegStatus?.installed ? "text-emerald-400 bg-emerald-500/10" : "text-amber-400 bg-amber-500/10"}`}>
+                    {ffmpegStatus?.installed ? "Ready" : "Optional"}
+                  </span>
+                </RaycastRow>
+              </RaycastSection>
+            </div>
+          )}
 
-                <div className="h-px bg-white/5" />
-
-                <div className="flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-zinc-400">RMBG-1.4 Neural Model</span>
-                    <span className="block text-[11px] text-zinc-500">
-                      {rmbgStatus?.installed ? "Installed in Local AppData" : "Not downloaded (using fallback)"}
-                    </span>
-                  </div>
+          {/* TAB 7: AI & MODELS */}
+          {activeTab === "ai" && (
+            <div className="max-w-xl">
+              <RaycastSection title="Neural Background Removal Model">
+                <RaycastRow
+                  title="RMBG-1.4 Neural Model"
+                  description={rmbgStatus?.installed ? "Installed in Local AppData with DirectML execution" : "Requires one-time download (176MB)"}
+                >
                   {rmbgStatus?.installed ? (
-                    <span className="text-emerald-400 font-medium flex items-center gap-1">
+                    <span className="text-emerald-400 font-medium text-xs flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
                       <FileCheck2 size={13} />
-                      Ready
+                      Installed
                     </span>
                   ) : (
-                    <button
-                      onClick={handleDownloadModel}
+                    <RaycastButton
+                      variant="primary"
                       disabled={isDownloadingModel}
-                      className="px-2.5 py-1 bg-orange-500 text-white rounded-lg text-xs font-medium flex items-center gap-1 cursor-pointer hover:bg-orange-600 disabled:opacity-50"
+                      onClick={handleDownloadModel}
                     >
-                      <Download size={12} />
+                      <Download size={12} className="inline mr-1" />
                       {isDownloadingModel ? "Downloading..." : "Download (176MB)"}
-                    </button>
+                    </RaycastButton>
                   )}
-                </div>
+                </RaycastRow>
+              </RaycastSection>
+            </div>
+          )}
 
-                <div className="h-px bg-white/5" />
-
-                <div className="flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-zinc-400">FFmpeg Transcoder</span>
-                    <span className="block text-[11px] text-zinc-500 truncate max-w-xs">
-                      {ffmpegStatus?.installed ? ffmpegStatus.version || "Installed" : "Not found in PATH or sidecar"}
-                    </span>
+          {/* TAB 8: ABOUT */}
+          {activeTab === "about" && (
+            <div className="max-w-xl">
+              <RaycastSection title="About Wheel">
+                <div className="p-4 bg-[#242424] border border-white/[0.06] rounded-xl space-y-3">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-neutral-400">Application Version</span>
+                    <span className="font-mono text-neutral-200">v0.1.0 (Windows x86_64)</span>
                   </div>
-                  <span className={`font-medium ${ffmpegStatus?.installed ? "text-emerald-400" : "text-amber-400"}`}>
-                    {ffmpegStatus?.installed ? "Detected" : "Optional"}
-                  </span>
-                </div>
-              </div>
 
-              {/* Maintenance Actions */}
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={handleClearHistory}
-                  disabled={historyCount === 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-red-500/10 text-zinc-400 hover:text-red-400 border border-white/10 text-xs font-medium transition-colors cursor-pointer disabled:opacity-40"
-                >
-                  <Trash2 size={13} />
-                  <span>Clear History</span>
-                </button>
-              </div>
+                  <div className="h-px bg-white/[0.04]" />
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-neutral-400">Tauri Engine</span>
+                    <span className="font-mono text-neutral-200">Tauri v2 + WebView2</span>
+                  </div>
+
+                  <div className="h-px bg-white/[0.04]" />
+
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-neutral-400">Design Framework</span>
+                    <span className="text-neutral-200">Raycast on Windows Design System</span>
+                  </div>
+                </div>
+              </RaycastSection>
+            </div>
+          )}
+
+          {/* FALLBACK / OTHER TABS */}
+          {(activeTab === "orgs" || activeTab === "applications" || activeTab === "browser") && (
+            <div className="max-w-xl">
+              <RaycastSection title={activeTab.toUpperCase()}>
+                <div className="p-8 text-center text-neutral-500 text-xs bg-[#242424] border border-white/[0.06] rounded-xl">
+                  <span>No custom settings configured for this section yet.</span>
+                </div>
+              </RaycastSection>
             </div>
           )}
         </main>

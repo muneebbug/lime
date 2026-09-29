@@ -2,6 +2,7 @@ import { useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { Image as ImageIcon, Palette } from "lucide-react";
 import { ToolWindowLayout } from "./ToolWindowLayout";
+import { RaycastSegmented } from "../../ui/RaycastUI";
 
 export interface AddBgToolProps {
   filePath: string;
@@ -121,17 +122,17 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
       onReset={handleReset}
       onPrimaryAction={handleApply}
     >
-      <div className="flex flex-col h-full gap-4">
+      <div className="flex flex-col h-full gap-3 p-3">
         {/* Controls Grid */}
-        <div className="flex flex-col gap-3 p-3.5 rounded-xl bg-zinc-900/60 border border-white/5 text-xs">
+        <div className="flex flex-col gap-3 p-3 rounded-xl bg-[#242424] border border-white/[0.06] text-xs shrink-0">
           {/* Swatches selector: Gradients and Solids */}
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-[11px] text-zinc-400 font-semibold uppercase tracking-wider">
+            <div className="flex items-center justify-between text-[11px] text-neutral-400 font-semibold uppercase tracking-wider">
               <span className="flex items-center gap-1.5">
                 <Palette size={13} />
                 Background Swatches
               </span>
-              <span className="text-zinc-500 font-normal lowercase">{selectedGradient.name}</span>
+              <span className="text-neutral-500 font-normal lowercase">{selectedGradient.name}</span>
             </div>
 
             {/* Gradient row */}
@@ -141,15 +142,15 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
                   key={g.name}
                   onClick={() => setSelectedGradient(g)}
                   style={{ background: g.css }}
-                  className={`w-7 h-7 rounded-full shrink-0 transition-transform cursor-pointer shadow-sm ${
+                  className={`w-6 h-6 rounded-full shrink-0 transition-transform cursor-pointer shadow-sm ${
                     selectedGradient.name === g.name
-                      ? "ring-2 ring-white scale-110 ring-offset-2 ring-offset-zinc-950"
-                      : "opacity-85 hover:opacity-100 hover:scale-105"
+                      ? "ring-2 ring-[#ff6339] scale-110 ring-offset-2 ring-offset-[#181818]"
+                      : "opacity-80 hover:opacity-100 hover:scale-105"
                   }`}
                   title={g.name}
                 />
               ))}
-              <div className="w-px h-6 bg-white/10 mx-1 shrink-0" />
+              <div className="w-px h-5 bg-white/[0.08] mx-1 shrink-0" />
               {/* Solid row */}
               {SOLID_PRESETS.map((s) => (
                 <button
@@ -163,10 +164,10 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
                     })
                   }
                   style={{ backgroundColor: s.hex }}
-                  className={`w-7 h-7 rounded-full shrink-0 border border-white/15 transition-transform cursor-pointer shadow-sm ${
+                  className={`w-6 h-6 rounded-full shrink-0 border border-white/15 transition-transform cursor-pointer shadow-sm ${
                     selectedGradient.css === s.hex
-                      ? "ring-2 ring-white scale-110 ring-offset-2 ring-offset-zinc-950"
-                      : "opacity-85 hover:opacity-100 hover:scale-105"
+                      ? "ring-2 ring-[#ff6339] scale-110 ring-offset-2 ring-offset-[#181818]"
+                      : "opacity-80 hover:opacity-100 hover:scale-105"
                   }`}
                   title={s.name}
                 />
@@ -175,12 +176,12 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
           </div>
 
           {/* Sliders: Padding, Corner Radius, Shadow */}
-          <div className="grid grid-cols-3 gap-4 pt-1 border-t border-white/5">
+          <div className="grid grid-cols-3 gap-4 pt-2 border-t border-white/[0.04]">
             {/* Padding slider */}
             <div className="flex flex-col gap-1">
-              <div className="flex justify-between text-[11px] text-zinc-400 font-medium">
+              <div className="flex justify-between text-[11px] text-neutral-400 font-medium">
                 <span>Padding</span>
-                <span className="font-mono text-zinc-200">{padding}px</span>
+                <span className="font-mono text-neutral-200">{padding}px</span>
               </div>
               <input
                 type="range"
@@ -188,15 +189,15 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
                 max={160}
                 value={padding}
                 onChange={(e) => setPadding(parseInt(e.target.value) || 0)}
-                className="accent-orange-500 cursor-pointer h-1.5 bg-zinc-950 rounded"
+                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#1c1c1c] rounded"
               />
             </div>
 
             {/* Corner Radius slider */}
             <div className="flex flex-col gap-1">
-              <div className="flex justify-between text-[11px] text-zinc-400 font-medium">
+              <div className="flex justify-between text-[11px] text-neutral-400 font-medium">
                 <span>Corners</span>
-                <span className="font-mono text-zinc-200">{cornerRadius}px</span>
+                <span className="font-mono text-neutral-200">{cornerRadius}px</span>
               </div>
               <input
                 type="range"
@@ -204,15 +205,15 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
                 max={48}
                 value={cornerRadius}
                 onChange={(e) => setCornerRadius(parseInt(e.target.value) || 0)}
-                className="accent-orange-500 cursor-pointer h-1.5 bg-zinc-950 rounded"
+                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#1c1c1c] rounded"
               />
             </div>
 
             {/* Shadow slider */}
             <div className="flex flex-col gap-1">
-              <div className="flex justify-between text-[11px] text-zinc-400 font-medium">
+              <div className="flex justify-between text-[11px] text-neutral-400 font-medium">
                 <span>Shadow</span>
-                <span className="font-mono text-zinc-200">{shadowBlur}px</span>
+                <span className="font-mono text-neutral-200">{shadowBlur}px</span>
               </div>
               <input
                 type="range"
@@ -220,51 +221,40 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
                 max={60}
                 value={shadowBlur}
                 onChange={(e) => setShadowBlur(parseInt(e.target.value) || 0)}
-                className="accent-orange-500 cursor-pointer h-1.5 bg-zinc-950 rounded"
+                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#1c1c1c] rounded"
               />
             </div>
           </div>
 
           {/* Ratio & Format Selector */}
-          <div className="flex items-center justify-between pt-1 border-t border-white/5">
+          <div className="flex items-center justify-between pt-2 border-t border-white/[0.04]">
             {/* Aspect Ratio */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-zinc-400 font-medium">Ratio:</span>
-              <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-white/5">
-                {(["auto", "1:1", "16:9", "4:5"] as const).map((r) => (
-                  <button
-                    key={r}
-                    onClick={() => setAspectRatio(r)}
-                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
-                      aspectRatio === r
-                        ? "bg-orange-500 text-zinc-950 font-semibold"
-                        : "text-zinc-400 hover:text-zinc-200"
-                    }`}
-                  >
-                    {r.toUpperCase()}
-                  </button>
-                ))}
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-neutral-400 font-medium">Ratio:</span>
+              <RaycastSegmented
+                value={aspectRatio}
+                options={[
+                  { label: "Auto", value: "auto" },
+                  { label: "1:1", value: "1:1" },
+                  { label: "16:9", value: "16:9" },
+                  { label: "4:5", value: "4:5" },
+                ]}
+                onChange={(val) => setAspectRatio(val as any)}
+              />
             </div>
 
             {/* Export Format */}
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] text-zinc-400 font-medium">Format:</span>
-              <div className="flex items-center gap-1 bg-zinc-950 p-1 rounded-lg border border-white/5">
-                {(["png", "jpg", "webp"] as const).map((fmt) => (
-                  <button
-                    key={fmt}
-                    onClick={() => setExportFormat(fmt)}
-                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all cursor-pointer ${
-                      exportFormat === fmt
-                        ? "bg-orange-500 text-zinc-950 font-semibold"
-                        : "text-zinc-400 hover:text-zinc-200"
-                    }`}
-                  >
-                    {fmt.toUpperCase()}
-                  </button>
-                ))}
-              </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-neutral-400 font-medium">Format:</span>
+              <RaycastSegmented
+                value={exportFormat}
+                options={[
+                  { label: "PNG", value: "png" },
+                  { label: "JPG", value: "jpg" },
+                  { label: "WEBP", value: "webp" },
+                ]}
+                onChange={(val) => setExportFormat(val as any)}
+              />
             </div>
           </div>
         </div>

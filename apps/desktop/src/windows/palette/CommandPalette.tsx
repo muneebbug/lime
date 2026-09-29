@@ -8,7 +8,6 @@ import {
   Sparkles,
   History,
   FileImage,
-  ArrowRight,
   X,
 } from "lucide-react";
 
@@ -211,43 +210,47 @@ export function CommandPalette() {
   return (
     <div
       onKeyDown={handleKeyDown}
-      className="flex flex-col h-screen w-screen bg-zinc-950 text-zinc-100 font-sans select-none overflow-hidden rounded-2xl border border-white/10 shadow-2xl backdrop-blur-2xl"
+      className="flex flex-col h-screen w-screen bg-[#181818] text-neutral-200 font-sans select-none overflow-hidden rounded-xl border border-white/[0.08] shadow-2xl"
     >
-      {/* Background warm glow */}
-      <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_50%_-10%,rgba(249,115,22,0.18),transparent_65%)]" />
-
-      {/* Search Input Bar */}
+      {/* Search Input Bar with integrated window controls */}
       <div
         data-tauri-drag-region
-        className="relative z-10 flex items-center gap-3 px-4 py-3.5 border-b border-white/10 bg-zinc-900/60"
+        className="relative z-10 flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#181818]"
       >
-        <Search size={18} className="text-orange-400 shrink-0" />
+        <Search size={16} className="text-neutral-400 shrink-0" />
         <input
           ref={inputRef}
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search commands, tools, conversions, or history..."
-          className="flex-1 bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
+          className="flex-1 bg-transparent text-[13px] text-white placeholder-neutral-500 outline-none"
         />
-        <button
-          onClick={handleClose}
-          className="w-6 h-6 rounded-full flex items-center justify-center bg-white/5 hover:bg-white/10 text-zinc-400 cursor-pointer"
-        >
-          <X size={13} />
-        </button>
+
+        <div className="flex items-center gap-2">
+          <kbd className="px-1.5 py-0.5 text-[10px] font-mono text-neutral-400 bg-white/[0.06] border border-white/[0.08] rounded">
+            Esc
+          </kbd>
+          <button
+            onClick={handleClose}
+            className="w-6 h-6 rounded flex items-center justify-center text-neutral-400 hover:text-white hover:bg-[#e81123] transition-colors cursor-pointer"
+            title="Close"
+          >
+            <X size={13} />
+          </button>
+        </div>
       </div>
 
       {/* Selected target file pill (if any) */}
       {selectedFile && (
-        <div className="px-4 py-2 bg-orange-500/10 border-b border-orange-500/20 flex items-center justify-between text-xs text-orange-300">
+        <div className="px-4 py-1.5 bg-[#222222] border-b border-white/[0.06] flex items-center justify-between text-xs text-neutral-300">
           <div className="flex items-center gap-2 truncate">
-            <FileImage size={13} className="text-orange-400 shrink-0" />
+            <FileImage size={13} className="text-[#ff6339] shrink-0" />
             <span className="truncate">Active file: <strong>{selectedFile}</strong></span>
           </div>
           <button
             onClick={() => setSelectedFile(null)}
-            className="text-orange-400 hover:text-white cursor-pointer ml-2 text-xs"
+            className="text-neutral-400 hover:text-white cursor-pointer ml-2 text-xs"
           >
             Clear
           </button>
@@ -257,11 +260,11 @@ export function CommandPalette() {
       {/* Results List */}
       <div
         ref={listRef}
-        className="flex-1 overflow-y-auto p-2 divide-y divide-white/5 relative z-10"
+        className="flex-1 overflow-y-auto p-1.5 relative z-10 space-y-0.5"
       >
         {filteredItems.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-48 text-zinc-500 gap-1.5 text-xs">
-            <Search size={24} className="opacity-30 mb-1" />
+          <div className="flex flex-col items-center justify-center h-48 text-neutral-500 gap-1.5 text-xs">
+            <Search size={22} className="opacity-30 mb-1" />
             <span>No matching commands or actions found</span>
           </div>
         ) : (
@@ -272,27 +275,31 @@ export function CommandPalette() {
                 key={item.id}
                 onClick={() => handleSelectItem(item)}
                 onMouseEnter={() => setSelectedIndex(index)}
-                className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer transition-all ${
+                className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
                   isSelected
-                    ? "bg-orange-500/15 border border-orange-500/30 text-white shadow-sm"
-                    : "border border-transparent text-zinc-300 hover:bg-white/5"
+                    ? "bg-white/[0.1] text-white shadow-sm"
+                    : "text-neutral-300 hover:bg-white/[0.04]"
                 }`}
               >
-                <div className="flex items-center gap-3 truncate">
-                  <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-white/10 flex items-center justify-center shrink-0">
+                <div className="flex items-center gap-2.5 truncate">
+                  <div className="w-6 h-6 rounded-md bg-[#252525] border border-white/[0.06] flex items-center justify-center shrink-0">
                     {item.icon}
                   </div>
                   <div className="truncate">
-                    <span className="block text-xs font-semibold truncate text-zinc-100">{item.title}</span>
-                    <span className="block text-[11px] text-zinc-500 truncate">{item.subtitle}</span>
+                    <span className="block text-xs font-medium truncate text-neutral-100">{item.title}</span>
+                    <span className="block text-[11px] text-neutral-500 truncate">{item.subtitle}</span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 text-zinc-400 capitalize">
+                  <span className="text-[10px] px-2 py-0.5 rounded bg-white/[0.05] border border-white/[0.06] text-neutral-400 capitalize">
                     {item.category}
                   </span>
-                  {isSelected && <ArrowRight size={13} className="text-orange-400" />}
+                  {isSelected && (
+                    <div className="flex items-center gap-1 text-[11px] text-neutral-400 font-mono">
+                      <span>↵</span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
@@ -300,17 +307,30 @@ export function CommandPalette() {
         )}
       </div>
 
-      {/* Footer Navigation Bar */}
-      <footer className="flex items-center justify-between px-4 py-2 border-t border-white/10 bg-zinc-900/50 text-[11px] text-zinc-500 relative z-10">
-        <div className="flex items-center gap-3">
-          <span><kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-400 font-mono">↑↓</kbd> Navigate</span>
-          <span><kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-400 font-mono">↵</kbd> Select</span>
-          <span><kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-zinc-400 font-mono">Esc</kbd> Close</span>
+      {/* Raycast Bottom Action Bar */}
+      <footer className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] bg-[#1e1e1e] text-xs text-neutral-400 relative z-10 shrink-0">
+        <div className="flex items-center gap-2 truncate">
+          <span className="text-neutral-500 text-[11px]">Wheel Command Palette</span>
+          {filteredItems[selectedIndex] && (
+            <>
+              <span className="text-neutral-600">•</span>
+              <span className="text-neutral-300 font-medium text-[11px] truncate">
+                {filteredItems[selectedIndex].title}
+              </span>
+            </>
+          )}
         </div>
 
-        <div className="flex items-center gap-1.5 text-zinc-400">
-          <Sparkles size={11} className="text-orange-400" />
-          <span>Wheel Palette</span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => filteredItems[selectedIndex] && handleSelectItem(filteredItems[selectedIndex])}
+            className="flex items-center gap-1.5 px-3 py-1 bg-[#ff6339] hover:bg-[#ff7247] text-white font-medium rounded-md transition-all cursor-pointer shadow-sm active:scale-[0.98] text-xs"
+          >
+            <span>Open Action</span>
+            <kbd className="text-[10px] bg-black/25 text-white/90 px-1 py-0.5 rounded font-mono font-bold">
+              ↵
+            </kbd>
+          </button>
         </div>
       </footer>
     </div>

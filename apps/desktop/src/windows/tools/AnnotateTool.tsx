@@ -419,105 +419,105 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
     >
       <div className="flex flex-col h-full w-full overflow-hidden">
         {/* Top Toolbars: Tools, Colors, Sizes */}
-        <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-2.5 bg-zinc-900/60 border-b border-white/5 backdrop-blur-md">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-2.5 bg-[#181818] border-b border-white/[0.06]">
           {/* Tool selectors */}
-          <div className="flex items-center gap-1 p-1 bg-zinc-950/60 rounded-xl border border-white/10">
+          <div className="flex items-center gap-0.5 p-0.5 bg-[#242424] rounded-lg border border-white/[0.08]">
             <button
               onClick={() => setActiveTool("arrow")}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                 activeTool === "arrow"
-                  ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
+                  ? "bg-white/[0.14] text-white shadow-sm font-semibold"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
               }`}
               title="Arrow"
             >
-              <ArrowUpRight size={14} />
+              <ArrowUpRight size={13} />
               <span>Arrow</span>
             </button>
 
             <button
               onClick={() => setActiveTool("pen")}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                 activeTool === "pen"
-                  ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
+                  ? "bg-white/[0.14] text-white shadow-sm font-semibold"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
               }`}
               title="Pen"
             >
-              <PenTool size={14} />
+              <PenTool size={13} />
               <span>Pen</span>
             </button>
 
             <button
               onClick={() => setActiveTool("highlighter")}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                 activeTool === "highlighter"
-                  ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
+                  ? "bg-white/[0.14] text-white shadow-sm font-semibold"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
               }`}
               title="Highlighter"
             >
-              <Highlighter size={14} />
+              <Highlighter size={13} />
               <span>Highlighter</span>
             </button>
 
             <button
               onClick={() => setActiveTool("rectangle")}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                 activeTool === "rectangle"
-                  ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
+                  ? "bg-white/[0.14] text-white shadow-sm font-semibold"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
               }`}
               title="Rectangle"
             >
-              <Square size={14} />
+              <Square size={13} />
               <span>Box</span>
             </button>
 
             <button
               onClick={() => setActiveTool("text")}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                 activeTool === "text"
-                  ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
+                  ? "bg-white/[0.14] text-white shadow-sm font-semibold"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
               }`}
               title="Text"
             >
-              <Type size={14} />
+              <Type size={13} />
               <span>Text</span>
             </button>
 
             <button
               onClick={() => setActiveTool("step")}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
                 activeTool === "step"
-                  ? "bg-orange-500 text-white shadow-md shadow-orange-500/20"
-                  : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
+                  ? "bg-white/[0.14] text-white shadow-sm font-semibold"
+                  : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
               }`}
               title="Numbered Step Markers (1, 2, 3...)"
             >
-              <ListOrdered size={14} />
+              <ListOrdered size={13} />
               <span>Step ({currentStep})</span>
             </button>
           </div>
 
           {/* Color swatches */}
-          <div className="flex items-center gap-1.5 p-1 bg-zinc-950/60 rounded-xl border border-white/10">
+          <div className="flex items-center gap-1.5 px-2 py-1 bg-[#242424] rounded-lg border border-white/[0.08]">
             {COLOR_SWATCHES.map((swatch) => (
               <button
                 key={swatch.hex}
                 onClick={() => setActiveColor(swatch.hex)}
                 style={{ backgroundColor: swatch.hex }}
-                className={`w-5 h-5 rounded-full border transition-transform cursor-pointer flex items-center justify-center ${
+                className={`w-4 h-4 rounded-full border transition-transform cursor-pointer flex items-center justify-center ${
                   activeColor === swatch.hex
-                    ? "scale-125 border-white shadow-md ring-2 ring-orange-500/50"
-                    : "border-white/20 hover:scale-110"
+                    ? "scale-125 border-white shadow-md ring-2 ring-white/20"
+                    : "border-white/20 hover:scale-110 opacity-70 hover:opacity-100"
                 }`}
                 title={swatch.name}
               >
                 {activeColor === swatch.hex && (
                   <Check
-                    size={10}
+                    size={9}
                     className={swatch.hex === "#ffffff" ? "text-black" : "text-white"}
                     strokeWidth={3}
                   />
@@ -528,15 +528,15 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
 
           {/* Stroke width & History controls */}
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1 bg-zinc-950/60 p-1 rounded-xl border border-white/10">
+            <div className="flex items-center gap-0.5 bg-[#242424] p-0.5 rounded-lg border border-white/[0.08]">
               {STROKE_WIDTHS.map((sw) => (
                 <button
                   key={sw.val}
                   onClick={() => setStrokeWidth(sw.val)}
-                  className={`px-2 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                  className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
                     strokeWidth === sw.val
-                      ? "bg-white/20 text-white"
-                      : "text-zinc-400 hover:text-zinc-200"
+                      ? "bg-white/[0.14] text-white font-semibold"
+                      : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
                   }`}
                 >
                   {sw.label}
@@ -547,28 +547,28 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
             <button
               onClick={handleUndo}
               disabled={history.length === 0}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-neutral-400 hover:text-white bg-[#242424] hover:bg-[#2c2c2c] border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
               title="Undo (Ctrl+Z)"
             >
-              <Undo2 size={14} />
+              <Undo2 size={13} />
             </button>
 
             <button
               onClick={handleRedo}
               disabled={redoStack.length === 0}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-white bg-white/5 hover:bg-white/10 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-neutral-400 hover:text-white bg-[#242424] hover:bg-[#2c2c2c] border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
               title="Redo (Ctrl+Y)"
             >
-              <Redo2 size={14} />
+              <Redo2 size={13} />
             </button>
 
             <button
               onClick={handleClear}
               disabled={history.length === 0}
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-red-400 bg-white/5 hover:bg-red-500/10 disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-neutral-400 hover:text-red-400 bg-[#242424] hover:bg-red-500/10 border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
               title="Clear all"
             >
-              <Trash2 size={14} />
+              <Trash2 size={13} />
             </button>
           </div>
         </div>
