@@ -17,13 +17,13 @@ import {
   FileCheck2,
 } from "lucide-react";
 import {
-  RaycastCaptionButtons,
-  RaycastToggle,
-  RaycastSegmented,
-  RaycastButton,
-  RaycastRow,
-  RaycastSection,
-} from "../../ui/RaycastUI";
+  CaptionButtons,
+  ToggleSwitch,
+  SegmentedControl,
+  WheelButton,
+  SettingRow,
+  SettingSection,
+} from "../../ui/WheelUI";
 
 type SettingsNavId =
   | "general"
@@ -230,7 +230,7 @@ export function SettingsWindow() {
             </span>
           )}
 
-          <RaycastCaptionButtons />
+          <CaptionButtons />
         </div>
       </header>
 
@@ -282,12 +282,12 @@ export function SettingsWindow() {
           {/* TAB 1: GENERAL */}
           {activeTab === "general" && (
             <div className="max-w-xl">
-              <RaycastSection title="System Startup & Tray">
-                <RaycastRow
+              <SettingSection title="System Startup & Tray">
+                <SettingRow
                   title="Launch at Windows Login"
                   description="Start Wheel automatically in the background when signing into Windows"
                 >
-                  <RaycastToggle
+                  <ToggleSwitch
                     checked={settings.general.launch_at_login}
                     onChange={(checked) => {
                       const updated = {
@@ -297,13 +297,13 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Close to System Tray"
                   description="Keep Wheel running in the background tray when tool windows are closed"
                 >
-                  <RaycastToggle
+                  <ToggleSwitch
                     checked={settings.general.minimize_to_tray}
                     onChange={(checked) => {
                       const updated = {
@@ -313,13 +313,13 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Automatic Updates"
                   description="Check for new application releases automatically in the background"
                 >
-                  <RaycastToggle
+                  <ToggleSwitch
                     checked={settings.general.auto_update}
                     onChange={(checked) => {
                       const updated = {
@@ -329,32 +329,32 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
-              </RaycastSection>
+                </SettingRow>
+              </SettingSection>
 
-              <RaycastSection title="Windows Explorer Integration">
-                <RaycastRow
+              <SettingSection title="Windows Explorer Integration">
+                <SettingRow
                   title="Explorer Context Menu"
                   description="Add 'Open with Wheel' to Windows Explorer right-click context menus"
                 >
-                  <RaycastToggle
+                  <ToggleSwitch
                     checked={settings.general.explorer_context_menu}
                     onChange={handleToggleContextMenu}
                   />
-                </RaycastRow>
-              </RaycastSection>
+                </SettingRow>
+              </SettingSection>
             </div>
           )}
 
           {/* TAB 2: TRIGGER & DRAG */}
           {activeTab === "trigger" && (
             <div className="max-w-xl">
-              <RaycastSection title="Gesture Activation">
-                <RaycastRow
+              <SettingSection title="Gesture Activation">
+                <SettingRow
                   title="Activation Modifier Key"
                   description="Key held while dragging files to summon the radial menu"
                 >
-                  <RaycastSegmented
+                  <SegmentedControl
                     value={settings.trigger.modifier}
                     options={[
                       { label: "Shift", value: "shift" },
@@ -370,9 +370,9 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Movement Threshold"
                   description="Minimum drag distance in pixels before the radial wheel appears"
                 >
@@ -398,9 +398,9 @@ export function SettingsWindow() {
                       className="w-28 accent-[#ff6339] cursor-pointer"
                     />
                   </div>
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Drop Confirmation Timeout"
                   description="Milliseconds to wait for Windows OLE drop confirmation before cancelling"
                 >
@@ -427,13 +427,13 @@ export function SettingsWindow() {
                       className="w-28 accent-[#ff6339] cursor-pointer"
                     />
                   </div>
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Always Show on Drag"
                   description="Display the wheel on any file drag, even without holding a modifier key"
                 >
-                  <RaycastToggle
+                  <ToggleSwitch
                     checked={settings.trigger.always_show}
                     onChange={(checked) => {
                       const updated = {
@@ -443,13 +443,13 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Pause Wheel Trigger"
                   description="Temporarily silence the radial gesture without quitting the app"
                 >
-                  <RaycastToggle
+                  <ToggleSwitch
                     checked={settings.trigger.paused}
                     onChange={(checked) => {
                       const updated = {
@@ -459,20 +459,20 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
-              </RaycastSection>
+                </SettingRow>
+              </SettingSection>
             </div>
           )}
 
           {/* TAB 3: RADIAL WHEEL UI */}
           {activeTab === "wheel_ui" && (
             <div className="max-w-xl">
-              <RaycastSection title="Wheel Layout & Display">
-                <RaycastRow
+              <SettingSection title="Wheel Layout & Display">
+                <SettingRow
                   title="Interface Theme"
                   description="Color appearance of the radial wheel overlay"
                 >
-                  <RaycastSegmented
+                  <SegmentedControl
                     value={settings.wheel_ui.theme}
                     options={[
                       { label: "System", value: "system" },
@@ -487,13 +487,13 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Default Start Page"
                   description="Which radial wheel page is displayed when a drag starts"
                 >
-                  <RaycastSegmented
+                  <SegmentedControl
                     value={settings.wheel_ui.start_page}
                     options={[
                       { label: "Convert (Page 1)", value: "convert" },
@@ -507,9 +507,9 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Wheel Diameter"
                   description="Outer pixel diameter of the circular radial wheel"
                 >
@@ -533,13 +533,13 @@ export function SettingsWindow() {
                       className="w-28 accent-[#ff6339] cursor-pointer"
                     />
                   </div>
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Context Filtering"
                   description="Automatically dim or filter actions incompatible with dragged files"
                 >
-                  <RaycastToggle
+                  <ToggleSwitch
                     checked={settings.wheel_ui.context_filter_enabled}
                     onChange={(checked) => {
                       const updated = {
@@ -549,13 +549,13 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Audio Tick Effects"
                   description="Play subtle mechanical tick sounds during wedge hover"
                 >
-                  <RaycastToggle
+                  <ToggleSwitch
                     checked={settings.wheel_ui.sound_enabled}
                     onChange={(checked) => {
                       const updated = {
@@ -565,13 +565,13 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Reduced Motion"
                   description="Disable spring animations for instant radial appearance"
                 >
-                  <RaycastToggle
+                  <ToggleSwitch
                     checked={settings.wheel_ui.reduced_motion}
                     onChange={(checked) => {
                       const updated = {
@@ -581,20 +581,20 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
-              </RaycastSection>
+                </SettingRow>
+              </SettingSection>
             </div>
           )}
 
           {/* TAB 4: OUTPUT & FILES */}
           {activeTab === "output" && (
             <div className="max-w-xl">
-              <RaycastSection title="File Destination">
-                <RaycastRow
+              <SettingSection title="File Destination">
+                <SettingRow
                   title="Save Location Policy"
                   description="Where converted and processed files are saved"
                 >
-                  <RaycastSegmented
+                  <SegmentedControl
                     value={settings.output.policy}
                     options={[
                       { label: "Next to Source", value: "next_to_source" },
@@ -610,10 +610,10 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
+                </SettingRow>
 
                 {settings.output.policy === "fixed_folder" && (
-                  <RaycastRow
+                  <SettingRow
                     title="Fixed Folder Path"
                     description="Absolute directory path where output files will be written"
                   >
@@ -633,10 +633,10 @@ export function SettingsWindow() {
                       placeholder="C:\Users\...\Pictures\Wheel"
                       className="w-56 px-2.5 py-1 text-xs bg-[#242424] border border-white/[0.08] focus:border-white/30 rounded-lg text-white font-mono outline-none"
                     />
-                  </RaycastRow>
+                  </SettingRow>
                 )}
 
-                <RaycastRow
+                <SettingRow
                   title="Filename Suffix"
                   description="Appended between file stem and extension (leave blank for clean filename)"
                 >
@@ -653,15 +653,15 @@ export function SettingsWindow() {
                     placeholder="_converted"
                     className="w-32 px-2.5 py-1 text-xs bg-[#242424] border border-white/[0.08] focus:border-white/30 rounded-lg text-white font-mono outline-none text-right"
                   />
-                </RaycastRow>
-              </RaycastSection>
+                </SettingRow>
+              </SettingSection>
 
-              <RaycastSection title="File Safety & Preservation">
-                <RaycastRow
+              <SettingSection title="File Safety & Preservation">
+                <SettingRow
                   title="Preserve EXIF Metadata"
                   description="Retain camera, timestamp, and device metadata during conversions"
                 >
-                  <RaycastToggle
+                  <ToggleSwitch
                     checked={settings.output.preserve_metadata}
                     onChange={(checked) => {
                       const updated = {
@@ -671,13 +671,13 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Send Source to Recycle Bin"
                   description="Safely move original files to the Windows Recycle Bin after successful conversion"
                 >
-                  <RaycastToggle
+                  <ToggleSwitch
                     checked={settings.output.recycle_source}
                     onChange={(checked) => {
                       const updated = {
@@ -687,13 +687,13 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
+                </SettingRow>
 
-                <RaycastRow
+                <SettingRow
                   title="Overwrite Existing Files"
                   description="Replace existing files if an output file with the same name already exists"
                 >
-                  <RaycastToggle
+                  <ToggleSwitch
                     checked={settings.output.overwrite_source}
                     onChange={(checked) => {
                       const updated = {
@@ -703,15 +703,15 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                   />
-                </RaycastRow>
-              </RaycastSection>
+                </SettingRow>
+              </SettingSection>
             </div>
           )}
 
           {/* TAB 5: PRESETS & WORKFLOWS */}
           {activeTab === "presets" && (
             <div className="max-w-xl">
-              <RaycastSection title="Multi-Step Automated Recipes">
+              <SettingSection title="Multi-Step Automated Recipes">
                 <div className="space-y-2.5">
                   {(settings.presets || []).map((preset: any, index: number) => (
                     <div
@@ -732,7 +732,7 @@ export function SettingsWindow() {
                         </p>
                       </div>
 
-                      <RaycastToggle
+                      <ToggleSwitch
                         checked={preset.enabled}
                         onChange={(checked) => {
                           const updatedPresets = [...settings.presets];
@@ -744,15 +744,15 @@ export function SettingsWindow() {
                     </div>
                   ))}
                 </div>
-              </RaycastSection>
+              </SettingSection>
             </div>
           )}
 
           {/* TAB 6: ENGINES & AI */}
           {activeTab === "engines" && (
             <div className="max-w-xl">
-              <RaycastSection title="AI Background Removal Model">
-                <RaycastRow
+              <SettingSection title="AI Background Removal Model">
+                <SettingRow
                   title="RMBG-1.4 Neural Model"
                   description={
                     rmbgStatus?.installed
@@ -778,20 +778,20 @@ export function SettingsWindow() {
                       </button>
                     </div>
                   ) : (
-                    <RaycastButton
+                    <WheelButton
                       variant="primary"
                       disabled={isDownloadingModel}
                       onClick={handleDownloadModel}
                     >
                       <Download size={12} className="inline mr-1" />
                       {isDownloadingModel ? "Downloading (~176 MB)..." : "Download Model (176 MB)"}
-                    </RaycastButton>
+                    </WheelButton>
                   )}
-                </RaycastRow>
-              </RaycastSection>
+                </SettingRow>
+              </SettingSection>
 
-              <RaycastSection title="Multimedia Conversion Engine">
-                <RaycastRow
+              <SettingSection title="Multimedia Conversion Engine">
+                <SettingRow
                   title="FFmpeg Sidecar Status"
                   description={
                     ffmpegStatus?.installed
@@ -808,35 +808,35 @@ export function SettingsWindow() {
                   >
                     {ffmpegStatus?.installed ? "Installed" : "Not Found"}
                   </span>
-                </RaycastRow>
-              </RaycastSection>
+                </SettingRow>
+              </SettingSection>
             </div>
           )}
 
           {/* TAB 7: HISTORY */}
           {activeTab === "history" && (
             <div className="max-w-xl">
-              <RaycastSection title="Conversion & Job History">
-                <RaycastRow
+              <SettingSection title="Conversion & Job History">
+                <SettingRow
                   title="SQLite Database History"
                   description={`${historyCount} completed file operation records stored in local database`}
                 >
-                  <RaycastButton
+                  <WheelButton
                     variant="danger"
                     disabled={historyCount === 0}
                     onClick={handleClearHistory}
                   >
                     Clear History
-                  </RaycastButton>
-                </RaycastRow>
-              </RaycastSection>
+                  </WheelButton>
+                </SettingRow>
+              </SettingSection>
             </div>
           )}
 
           {/* TAB 8: ABOUT */}
           {activeTab === "about" && (
             <div className="max-w-xl">
-              <RaycastSection title="About Wheel">
+              <SettingSection title="About Wheel">
                 <div className="p-4 bg-[#242424] border border-white/[0.06] rounded-xl space-y-3">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-neutral-400">Application</span>
@@ -859,7 +859,7 @@ export function SettingsWindow() {
                     </span>
                   </div>
                 </div>
-              </RaycastSection>
+              </SettingSection>
             </div>
           )}
         </main>

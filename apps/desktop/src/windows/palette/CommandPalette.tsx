@@ -307,7 +307,7 @@ export function CommandPalette() {
         )}
       </div>
 
-      {/* Raycast Bottom Action Bar */}
+      {/* Action Bar */}
       <footer className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] bg-[#1e1e1e] text-xs text-neutral-400 relative z-10 shrink-0">
         <div className="flex items-center gap-2 truncate">
           <span className="text-neutral-500 text-[11px]">Wheel Command Palette</span>

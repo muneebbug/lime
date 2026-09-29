@@ -12,7 +12,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { ToolWindowLayout } from "./ToolWindowLayout";
-import { RaycastSegmented } from "../../ui/RaycastUI";
+import { SegmentedControl } from "../../ui/WheelUI";
 
 export interface MetadataToolProps {
   filePath: string;
@@ -174,7 +174,7 @@ export function MetadataTool({ filePath }: MetadataToolProps) {
           </div>
 
           {/* Strip scope mode selector */}
-          <RaycastSegmented
+          <SegmentedControl
             value={stripGpsOnly ? "gps" : "all"}
             options={[
               { label: "Strip All", value: "all" },

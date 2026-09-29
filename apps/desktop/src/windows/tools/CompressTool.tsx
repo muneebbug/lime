@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { Minimize2, Zap, ShieldCheck, Target, ArrowDownRight } from "lucide-react";
 import { ToolWindowLayout } from "./ToolWindowLayout";
-import { RaycastToggle } from "../../ui/RaycastUI";
+import { ToggleSwitch } from "../../ui/WheelUI";
 
 export interface CompressToolProps {
   filePath: string;
@@ -227,7 +227,7 @@ export function CompressTool({ filePath }: CompressToolProps) {
                     : `${targetSizeKb} KB`}
                 </span>
               )}
-              <RaycastToggle
+              <ToggleSwitch
                 checked={useTargetSize}
                 onChange={setUseTargetSize}
               />

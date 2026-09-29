@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { Crop, Lock, Unlock } from "lucide-react";
 import { ToolWindowLayout } from "./ToolWindowLayout";
-import { RaycastSegmented } from "../../ui/RaycastUI";
+import { SegmentedControl } from "../../ui/WheelUI";
 
 export interface CropToolProps {
   filePath: string;
@@ -220,7 +220,7 @@ export function CropTool({ filePath }: CropToolProps) {
         {/* Controls bar: Aspect Ratio presets & Pixel Dimensions */}
         <div className="flex flex-wrap items-center justify-between gap-3 px-3 py-2 rounded-xl bg-[#242424] border border-white/[0.06] text-xs shrink-0">
           {/* Ratio Segmented Control */}
-          <RaycastSegmented
+          <SegmentedControl
             value={aspectRatio}
             options={[
               { label: "Free", value: "free" },

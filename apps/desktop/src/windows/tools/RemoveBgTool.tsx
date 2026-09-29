@@ -9,7 +9,7 @@ import {
   SplitSquareVertical,
 } from "lucide-react";
 import { ToolWindowLayout } from "./ToolWindowLayout";
-import { RaycastSegmented, RaycastButton } from "../../ui/RaycastUI";
+import { SegmentedControl, WheelButton } from "../../ui/WheelUI";
 
 export interface RemoveBgToolProps {
   filePath: string;
@@ -194,12 +194,12 @@ export function RemoveBgTool({ filePath }: RemoveBgToolProps) {
                   </span>
                 </div>
               ) : (
-                <RaycastButton
+                <WheelButton
                   variant="primary"
                   onClick={handleDownloadModel}
                 >
                   Download Model
-                </RaycastButton>
+                </WheelButton>
               )}
             </div>
           </div>
@@ -244,7 +244,7 @@ export function RemoveBgTool({ filePath }: RemoveBgToolProps) {
           {/* Background Replacement Mode */}
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-neutral-400 font-medium">Backdrop:</span>
-            <RaycastSegmented
+            <SegmentedControl
               value={bgMode}
               options={[
                 { label: "Alpha", value: "transparent" },
@@ -258,7 +258,7 @@ export function RemoveBgTool({ filePath }: RemoveBgToolProps) {
           {/* Format selector */}
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-neutral-400 font-medium">Format:</span>
-            <RaycastSegmented
+            <SegmentedControl
               value={format}
               options={[
                 { label: "PNG", value: "png" },

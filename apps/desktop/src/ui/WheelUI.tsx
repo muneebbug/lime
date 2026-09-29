@@ -3,9 +3,9 @@ import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { Minus, Square, X, RotateCcw, ChevronDown } from "lucide-react";
 
 /**
- * Windows caption buttons styled like Raycast on Windows.
+ * Native Windows caption buttons (minimize, maximize, close).
  */
-export function RaycastCaptionButtons({ className = "" }: { className?: string }) {
+export function CaptionButtons({ className = "" }: { className?: string }) {
   const appWindow = getCurrentWebviewWindow();
 
   const handleMinimize = () => {
@@ -51,16 +51,16 @@ export function RaycastCaptionButtons({ className = "" }: { className?: string }
 }
 
 /**
- * Toggle switch matching Raycast on Windows.
+ * Toggle switch component.
  */
-export interface RaycastToggleProps {
+export interface ToggleSwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
   id?: string;
 }
 
-export function RaycastToggle({ checked, onChange, disabled = false, id }: RaycastToggleProps) {
+export function ToggleSwitch({ checked, onChange, disabled = false, id }: ToggleSwitchProps) {
   return (
     <button
       id={id}
@@ -85,9 +85,9 @@ export function RaycastToggle({ checked, onChange, disabled = false, id }: Rayca
 }
 
 /**
- * Hotkey pill matching Raycast on Windows (e.g. [Replace Start Menu] [Alt Space] [↺]).
+ * Keyboard hotkey pill display.
  */
-export interface RaycastHotkeyPillProps {
+export interface HotkeyPillProps {
   label: string;
   sublabel?: string;
   onReset?: () => void;
@@ -95,13 +95,13 @@ export interface RaycastHotkeyPillProps {
   onClick?: () => void;
 }
 
-export function RaycastHotkeyPill({
+export function HotkeyPill({
   label,
   sublabel,
   onReset,
   isRecording = false,
   onClick,
-}: RaycastHotkeyPillProps) {
+}: HotkeyPillProps) {
   return (
     <div className="flex items-center gap-1.5">
       {sublabel && (
@@ -138,22 +138,22 @@ export function RaycastHotkeyPill({
 }
 
 /**
- * Dropdown selector matching Raycast on Windows ([☾ Raycast Dark ▾]).
+ * Dropdown select input.
  */
-export interface RaycastSelectOption {
+export interface SelectOption {
   label: string;
   value: string;
   icon?: React.ReactNode;
 }
 
-export interface RaycastSelectProps {
+export interface SelectDropdownProps {
   value: string;
-  options: RaycastSelectOption[];
+  options: SelectOption[];
   onChange: (val: string) => void;
   className?: string;
 }
 
-export function RaycastSelect({ value, options, onChange, className = "" }: RaycastSelectProps) {
+export function SelectDropdown({ value, options, onChange, className = "" }: SelectDropdownProps) {
   const current = options.find((o) => o.value === value) || options[0];
 
   return (
@@ -180,21 +180,21 @@ export function RaycastSelect({ value, options, onChange, className = "" }: Rayc
 }
 
 /**
- * Segmented control matching Raycast on Windows ([Aa  Aa  Aa]).
+ * Segmented control button group.
  */
-export interface RaycastSegmentedProps {
+export interface SegmentedControlProps {
   options: { label: React.ReactNode; value: string; title?: string }[];
   value: string;
   onChange: (val: string) => void;
   className?: string;
 }
 
-export function RaycastSegmented({
+export function SegmentedControl({
   options,
   value,
   onChange,
   className = "",
-}: RaycastSegmentedProps) {
+}: SegmentedControlProps) {
   return (
     <div
       className={`inline-flex items-center bg-[#252525] p-0.5 rounded-lg border border-white/[0.08] ${className}`}
@@ -222,33 +222,32 @@ export function RaycastSegmented({
 }
 
 /**
- * Raycast standard button ([Upgrade to Pro], [Reset], [Action]).
+ * Action button component.
  */
-export interface RaycastButtonProps {
+export interface WheelButtonProps {
   children: React.ReactNode;
   onClick?: () => void;
-  variant?: "primary" | "secondary" | "danger" | "pro";
+  variant?: "primary" | "secondary" | "danger";
   disabled?: boolean;
   className?: string;
   kbd?: string;
 }
 
-export function RaycastButton({
+export function WheelButton({
   children,
   onClick,
   variant = "secondary",
   disabled = false,
   className = "",
   kbd,
-}: RaycastButtonProps) {
-  let baseStyle = "flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed";
+}: WheelButtonProps) {
+  let baseStyle =
+    "flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed";
 
   if (variant === "primary") {
     baseStyle += " bg-[#ff6339] hover:bg-[#ff7247] text-white shadow-sm active:scale-[0.98]";
   } else if (variant === "danger") {
     baseStyle += " bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/25";
-  } else if (variant === "pro") {
-    baseStyle += " bg-[#262626] hover:bg-[#303030] text-neutral-200 border border-white/[0.1] shadow-sm";
   } else {
     baseStyle += " bg-[#262626] hover:bg-[#303030] text-neutral-200 border border-white/[0.08]";
   }
@@ -266,16 +265,16 @@ export function RaycastButton({
 }
 
 /**
- * Standard settings row with Title, description, and Control matching Raycast on Windows.
+ * Settings row with Title, description, and Control.
  */
-export interface RaycastRowProps {
+export interface SettingRowProps {
   title: string;
   description?: string;
   children: React.ReactNode;
   className?: string;
 }
 
-export function RaycastRow({ title, description, children, className = "" }: RaycastRowProps) {
+export function SettingRow({ title, description, children, className = "" }: SettingRowProps) {
   return (
     <div
       className={`flex items-center justify-between py-3 border-b border-white/[0.04] last:border-b-0 gap-4 ${className}`}
@@ -294,15 +293,15 @@ export function RaycastRow({ title, description, children, className = "" }: Ray
 }
 
 /**
- * Section container with Raycast header.
+ * Section container with group header.
  */
-export interface RaycastSectionProps {
+export interface SettingSectionProps {
   title?: string;
   children: React.ReactNode;
   className?: string;
 }
 
-export function RaycastSection({ title, children, className = "" }: RaycastSectionProps) {
+export function SettingSection({ title, children, className = "" }: SettingSectionProps) {
   return (
     <div className={`mb-6 ${className}`}>
       {title && (

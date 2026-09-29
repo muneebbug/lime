@@ -28,7 +28,7 @@ Wheel is completely local-first: all image processing, PDF operations, model inf
 - **Command Palette (`Ctrl+Alt+Space`):** Spotlight-style floating search across tools, conversions, preset chains, and recent conversion history.
 - **Action Presets & Chains:** Multi-step automated recipes (e.g. *Clean Web Asset*: strip metadata → convert to WebP).
 - **Windows Explorer Context Menu:** One-click integration under `HKCU\Software\Classes\*\shell\Wheel` without requiring administrator privileges.
-- **Settings Window:** Raycast-style preferences interface for configuring trigger keys, drag thresholds, wheel size, wedge count, and output naming policies.
+- **Settings Window:** Tabbed preferences interface for configuring trigger keys, drag thresholds, wheel size, wedge count, and output naming policies.
 - **SQLite History & Recycle Bin:** Persistent job history at `%LOCALAPPDATA%\Wheel\history.db` with non-destructive Windows Recycle Bin integration.
 
 ---

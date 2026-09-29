@@ -2,7 +2,7 @@ import { useState } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { Image as ImageIcon, Palette } from "lucide-react";
 import { ToolWindowLayout } from "./ToolWindowLayout";
-import { RaycastSegmented } from "../../ui/RaycastUI";
+import { SegmentedControl } from "../../ui/WheelUI";
 
 export interface AddBgToolProps {
   filePath: string;
@@ -231,7 +231,7 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
             {/* Aspect Ratio */}
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-neutral-400 font-medium">Ratio:</span>
-              <RaycastSegmented
+              <SegmentedControl
                 value={aspectRatio}
                 options={[
                   { label: "Auto", value: "auto" },
@@ -246,7 +246,7 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
             {/* Export Format */}
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-neutral-400 font-medium">Format:</span>
-              <RaycastSegmented
+              <SegmentedControl
                 value={exportFormat}
                 options={[
                   { label: "PNG", value: "png" },

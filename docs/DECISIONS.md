@@ -164,7 +164,7 @@ Checked via `cargo info window-vibrancy`.
 **Decision:** Enforce absolute command-line safety for media conversions by passing strict argument arrays (`std::process::Command::arg(...)`) with zero shell string concatenation. Discover FFmpeg across three prioritized locations: `%LOCALAPPDATA%\Wheel\bin\ffmpeg.exe`, application directory sidecar, and system PATH. Implement high-fidelity GIF creation using a two-pass palette pipeline (`fps=15,scale=540:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse`).
 **Rationale:** Defends against path injection or malicious file name execution while delivering clean GIF animation and high-fidelity video/audio transcoding.
 
-### D030: Raycast-style Settings architecture and live schema persistence
+### D030: Tabbed Settings architecture and live schema persistence
 **Decision:** Implement a modular, tabbed desktop settings window (`SettingsWindow.tsx`) with instant schema synchronization (`wheel_core::WheelSettings`), live SQLite history inspection, RMBG-1.4 model management, and FFmpeg capability detection.
 **Rationale:** Ensures users have transparent control over background triggers, output naming policies, and local disk usage without opening raw JSON configuration files.
 
@@ -176,7 +176,7 @@ Checked via `cargo info window-vibrancy`.
 **Decision:** Provide a sequential action chain runner in `commands::run_preset` that executes declarative recipes (e.g. Clean Web Asset: strip metadata -> convert to WebP; Cutout PNG: remove background -> convert to PNG). Intermediate outputs are isolated in temporary scratch paths and safely pruned after the terminal output is produced.
 **Rationale:** Enables advanced automation workflows from a single drag-and-drop gesture or palette search command while guaranteeing that intermediate artifacts never clutter the user's workspace.
 
-### D033: Spotlight/Raycast Command Palette floating surface
+### D033: Spotlight Command Palette floating surface
 **Decision:** Implement a dedicated floating command palette (`640x480`, borderless, always-on-top) supporting fuzzy searching across all tools, conversions, presets, and SQLite history items, with keyboard navigation (`↑`/`↓`, `Enter`, `Esc`).
 **Rationale:** Serves power users who prefer keyboard-centric workflows over mouse gestures and provides quick access to recent conversions and file operations.
 
@@ -257,13 +257,13 @@ Checked via `cargo info window-vibrancy`.
 4. **Action Filtering Fallback:** In `apps/desktop/src/windows/overlay/RadialWheel.tsx`, if extension-based filtering leaves 0 actions (e.g. dragging non-image files or folders), gracefully fall back to displaying the first 8 actions in the requested category so the 2nd page never renders 0 wedges or an empty wheel.
 **Rationale:** High-precision mouse wheels and trackpads emit multiple scroll ticks per detent, causing immediate toggle flapping (`convert -> tools -> convert`) without debounce. Furthermore, when non-image files are dragged, strict extension filtering yielded 0 actions on the Tools page, giving the appearance of an invisible or unopened 2nd page. Fallback rendering and debounced dual-route IPC guarantee seamless, reliable wheel flipping across any hardware or input type.
 
-### D045: Raycast on Windows Design System Unification
-**Decision:** Standardize all desktop windows (Settings, Command Palette, and Tool Windows) on the Raycast on Windows visual design system:
-1. **Shared Raycast Primitives (`apps/desktop/src/ui/RaycastUI.tsx`):** Implement `RaycastCaptionButtons` (native Windows minimize, maximize, and red hover close controls), `RaycastToggle` (subtle dark pill switch with smooth thumb transition), `RaycastHotkeyPill` (split action/shortcut button with reset button), `RaycastSelect` (dark dropdown with chevron indicator), `RaycastSegmented` (discrete segmented control container), `RaycastButton` (primary Raycast orange-red `#ff6339`, secondary `#262626`, and pro badges), `RaycastRow`, and `RaycastSection`.
-2. **Settings Window (`SettingsWindow.tsx`):** Rebuild the settings window to match the Raycast on Windows layout: dark charcoal frame (`#181818`), top search input bar (`#222222`), user profile card ("Muneeb Ur Rehman - Account"), left navigation items with crisp icons and cyan Pro badges, and content panel (`#1e1e1e`) with appearance themes, hotkey configuration, system tray toggles, and feature sections.
-3. **Tool Windows Framework (`ToolWindowLayout.tsx`):** Overhaul the tool window chrome with Raycast titlebar, tool badge, file chip, native caption buttons, and the iconic Raycast bottom Action Bar featuring the primary orange-red action button (`↵` kbd) and secondary shortcut buttons.
-4. **Tool Windows & Command Palette:** Update `CropTool`, `CompressTool`, `AddBgTool`, `RemoveBgTool`, `MetadataTool`, `EditTool`, `AnnotateTool`, `RedactTool`, and `CommandPalette` to utilize Raycast elevated cards (`#242424`), subtle borders (`rgba(255, 255, 255, 0.06)`), and unified typography.
-**Rationale:** Creates a cohesive, high-end desktop experience matching the native Windows 11 Raycast aesthetic requested by the user, providing immediate visual familiarity, keyboard-centric power features, and clean information hierarchy.
+### D045: Unified Wheel Desktop Design System and Settings Overhaul
+**Decision:** Standardize all desktop windows (Settings, Command Palette, and Tool Windows) on a unified dark desktop design system:
+1. **Shared Wheel UI Primitives (`apps/desktop/src/ui/WheelUI.tsx`):** Implement `CaptionButtons` (native Windows minimize, maximize, and red hover close controls), `ToggleSwitch` (dark pill switch with smooth thumb transition), `HotkeyPill` (split action/shortcut button with reset button), `SelectDropdown` (dark dropdown with chevron indicator), `SegmentedControl` (discrete segmented control container), `WheelButton` (primary action button, secondary dark button, and danger styles), `SettingRow`, and `SettingSection`.
+2. **Settings Window (`SettingsWindow.tsx`):** Complete functional overhaul exposing only real, implemented Wheel features: System Startup & Tray, Trigger & Drag configuration, Radial Wheel geometry and display, Output & Files policies, automated Multi-Step Presets, local RMBG-1.4 Neural Model and FFmpeg Engine status, SQLite history management, and About Wheel. Every control is bound directly to `WheelSettings` with immediate disk persistence.
+3. **Tool Windows Framework (`ToolWindowLayout.tsx`):** Unify tool window chrome with clean titlebar, tool badge, file chip, native caption controls, and bottom Action Bar featuring the primary action button (`↵` kbd) and secondary reset/folder shortcuts.
+4. **Tool Windows & Command Palette:** Update `CropTool`, `CompressTool`, `AddBgTool`, `RemoveBgTool`, `MetadataTool`, `EditTool`, `AnnotateTool`, `RedactTool`, and `CommandPalette` to utilize elevated cards (`#242424`), subtle borders (`rgba(255, 255, 255, 0.06)`), and unified typography.
+**Rationale:** Delivers a cohesive, high-end Windows 11 desktop experience that is 100% functional, responsive, and free of extraneous placeholders or foreign branding references.
 
 ---
 

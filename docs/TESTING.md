@@ -84,7 +84,7 @@ pnpm --filter desktop build
 | **Command Palette** | `Ctrl+Alt+Space` or Settings launcher | Floating `640x480` borderless window; fuzzy search across tools, converts, presets, and history |
 | **Action Presets** | Preset wedge or Palette | Executes multi-step chain (e.g. *Clean Web Asset*); cleans intermediate temporary files |
 | **Explorer Context Menu**| Right-click any file in Windows Explorer | "Open with Wheel" appears in menu without requiring administrator elevation |
-| **Settings Window** | Tray menu "Open Settings" or Palette | Tabbed Raycast-style interface; modifies schema live with instant persistence |
+| **Settings Window** | Tray menu "Open Settings" or Palette | Tabbed preferences interface; modifies schema live with instant persistence |
 
 ---
 

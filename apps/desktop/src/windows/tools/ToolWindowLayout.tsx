@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { invoke } from "@tauri-apps/api/core";
 import { RotateCcw, Loader2, FolderOpen, ExternalLink } from "lucide-react";
-import { RaycastCaptionButtons, RaycastButton } from "../../ui/RaycastUI";
+import { CaptionButtons, WheelButton } from "../../ui/WheelUI";
 
 export interface ToolWindowLayoutProps {
   title: string;
@@ -82,7 +82,7 @@ export function ToolWindowLayout({
 
   return (
     <div className="flex flex-col h-screen w-screen bg-[#181818] text-neutral-200 font-sans select-none overflow-hidden rounded-xl border border-white/[0.08] shadow-2xl">
-      {/* Raycast Header Bar */}
+      {/* Window Titlebar Header */}
       <header
         data-tauri-drag-region
         className="h-10 flex items-center justify-between px-3 border-b border-white/[0.06] bg-[#181818] select-none cursor-move shrink-0 z-20"
@@ -109,7 +109,7 @@ export function ToolWindowLayout({
           <span className="hidden sm:inline-block px-1.5 py-0.5 bg-white/[0.04] border border-white/[0.06] text-[10px] text-neutral-400 font-mono rounded">
             Esc to cancel
           </span>
-          <RaycastCaptionButtons />
+          <CaptionButtons />
         </div>
       </header>
 
@@ -118,7 +118,7 @@ export function ToolWindowLayout({
         {children}
       </main>
 
-      {/* Raycast Action Bar Footer */}
+      {/* Action Bar Footer */}
       <footer className="h-12 px-4 bg-[#181818] border-t border-white/[0.06] flex items-center justify-between shrink-0 select-none z-20">
         {/* Left: Secondary actions or success state */}
         <div className="flex items-center gap-2">
@@ -142,20 +142,20 @@ export function ToolWindowLayout({
               </button>
             </div>
           ) : (
-            <RaycastButton
+            <WheelButton
               variant="secondary"
               onClick={onReset}
               disabled={isProcessing}
             >
               <RotateCcw size={12} className="inline mr-1 text-neutral-400" />
               Reset
-            </RaycastButton>
+            </WheelButton>
           )}
         </div>
 
         {/* Right: Primary Action Button with Enter kbd hint */}
         <div className="flex items-center gap-2">
-          <RaycastButton
+          <WheelButton
             variant="primary"
             onClick={onPrimaryAction}
             disabled={isProcessing}
@@ -169,7 +169,7 @@ export function ToolWindowLayout({
             ) : (
               primaryActionLabel
             )}
-          </RaycastButton>
+          </WheelButton>
         </div>
       </footer>
     </div>
