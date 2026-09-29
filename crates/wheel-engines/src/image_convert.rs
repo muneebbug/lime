@@ -14,7 +14,6 @@ pub enum OutputFormat {
     Gif,
     Ico,
     Avif,
-    Heic,
 }
 
 impl OutputFormat {
@@ -28,7 +27,6 @@ impl OutputFormat {
             "gif" => Some(Self::Gif),
             "ico" => Some(Self::Ico),
             "avif" => Some(Self::Avif),
-            "heic" | "heif" => Some(Self::Heic),
             _ => None,
         }
     }
@@ -43,7 +41,6 @@ impl OutputFormat {
             Self::Gif => Some(ImageFormat::Gif),
             Self::Ico => Some(ImageFormat::Ico),
             Self::Avif => Some(ImageFormat::Avif),
-            Self::Heic => None,
         }
     }
 
@@ -57,7 +54,6 @@ impl OutputFormat {
             Self::Gif => "gif",
             Self::Ico => "ico",
             Self::Avif => "avif",
-            Self::Heic => "heic",
         }
     }
 }
@@ -75,9 +71,17 @@ pub fn convert_image(input: &Path, params: &ConvertParams) -> Result<PathBuf> {
     let img = match image::open(input) {
         Ok(img) => img,
         Err(orig_err) => {
-            // If image::open fails (e.g. HEIC/HEIF), attempt to decode with FFmpeg
+            // If image::open fails on unsupported formats, attempt to decode with FFmpeg
             if let Some(ffmpeg) = crate::media::find_ffmpeg_path() {
-                let tmp_png = params.output_path.with_extension("wheel_decoded_tmp.png");
+                let temp_dir = std::env::temp_dir().join("wheel_temp");
+                let _ = std::fs::create_dir_all(&temp_dir);
+                let tmp_png = temp_dir.join(format!(
+                    "decode_{}.png",
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_nanos()
+                ));
                 let status = std::process::Command::new(ffmpeg)
                     .arg("-y")
                     .arg("-i")
@@ -102,6 +106,45 @@ pub fn convert_image(input: &Path, params: &ConvertParams) -> Result<PathBuf> {
     convert_image_loaded(img, input, params)
 }
 
+/// Flatten an image with an alpha channel onto a solid background color (typically pure white [255, 255, 255]).
+///
+/// Formats like JPEG do not support transparency. When a transparent PNG is naively converted to RGB,
+/// the alpha channel is simply discarded, exposing whatever RGB values happen to be in the transparent
+/// pixels (often (0,0,0) black or (255,255,255) white blocks).
+///
+/// Alpha compositing blends transparent and semi-transparent pixels smoothly against the background:
+/// `result = foreground * alpha + background * (1 - alpha)`
+pub fn flatten_to_rgb(img: &image::DynamicImage, bg_color: [u8; 3]) -> image::RgbImage {
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    let mut rgb = image::RgbImage::new(width, height);
+
+    let bg_r = bg_color[0] as f32 / 255.0;
+    let bg_g = bg_color[1] as f32 / 255.0;
+    let bg_b = bg_color[2] as f32 / 255.0;
+
+    for (x, y, pixel) in rgba.enumerate_pixels() {
+        let alpha = pixel[3] as f32 / 255.0;
+        if alpha >= 0.999 {
+            rgb.put_pixel(x, y, image::Rgb([pixel[0], pixel[1], pixel[2]]));
+        } else if alpha <= 0.001 {
+            rgb.put_pixel(x, y, image::Rgb(bg_color));
+        } else {
+            let fg_r = pixel[0] as f32 / 255.0;
+            let fg_g = pixel[1] as f32 / 255.0;
+            let fg_b = pixel[2] as f32 / 255.0;
+
+            let out_r = ((fg_r * alpha + bg_r * (1.0 - alpha)) * 255.0).round() as u8;
+            let out_g = ((fg_g * alpha + bg_g * (1.0 - alpha)) * 255.0).round() as u8;
+            let out_b = ((fg_b * alpha + bg_b * (1.0 - alpha)) * 255.0).round() as u8;
+
+            rgb.put_pixel(x, y, image::Rgb([out_r, out_g, out_b]));
+        }
+    }
+
+    rgb
+}
+
 fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &ConvertParams) -> Result<PathBuf> {
     info!(
         "Converting {:?} -> {:?} ({:?})",
@@ -110,131 +153,118 @@ fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &Convert
         params.output_format
     );
 
-    // Write to a temp file first, then atomic rename
-    let tmp = params.output_path.with_extension(
-        format!("{}.tmp", params.output_format.extension())
-    );
+    // Create temporary file in the OS temp directory with its proper format extension
+    // so FFmpeg and other encoders recognize the container format immediately.
+    let temp_dir = std::env::temp_dir().join("wheel_temp");
+    let _ = std::fs::create_dir_all(&temp_dir);
+    let tmp = temp_dir.join(format!(
+        "conv_{}.{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos(),
+        params.output_format.extension()
+    ));
 
-    match &params.output_format {
-        OutputFormat::Jpeg => {
-            let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
-                std::fs::File::create(&tmp)
-                    .with_context(|| format!("Cannot create {:?}", tmp))?,
-                params.quality,
-            );
-            img.write_with_encoder(encoder)
-                .with_context(|| "JPEG encode failed")?;
-        }
-        OutputFormat::Ico => {
-            let ico_img = if img.width() > 256 || img.height() > 256 {
-                img.resize(256, 256, image::imageops::FilterType::Lanczos3)
-            } else {
-                img
-            };
-            ico_img.save_with_format(&tmp, ImageFormat::Ico)
-                .with_context(|| "ICO encode failed")?;
-        }
-        OutputFormat::Avif => {
-            // Try image crate built-in AVIF encoder first, fallback to FFmpeg
-            let res = img.save_with_format(&tmp, ImageFormat::Avif);
-            if let Err(e) = res {
-                tracing::warn!("Image crate AVIF encode failed ({:?}), trying FFmpeg fallback", e);
-                let ffmpeg = crate::media::find_ffmpeg_path().ok_or_else(|| {
-                    anyhow::anyhow!("AVIF encoding failed and FFmpeg not found: {}", e)
-                })?;
-                let status = std::process::Command::new(ffmpeg)
-                    .arg("-y")
-                    .arg("-i")
-                    .arg(input)
-                    .arg("-c:v")
-                    .arg("libaom-av1")
-                    .arg("-crf")
-                    .arg("28")
-                    .arg(&tmp)
-                    .status()
-                    .with_context(|| "Failed to execute FFmpeg for AVIF conversion")?;
-                if !status.success() {
-                    anyhow::bail!("FFmpeg AVIF conversion exited with code {:?}", status.code());
+    let encode_result: Result<()> = (|| {
+        match &params.output_format {
+            OutputFormat::Jpeg => {
+                // JPEG does not support transparency. If image has alpha, flatten onto white.
+                let dynamic_rgb = if img.color().has_alpha() {
+                    image::DynamicImage::ImageRgb8(flatten_to_rgb(&img, [255, 255, 255]))
+                } else {
+                    img
+                };
+                let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
+                    std::fs::File::create(&tmp)
+                        .with_context(|| format!("Cannot create {:?}", tmp))?,
+                    params.quality,
+                );
+                dynamic_rgb.write_with_encoder(encoder)
+                    .with_context(|| "JPEG encode failed")?;
+            }
+            OutputFormat::Bmp => {
+                // BMP typically does not support transparency. Flatten onto white if alpha present.
+                let dynamic_rgb = if img.color().has_alpha() {
+                    image::DynamicImage::ImageRgb8(flatten_to_rgb(&img, [255, 255, 255]))
+                } else {
+                    img
+                };
+                dynamic_rgb.save_with_format(&tmp, ImageFormat::Bmp)
+                    .with_context(|| "BMP encode failed")?;
+            }
+            OutputFormat::Ico => {
+                let ico_img = if img.width() > 256 || img.height() > 256 {
+                    img.resize(256, 256, image::imageops::FilterType::Lanczos3)
+                } else {
+                    img
+                };
+                ico_img.save_with_format(&tmp, ImageFormat::Ico)
+                    .with_context(|| "ICO encode failed")?;
+            }
+            OutputFormat::Avif => {
+                // If FFmpeg is available, use libaom-av1 with fast preset (-cpu-used 8)
+                // for near-instant encoding (~1s vs 35s in pure-Rust unoptimized)
+                let mut ffmpeg_encoded = false;
+                if let Some(ffmpeg) = crate::media::find_ffmpeg_path() {
+                    let crf = (63 - ((params.quality as f32 / 100.0) * 50.0).round() as u32).clamp(10, 50);
+                    let status = std::process::Command::new(ffmpeg)
+                        .arg("-y")
+                        .arg("-i")
+                        .arg(input)
+                        .arg("-c:v")
+                        .arg("libaom-av1")
+                        .arg("-crf")
+                        .arg(crf.to_string())
+                        .arg("-cpu-used")
+                        .arg("8")
+                        .arg("-row-mt")
+                        .arg("1")
+                        .arg("-f")
+                        .arg("avif")
+                        .arg(&tmp)
+                        .status();
+                    if let Ok(st) = status {
+                        if st.success() {
+                            ffmpeg_encoded = true;
+                        }
+                    }
+                }
+
+                if !ffmpeg_encoded {
+                    img.save_with_format(&tmp, ImageFormat::Avif)
+                        .with_context(|| "AVIF encode failed")?;
+                }
+            }
+            fmt => {
+                if let Some(image_fmt) = fmt.image_format() {
+                    img.save_with_format(&tmp, image_fmt)
+                        .with_context(|| format!("Encode to {:?} failed", fmt))?;
+                } else {
+                    anyhow::bail!("Unsupported image format: {:?}", fmt);
                 }
             }
         }
-        OutputFormat::Heic => {
-            convert_to_heic(input, &tmp, params.quality)?;
-        }
-        fmt => {
-            if let Some(image_fmt) = fmt.image_format() {
-                img.save_with_format(&tmp, image_fmt)
-                    .with_context(|| format!("Encode to {:?} failed", fmt))?;
-            } else {
-                anyhow::bail!("Unsupported image format: {:?}", fmt);
-            }
-        }
+        Ok(())
+    })();
+
+    if let Err(e) = encode_result {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
     }
 
-    std::fs::rename(&tmp, &params.output_path)
-        .with_context(|| format!("Atomic rename {:?} -> {:?} failed", tmp, params.output_path))?;
+    if let Some(parent) = params.output_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+
+    if let Err(_rename_err) = std::fs::rename(&tmp, &params.output_path) {
+        std::fs::copy(&tmp, &params.output_path)
+            .with_context(|| format!("Failed to save output to {:?}", params.output_path))?;
+        let _ = std::fs::remove_file(&tmp);
+    }
 
     info!("Conversion complete: {:?}", params.output_path);
     Ok(params.output_path.clone())
-}
-
-pub fn convert_to_heic(input: &Path, output: &Path, quality: u8) -> Result<()> {
-    // 1. Try heif-enc if installed (e.g. %LOCALAPPDATA%\Wheel\bin\heif-enc.exe or in PATH)
-    if let Some(tool) = find_heif_enc_path() {
-        let status = std::process::Command::new(tool)
-            .arg(input)
-            .arg("-q")
-            .arg(quality.to_string())
-            .arg("-o")
-            .arg(output)
-            .status()
-            .with_context(|| "Failed to execute heif-enc")?;
-        if status.success() {
-            return Ok(());
-        }
-    }
-
-    // 2. Try ImageMagick (`magick`) if installed
-    if let Ok(status) = std::process::Command::new("magick")
-        .arg(input)
-        .arg("-quality")
-        .arg(quality.to_string())
-        .arg(output)
-        .status()
-    {
-        if status.success() {
-            return Ok(());
-        }
-    }
-
-    anyhow::bail!(
-        "HEIC encoding requires 'heif-enc' or 'ImageMagick' installed (HEVC encoders are patent-restricted on Windows). Tip: Use AVIF for royalty-free next-gen image compression with higher quality and smaller file size."
-    )
-}
-
-pub fn find_heif_enc_path() -> Option<PathBuf> {
-    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        let sidecar = PathBuf::from(local_app_data).join("Wheel").join("bin").join("heif-enc.exe");
-        if sidecar.exists() {
-            return Some(sidecar);
-        }
-    }
-    if let Ok(current_exe) = std::env::current_exe() {
-        if let Some(dir) = current_exe.parent() {
-            let next_to = dir.join("heif-enc.exe");
-            if next_to.exists() {
-                return Some(next_to);
-            }
-        }
-    }
-    if std::process::Command::new("heif-enc")
-        .arg("-h")
-        .output()
-        .is_ok()
-    {
-        return Some(PathBuf::from("heif-enc"));
-    }
-    None
 }
 
 #[cfg(test)]
@@ -252,8 +282,6 @@ mod tests {
         assert_eq!(OutputFormat::from_extension("gif"), Some(OutputFormat::Gif));
         assert_eq!(OutputFormat::from_extension("ico"), Some(OutputFormat::Ico));
         assert_eq!(OutputFormat::from_extension("avif"), Some(OutputFormat::Avif));
-        assert_eq!(OutputFormat::from_extension("heic"), Some(OutputFormat::Heic));
-        assert_eq!(OutputFormat::from_extension("heif"), Some(OutputFormat::Heic));
         assert_eq!(OutputFormat::from_extension("unknown"), None);
     }
 
@@ -299,5 +327,58 @@ mod tests {
         let _ = std::fs::remove_file(src_path);
         let _ = std::fs::remove_file(dst_path);
         let _ = std::fs::remove_file(avif_path);
+    }
+
+    #[test]
+    fn test_convert_transparent_png_to_jpeg_composites_on_white() {
+        use image::{RgbaImage, Rgba};
+        let dir = std::env::temp_dir().join("wheel_tests");
+        let _ = std::fs::create_dir_all(&dir);
+
+        let src_path = dir.join("test_alpha_input.png");
+        let dst_path = dir.join("test_alpha_output.jpg");
+
+        // 4x4 image:
+        // (0,0): red opaque
+        // (0,1): transparent with RGB=0,0,0, alpha=0 (common in transparent PNGs)
+        // (1,0): transparent with RGB=255,255,255, alpha=0 (unmultiplied white artifact)
+        // (1,1): 50% transparent red
+        let mut img = RgbaImage::new(2, 2);
+        img.put_pixel(0, 0, Rgba([255, 0, 0, 255]));
+        img.put_pixel(1, 0, Rgba([0, 0, 0, 0]));
+        img.put_pixel(0, 1, Rgba([255, 255, 255, 0]));
+        img.put_pixel(1, 1, Rgba([255, 0, 0, 128]));
+        img.save(&src_path).expect("failed to save alpha test image");
+
+        let params = ConvertParams {
+            output_format: OutputFormat::Jpeg,
+            output_path: dst_path.clone(),
+            quality: 95,
+        };
+
+        let result = convert_image(&src_path, &params).expect("convert_image failed");
+        assert_eq!(result, dst_path);
+        assert!(dst_path.exists());
+
+        // Read back the JPEG and verify pixel colors
+        let decoded = image::open(&dst_path).expect("failed to open output JPEG").to_rgb8();
+        
+        // (0,0) was pure opaque red -> still red (~255, ~0, ~0)
+        let p_opaque = decoded.get_pixel(0, 0);
+        assert!(p_opaque[0] > 240 && p_opaque[1] < 15 && p_opaque[2] < 15);
+
+        // (1,0) was transparent with (0,0,0,0) -> must be WHITE, NOT BLACK!
+        let p_trans_black = decoded.get_pixel(1, 0);
+        assert!(p_trans_black[0] > 240 && p_trans_black[1] > 240 && p_trans_black[2] > 240,
+            "Expected transparent pixel to composite onto white, got {:?}", p_trans_black);
+
+        // (0,1) was transparent with (255,255,255,0) -> must also be WHITE!
+        let p_trans_white = decoded.get_pixel(0, 1);
+        assert!(p_trans_white[0] > 240 && p_trans_white[1] > 240 && p_trans_white[2] > 240,
+            "Expected transparent pixel to composite onto white, got {:?}", p_trans_white);
+
+        // Clean up
+        let _ = std::fs::remove_file(src_path);
+        let _ = std::fs::remove_file(dst_path);
     }
 }

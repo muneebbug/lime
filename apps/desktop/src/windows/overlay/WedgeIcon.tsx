@@ -8,7 +8,7 @@ const ICON_MAP: Record<string, string> = {
   "format-avif": "AVIF",
   "format-tiff": "TIFF",
   "format-bmp": "BMP",
-  "format-heic": "HEIC",
+  "format-ico": "ICO",
   "format-pdf": "PDF",
   "crop": "✂",
   "compress": "⚡",

@@ -57,6 +57,8 @@ pnpm --filter desktop build
 |-------------|-----------|----------------|-------|-------------------|
 | PNG / JPG | WEBP | Lossy quality 85, high fidelity | <150ms | Strips EXIF by default |
 | PNG / WEBP | JPG | Pure RGB8 buffer (alpha flattened) | <120ms | No alpha channel rejection |
+| PNG / JPG | AVIF | Hardware-accelerated AV1 (-cpu-used 8) | ~650ms | High-efficiency next-gen compression |
+| PNG / JPG | ICO | Auto-resized 256x256 multi-resolution icon | <100ms | Direct Windows icon format |
 | Any Image | PDF | Multi-image Lopdf assembly | <250ms | Scaled to standard points |
 | PDF Document | PNG / JPG | Raster extraction of embedded bitmaps | <300ms | Preserves original raster quality |
 | MP4 / MOV Video | GIF | 15fps, Lanczos downscale, palettegen/paletteuse | ~2-4s | Vibrant palette, no color banding |

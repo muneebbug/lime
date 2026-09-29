@@ -142,8 +142,8 @@ impl Default for ActionRegistry {
 pub fn default_actions() -> Vec<ActionManifest> {
     let image_exts = vec![
         "png".into(), "jpg".into(), "jpeg".into(), "webp".into(),
-        "heic".into(), "avif".into(), "tiff".into(), "tif".into(),
-        "bmp".into(), "gif".into(),
+        "avif".into(), "tiff".into(), "tif".into(),
+        "bmp".into(), "gif".into(), "ico".into(),
     ];
 
     let mut actions = Vec::new();
@@ -156,7 +156,7 @@ pub fn default_actions() -> Vec<ActionManifest> {
         ("convert.avif", "AVIF", "avif"),
         ("convert.tiff", "TIFF", "tiff"),
         ("convert.bmp",  "BMP",  "bmp"),
-        ("convert.heic", "HEIC", "heic"),
+        ("convert.ico",  "ICO",  "ico"),
         ("convert.pdf",  "PDF",  "pdf"),
     ];
 

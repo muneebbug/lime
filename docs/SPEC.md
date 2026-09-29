@@ -11,7 +11,7 @@ The working name is **Wheel**. Keep the name in one config constant so it is eas
 
 Wheel is a background tray app. When the user **holds Shift and drags one or more files**, a **radial wheel** appears centered on the cursor. The user drops the file onto a wedge of the wheel. Each wedge is either:
 
-- a **Convert** target (PNG, WEBP, HEIC, TIFF, PDF, DOCX, BMP, AVIF, JPG, and so on), which runs instantly in the background, or
+- a **Convert** target (PNG, WEBP, AVIF, TIFF, PDF, DOCX, BMP, ICO, JPG, and so on), which runs instantly in the background, or
 - a **Tool** (Crop, Add BG, Compress, Redact, Metadata, Edit, Annotate, Remove BG, and so on), which opens in **its own dedicated window** for that tool.
 
 The app must feel native to Windows 11 (Mica/Acrylic, rounded corners, system accent color, dark/light mode), be extremely fast to appear (<50 ms from trigger to first frame), and be **highly configurable in the way the Raycast for Windows app is configurable** (see section 9).
@@ -38,7 +38,7 @@ Reference: the design is inspired by a macOS app with a glassy, warm-gradient ra
 - **Frontend:** React + TypeScript + Vite, Tailwind CSS, Motion (formerly Framer Motion; use the current package) for wheel animation, Zustand for state, Radix UI primitives for accessible controls, Konva (react-konva) for canvas tools (crop overlay, annotate, redact).
 - **Native layer (Rust):** the `windows` crate (Win32, COM/OLE, Shell, DWM, UI Automation where needed), `tokio`, `serde`, `tracing`.
 - **Window effects:** `window-vibrancy` crate (Mica / Acrylic / Tabbed) with fallbacks.
-- **Image engines:** `image` + `fast_image_resize`, `resvg` for SVG, WIC (via `windows` crate) as a fallback for HEIC/AVIF when native crates fail, `pdfium-render` for PDF rasterization, `printpdf` or `lopdf` for image to PDF, `docx-rs` for image to DOCX.
+- **Image engines:** `image` + `fast_image_resize`, `resvg` for SVG, WIC (via `windows` crate) as a fallback for AVIF when native crates fail, `pdfium-render` for PDF rasterization, `printpdf` or `lopdf` for image to PDF, `docx-rs` for image to DOCX.
 - **Background removal:** ONNX Runtime (`ort` crate) with DirectML execution provider (CPU fallback). Use an open model (RMBG-1.4 or U2-Net). **Download the model on first use** into `%LOCALAPPDATA%\Wheel\models` with a progress UI and SHA-256 verification; do not bundle it in the installer.
 - **Video/audio:** FFmpeg as a Tauri **sidecar** binary (download on first use or bundle, your call; document the decision), with hardware encoders (NVENC/QSV/AMF) auto-detected and used when available.
 - **Metadata:** ExifTool sidecar for read/write/strip across formats (fallback to `nom-exif`/`kamadak-exif` for read-only if ExifTool is missing).
@@ -138,7 +138,7 @@ Every wedge and tool is an **Action** described by a manifest, registered in `wh
   "title": "Crop",
   "icon": "crop",                       // from the icon set, or a path
   "category": "tools",                  // "convert" | "tools" | custom
-  "accepts": { "extensions": ["png","jpg","jpeg","webp","heic","bmp","tiff","avif","pdf"], "multi": false },
+  "accepts": { "extensions": ["png","jpg","jpeg","webp","ico","bmp","tiff","avif","pdf"], "multi": false },
   "kind": "window",                     // "instant" (runs in background) | "window" (opens a tool window)
   "window": { "width": 640, "height": 860, "resizable": true, "mica": true },
   "defaults": { }
@@ -160,7 +160,7 @@ Every wedge and tool is an **Action** described by a manifest, registered in `wh
 - Each wedge shows an icon (tools) or a bold label (formats). The wedge under the cursor lifts, brightens and switches to the accent color (a saturated red-orange in the reference).
 - The **center pill shows the label of the hovered wedge** (for example "TIFF", "ANNOTATE") and the file count/name while idle.
 - **Two pages:** *Convert* (format wedges) and *Tools* (tool wedges). Switch pages by: dwelling on the center pill, pressing `Tab`, `Space`, or the mouse wheel during the drag. Show small page dots. Remember the last-used page (configurable).
-- **Context-aware wedges:** only show actions that accept the dragged files (do not offer HEIC output for a video). Same-format conversions are hidden. If a page has fewer wedges than slots, re-space evenly.
+- **Context-aware wedges:** only show actions that accept the dragged files (do not offer image output for a video). Same-format conversions are hidden. If a page has fewer wedges than slots, re-space evenly.
 - Slot count, order, and contents are user-configurable (section 9). Also support number keys `1` to `9` to pick a wedge while dragging.
 - Sound and haptics are optional and off by default.
 
@@ -186,7 +186,7 @@ Tool-specific requirements:
 Add more tools only via the action architecture. Build in this order: Convert, Crop, Compress, Metadata, Add BG, Remove BG, Edit, Annotate, Redact.
 
 ### 7.3 Conversion matrix (instant wedges)
-- Image to image: PNG, JPG, WEBP, HEIC, AVIF, TIFF, BMP, GIF (static), ICO.
+- Image to image: PNG, JPG, WEBP, AVIF, TIFF, BMP, GIF (static), ICO.
 - Image to PDF (single or multiple images merged into one PDF, page size options), PDF to PNG/JPG (per page, zip if many), image/PDF to DOCX (embed as image pages; be honest in the UI that this is not OCR unless OCR is enabled).
 - Optional OCR (Windows.Media.Ocr or Tesseract) as a later tool: "Image/PDF to searchable text or DOCX".
 - Video/audio conversions via FFmpeg (MP4, MOV, WEBM, MKV, GIF, MP3, WAV, M4A, FLAC).
