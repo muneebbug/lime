@@ -1,5 +1,5 @@
 use std::path::PathBuf;
-use tauri::{Manager, State};
+use tauri::{Manager, State, Emitter};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -46,7 +46,10 @@ pub async fn show_overlay(
     x: i32,
     y: i32,
 ) -> Result<(), String> {
+    wheel_win::hooks::set_drag_armed(true);
+    let _ = app.emit("drag-armed", serde_json::json!({ "x": x, "y": y }));
     if let Some(overlay) = app.get_webview_window("overlay") {
+        let _ = overlay.emit("drag-armed", serde_json::json!({ "x": x, "y": y }));
         let overlay_size = 400i32;
         let (ox, oy) = wheel_win::dpi::clamp_to_work_area(x, y, overlay_size, overlay_size);
         overlay
@@ -63,7 +66,10 @@ pub async fn show_overlay(
 /// Hide the overlay
 #[tauri::command]
 pub async fn hide_overlay(app: tauri::AppHandle) -> Result<(), String> {
+    wheel_win::hooks::set_drag_armed(false);
+    let _ = app.emit("drag-cancelled", ());
     if let Some(overlay) = app.get_webview_window("overlay") {
+        let _ = overlay.emit("drag-cancelled", ());
         overlay.hide().map_err(|e| e.to_string())?;
     }
     Ok(())

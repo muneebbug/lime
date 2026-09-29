@@ -249,6 +249,14 @@ Checked via `cargo info window-vibrancy`.
 3. **In-Flight Lock and Window Reuse:** In `commands.rs`, introduce an in-flight tool creation lock (`IN_FLIGHT_TOOLS`) and reuse existing tool windows via `win.eval` navigation rather than launching redundant parallel instances.
 **Rationale:** In Windows, borderless transparent windows created while the Windows Explorer or Taskbar holds foreground focus are suppressed by Windows' `LockSetForegroundWindow` policy and open minimized or unfocused on the taskbar. Forcing window restoration and attaching thread input guarantees immediate, focused display. Eliminating duplicate drop event sources prevents tools from being spawned multiple times for a single drop.
 
+### D044: Radial wheel page switching debouncing, dual event routing, and category fallback
+**Decision:**
+1. **Hardware & Store Debounce:** In `crates/wheel-win/src/hooks.rs`, debounce mouse wheel ticks (`WM_MOUSEWHEEL`, `WM_MOUSEHWHEEL`), rocker clicks (`WM_RBUTTONDOWN`, `WM_MBUTTONDOWN`), and keyboard toggles (`VK_TAB`, `VK_SPACE`) using an atomic millisecond timestamp (180ms cooldown). In `apps/desktop/src/store/wheelStore.ts`, enforce a matching 180ms cooldown in `togglePage()` to prevent multi-notch rapid toggling from flipping back to `"convert"` in milliseconds.
+2. **Synchronized Drag Armed State (`set_drag_armed`):** Expose `wheel_win::hooks::set_drag_armed(bool)` and synchronize it whenever the overlay is shown or hidden across hook arming, programmatic commands (`show_overlay`, `hide_overlay`), and drop cancellation, ensuring low-level hooks never filter out page switch gestures while the overlay is visible.
+3. **Dual Event Routing:** In `apps/desktop/src-tauri/src/lib.rs`, emit `"toggle-page"` to both the app instance and the overlay window. In `WheelOverlay.tsx`, register listeners with both `@tauri-apps/api/event` and `getCurrentWebviewWindow().listen` to guarantee delivery across Tauri v2 target boundaries.
+4. **Action Filtering Fallback:** In `apps/desktop/src/windows/overlay/RadialWheel.tsx`, if extension-based filtering leaves 0 actions (e.g. dragging non-image files or folders), gracefully fall back to displaying the first 8 actions in the requested category so the 2nd page never renders 0 wedges or an empty wheel.
+**Rationale:** High-precision mouse wheels and trackpads emit multiple scroll ticks per detent, causing immediate toggle flapping (`convert -> tools -> convert`) without debounce. Furthermore, when non-image files are dragged, strict extension filtering yielded 0 actions on the Tools page, giving the appearance of an invisible or unopened 2nd page. Fallback rendering and debounced dual-route IPC guarantee seamless, reliable wheel flipping across any hardware or input type.
+
 ---
 
 ## Pending / Open Questions

@@ -34,6 +34,7 @@ interface WheelStore {
 
   // Page
   currentPage: WheelPage;
+  lastToggleTime: number;
   setPage: (page: WheelPage) => void;
   togglePage: () => void;
 
@@ -91,9 +92,20 @@ export const useWheelStore = create<WheelStore>((set) => ({
   setCursor: (x, y) => set({ cursorX: x, cursorY: y }),
 
   currentPage: "convert",
-  setPage: (page) => set({ currentPage: page }),
-  togglePage: () =>
-    set((s) => ({ currentPage: s.currentPage === "convert" ? "tools" : "convert" })),
+  lastToggleTime: 0,
+  setPage: (page) => set({ currentPage: page, hoveredWedge: null }),
+  togglePage: () => {
+    const now = Date.now();
+    const state = useWheelStore.getState();
+    if (now - state.lastToggleTime < 180) {
+      return;
+    }
+    set((s) => ({
+      lastToggleTime: now,
+      currentPage: s.currentPage === "convert" ? "tools" : "convert",
+      hoveredWedge: null,
+    }));
+  },
 
   recentJobs: [],
   addJob: (job) =>

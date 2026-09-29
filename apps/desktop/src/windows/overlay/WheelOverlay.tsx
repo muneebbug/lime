@@ -266,14 +266,24 @@ export function WheelOverlay() {
     }).then((u) => unlisteners.push(u));
 
     // Toggle page event from low-level hook (scroll wheel, right-click, Tab, or Space)
-    listen("toggle-page", () => {
+    const onToggle = () => {
+      lastHoveredRef.current = null;
       useWheelStore.getState().togglePage();
-    }).then((u) => unlisteners.push(u));
+    };
+
+    listen("toggle-page", onToggle).then((u) => unlisteners.push(u));
+    try {
+      const appWindow = getCurrentWebviewWindow();
+      appWindow.listen("toggle-page", onToggle).then((u) => unlisteners.push(u));
+    } catch (e) {
+      console.error("Failed to attach appWindow toggle-page listener:", e);
+    }
 
     // Mouse scroll wheel inside webview to toggle page
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      useWheelStore.getState().togglePage();
+      e.stopPropagation();
+      onToggle();
     };
     window.addEventListener("wheel", handleWheel, { passive: false });
     unlisteners.push(() => window.removeEventListener("wheel", handleWheel));
@@ -284,7 +294,8 @@ export function WheelOverlay() {
       if (state.isDragging) {
         if (e.key === "Tab" || e.key === " ") {
           e.preventDefault();
-          state.togglePage();
+          e.stopPropagation();
+          onToggle();
         } else if (e.key === "Escape") {
           lastHoveredRef.current = null;
           state.clearDragState();

@@ -11,7 +11,8 @@
 
 #[cfg(windows)]
 mod windows_impl {
-    use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
     use tokio::sync::mpsc::UnboundedSender;
     use tracing::debug;
 
@@ -30,6 +31,8 @@ mod windows_impl {
 
     use crate::WinEvent;
 
+    const WM_MOUSEHWHEEL_MSG: u32 = 0x020E;
+
     // Global state shared between the hook callback and the processing thread.
     // Using atomics to avoid locks in the hook callback.
     static SHIFT_DOWN: AtomicBool = AtomicBool::new(false);
@@ -42,6 +45,25 @@ mod windows_impl {
     static THRESHOLD_PX: AtomicI32 = AtomicI32::new(6);
     static PAUSED: AtomicBool = AtomicBool::new(false);
     static ALWAYS_SHOW: AtomicBool = AtomicBool::new(false);
+    static LAST_TOGGLE_MS: AtomicU64 = AtomicU64::new(0);
+
+    fn current_ms() -> u64 {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
+    }
+
+    fn check_and_debounce_toggle(cooldown_ms: u64) -> bool {
+        let now = current_ms();
+        let last = LAST_TOGGLE_MS.load(Ordering::Relaxed);
+        if now.saturating_sub(last) >= cooldown_ms {
+            LAST_TOGGLE_MS.store(now, Ordering::Relaxed);
+            true
+        } else {
+            false
+        }
+    }
 
     // Thread-local sender; set once when the hook thread starts.
     thread_local! {
@@ -110,15 +132,19 @@ mod windows_impl {
                         }
                     }
                 }
-                v if v == WM_MOUSEWHEEL => {
+                v if v == WM_MOUSEWHEEL || v == WM_MOUSEHWHEEL_MSG => {
                     if DRAG_ARMED.load(Ordering::Relaxed) {
-                        send_event(WinEvent::TogglePage);
+                        if check_and_debounce_toggle(180) {
+                            send_event(WinEvent::TogglePage);
+                        }
                         return LRESULT(1);
                     }
                 }
                 v if v == WM_RBUTTONDOWN || v == WM_MBUTTONDOWN => {
                     if DRAG_ARMED.load(Ordering::Relaxed) {
-                        send_event(WinEvent::TogglePage);
+                        if check_and_debounce_toggle(180) {
+                            send_event(WinEvent::TogglePage);
+                        }
                         return LRESULT(1);
                     }
                 }
@@ -167,7 +193,9 @@ mod windows_impl {
                         send_event(WinEvent::EscapePressed);
                         send_event(WinEvent::DragCancelled);
                     } else if (vk == VK_TAB.0 as u32 || vk == VK_SPACE.0 as u32) && DRAG_ARMED.load(Ordering::Relaxed) {
-                        send_event(WinEvent::TogglePage);
+                        if check_and_debounce_toggle(180) {
+                            send_event(WinEvent::TogglePage);
+                        }
                         return LRESULT(1);
                     }
                 }
@@ -231,10 +259,14 @@ mod windows_impl {
     pub fn set_always_show(always: bool) {
         ALWAYS_SHOW.store(always, Ordering::Relaxed);
     }
+
+    pub fn set_drag_armed(armed: bool) {
+        DRAG_ARMED.store(armed, Ordering::Relaxed);
+    }
 }
 
 #[cfg(windows)]
-pub use windows_impl::{start_hooks, set_paused, set_threshold, set_always_show};
+pub use windows_impl::{start_hooks, set_paused, set_threshold, set_always_show, set_drag_armed};
 
 #[cfg(not(windows))]
 pub fn start_hooks(
@@ -254,3 +286,5 @@ pub fn set_paused(_paused: bool) {}
 pub fn set_threshold(_px: i32) {}
 #[cfg(not(windows))]
 pub fn set_always_show(_always: bool) {}
+#[cfg(not(windows))]
+pub fn set_drag_armed(_armed: bool) {}

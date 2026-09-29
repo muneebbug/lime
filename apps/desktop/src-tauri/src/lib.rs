@@ -167,6 +167,9 @@ async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>
 
                 if !paused {
                     info!("Drag armed at ({}, {}), showing overlay", x, y);
+                    wheel_win::hooks::set_drag_armed(true);
+                    let _ = app.emit("drag-armed", serde_json::json!({ "x": x, "y": y }));
+
                     // Position and show the overlay centered on cursor
                     if let Some(overlay) = app.get_webview_window("overlay") {
                         let _ = overlay.emit("drag-armed", serde_json::json!({ "x": x, "y": y }));
@@ -183,7 +186,9 @@ async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>
                 }
             }
             WinEvent::DragCancelled | WinEvent::EscapePressed => {
+                wheel_win::hooks::set_drag_armed(false);
                 current_overlay_rect = None;
+                let _ = app.emit("drag-cancelled", ());
                 if let Some(overlay) = app.get_webview_window("overlay") {
                     let _ = overlay.emit("drag-cancelled", ());
                     let _ = overlay.hide();
@@ -194,6 +199,8 @@ async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>
                 // via Chromium dragover and OLE drop target, avoiding IPC saturation.
             }
             WinEvent::TogglePage => {
+                info!("Toggling wheel page from WinEvent");
+                let _ = app.emit("toggle-page", ());
                 if let Some(overlay) = app.get_webview_window("overlay") {
                     let _ = overlay.emit("toggle-page", ());
                 }
@@ -208,6 +215,8 @@ async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>
                 current_overlay_rect = None;
 
                 if !is_inside_overlay {
+                    wheel_win::hooks::set_drag_armed(false);
+                    let _ = app.emit("drag-cancelled", ());
                     if let Some(overlay) = app.get_webview_window("overlay") {
                         let _ = overlay.emit("drag-cancelled", ());
                         let _ = overlay.hide();
@@ -219,6 +228,7 @@ async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>
                     let overlay_clone = app.get_webview_window("overlay");
                     tauri::async_runtime::spawn(async move {
                         tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+                        wheel_win::hooks::set_drag_armed(false);
                         if let Some(overlay) = overlay_clone {
                             let _ = overlay.hide();
                         }

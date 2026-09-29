@@ -21,19 +21,32 @@ export function filterActions(
   page: WheelPage,
   extensions: string[]
 ): ActionManifest[] {
-  return actions
+  const categoryActions = actions
     .filter((a) => {
       if (page === "convert" && a.category !== "convert") return false;
       if (page === "tools" && a.category !== "tools") return false;
-      if (!a.enabled) return false;
-      // Context filter: only show if the action accepts at least one dragged ext
-      if (extensions.length > 0 && a.accepts.extensions.length > 0) {
-        return a.accepts.extensions.some((e) => extensions.includes(e));
-      }
-      return true;
+      return a.enabled;
     })
-    .sort((a, b) => a.order - b.order)
-    .slice(0, 8);
+    .sort((a, b) => a.order - b.order);
+
+  if (categoryActions.length === 0) {
+    return [];
+  }
+
+  // Context filter: if extensions exist, show actions that accept them
+  if (extensions.length > 0) {
+    const cleanExts = extensions.map((e) => e.toLowerCase().trim().replace(/^\./, ""));
+    const matched = categoryActions.filter((a) => {
+      if (a.accepts.extensions.length === 0) return true;
+      return a.accepts.extensions.some((ext) => cleanExts.includes(ext.toLowerCase()));
+    });
+    if (matched.length > 0) {
+      return matched.slice(0, 8);
+    }
+  }
+
+  // Fallback: show all actions in this category so the wheel is never empty
+  return categoryActions.slice(0, 8);
 }
 
 function wedgeGeometry(index: number, total: number, outerR: number, innerR: number) {
@@ -263,9 +276,27 @@ function RadialWheelInner({
             : "0 4px 16px rgba(0,0,0,0.3)",
           transition: "background 0.1s ease, box-shadow 0.1s ease",
         }}
-        onClick={onTogglePage}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onTogglePage();
+        }}
+        onMouseDown={(e) => {
+          // Left, middle, or right click on center pill toggles page
+          if (e.button === 0 || e.button === 1 || e.button === 2) {
+            e.preventDefault();
+            e.stopPropagation();
+            onTogglePage();
+          }
+        }}
+        onWheel={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onTogglePage();
+        }}
         onContextMenu={(e) => {
           e.preventDefault();
+          e.stopPropagation();
           onTogglePage();
         }}
         title="Scroll wheel, Right-Click, or Tab/Space to switch wheels"
