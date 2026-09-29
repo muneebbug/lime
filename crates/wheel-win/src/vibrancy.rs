@@ -132,3 +132,42 @@ fn is_windows_10_20h1() -> bool {
     let build = get_build_number();
     build >= 19041 && build < 22000
 }
+
+/// Ensure a window is restored from minimized state, brought to the foreground,
+/// and given keyboard/input focus, even when spawned from background threads or tray.
+pub fn force_focus_window(hwnd: isize) {
+    #[cfg(windows)]
+    unsafe {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::UI::WindowsAndMessaging::{
+            ShowWindow, SetForegroundWindow, BringWindowToTop,
+            SW_RESTORE, GetForegroundWindow, GetWindowThreadProcessId,
+        };
+        use windows::Win32::UI::Input::KeyboardAndMouse::{SetActiveWindow, SetFocus};
+        use windows::Win32::System::Threading::{GetCurrentThreadId, AttachThreadInput};
+
+        let hwnd = HWND(hwnd as _);
+        let fg_hwnd = GetForegroundWindow();
+        let fg_thread = GetWindowThreadProcessId(fg_hwnd, None);
+        let current_thread = GetCurrentThreadId();
+
+        if fg_thread != current_thread && fg_thread != 0 {
+            let _ = AttachThreadInput(current_thread, fg_thread, true);
+            let _ = ShowWindow(hwnd, SW_RESTORE);
+            let _ = BringWindowToTop(hwnd);
+            let _ = SetForegroundWindow(hwnd);
+            let _ = SetActiveWindow(hwnd);
+            let _ = SetFocus(Some(hwnd));
+            let _ = AttachThreadInput(current_thread, fg_thread, false);
+        } else {
+            let _ = ShowWindow(hwnd, SW_RESTORE);
+            let _ = BringWindowToTop(hwnd);
+            let _ = SetForegroundWindow(hwnd);
+            let _ = SetActiveWindow(hwnd);
+            let _ = SetFocus(Some(hwnd));
+        }
+    }
+}
+
+#[cfg(not(windows))]
+pub fn force_focus_window(_hwnd: isize) {}

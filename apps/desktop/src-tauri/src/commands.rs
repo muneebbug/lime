@@ -131,6 +131,12 @@ pub async fn dispatch_action(
     }
 }
 
+fn get_in_flight_tools() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static IN_FLIGHT: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
+        std::sync::OnceLock::new();
+    IN_FLIGHT.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
+}
+
 fn open_tool_window(
     app: &tauri::AppHandle,
     manifest: &ActionManifest,
@@ -149,18 +155,51 @@ fn open_tool_window(
     let window_id = format!("tool-{}", manifest.id.replace('.', "-"));
 
     // Reuse existing window if open
-    if app.get_webview_window(&window_id).is_some() {
+    if let Some(win) = app.get_webview_window(&window_id) {
+        let _ = win.eval(&format!("window.location.href = '{}'", url));
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+        #[cfg(target_os = "windows")]
+        if let Ok(hwnd) = win.hwnd() {
+            wheel_win::force_focus_window(hwnd.0 as isize);
+        }
         return Ok(());
     }
 
-    tauri::WebviewWindowBuilder::new(app, &window_id, WebviewUrl::App(url.into()))
+    let in_flight = get_in_flight_tools();
+    {
+        let mut guard = in_flight.lock().unwrap();
+        if guard.contains(&window_id) {
+            info!("Tool window {} creation already in-flight, skipping duplicate", window_id);
+            return Ok(());
+        }
+        guard.insert(window_id.clone());
+    }
+
+    let win_res = tauri::WebviewWindowBuilder::new(app, &window_id, WebviewUrl::App(url.into()))
         .title(&manifest.title)
         .inner_size(win_cfg.width as f64, win_cfg.height as f64)
         .decorations(false)
         .transparent(true)
         .resizable(win_cfg.resizable)
         .center()
-        .build()?;
+        .focused(true)
+        .build();
+
+    {
+        let mut guard = in_flight.lock().unwrap();
+        guard.remove(&window_id);
+    }
+
+    let win = win_res?;
+    let _ = win.unminimize();
+    let _ = win.show();
+    let _ = win.set_focus();
+    #[cfg(target_os = "windows")]
+    if let Ok(hwnd) = win.hwnd() {
+        wheel_win::force_focus_window(hwnd.0 as isize);
+    }
 
     Ok(())
 }

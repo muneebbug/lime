@@ -47,6 +47,7 @@ export function WheelOverlay() {
 
   const lastHoveredRef = useRef<string | null>(null);
   const lastDropPosRef = useRef<{ x: number; y: number }>({ x: 200, y: 200 });
+  const isDroppingRef = useRef(false);
 
   useEffect(() => {
     loadActions();
@@ -120,6 +121,14 @@ export function WheelOverlay() {
     const unlisteners: Array<() => void> = [];
 
     const handleFilesDropped = (files: string[], x: number, y: number) => {
+      if (isDroppingRef.current) {
+        return;
+      }
+      isDroppingRef.current = true;
+      setTimeout(() => {
+        isDroppingRef.current = false;
+      }, 800);
+
       const state = useWheelStore.getState();
       const dropFiles = files.length > 0 ? files : state.dragFiles;
       if (dropFiles.length === 0) {
@@ -225,33 +234,6 @@ export function WheelOverlay() {
       console.error("Failed to attach onDragDropEvent:", e);
     }
 
-    // HTML5 dragover & drop fallback for Chromium WebView2
-    const handleDragOver = (e: DragEvent) => {
-      e.preventDefault();
-      if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = "copy";
-      }
-      handlePointerMove(e.clientX, e.clientY);
-    };
-
-    const handleDrop = (e: DragEvent) => {
-      e.preventDefault();
-      const files: string[] = [];
-      if (e.dataTransfer?.files) {
-        for (let i = 0; i < e.dataTransfer.files.length; i++) {
-          const file = e.dataTransfer.files[i] as any;
-          if (file.path) {
-            files.push(file.path);
-          }
-        }
-      }
-      handleFilesDropped(files, e.clientX, e.clientY);
-    };
-
-    window.addEventListener("dragover", handleDragOver);
-    window.addEventListener("drop", handleDrop);
-    unlisteners.push(() => window.removeEventListener("dragover", handleDragOver));
-    unlisteners.push(() => window.removeEventListener("drop", handleDrop));
 
     // Custom OLE events from Rust IDropTarget fallback
     listen<DropEnterEvent>("drop-enter", ({ payload }) => {

@@ -31,6 +31,12 @@ export function SettingsWindow() {
 
   const appWindow = getCurrentWebviewWindow();
 
+  useEffect(() => {
+    appWindow.unminimize().catch(() => {});
+    appWindow.show().catch(() => {});
+    appWindow.setFocus().catch(() => {});
+  }, [appWindow]);
+
   // Load initial settings and statuses
   useEffect(() => {
     async function loadData() {

@@ -56,12 +56,17 @@ pub fn setup_tray(app: &AppHandle) -> anyhow::Result<()> {
 pub fn open_settings_window(app: &AppHandle) {
     use tauri::Manager;
     if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();
+        #[cfg(target_os = "windows")]
+        if let Ok(hwnd) = win.hwnd() {
+            wheel_win::force_focus_window(hwnd.0 as isize);
+        }
         return;
     }
 
-    let _ = tauri::WebviewWindowBuilder::new(
+    let win = tauri::WebviewWindowBuilder::new(
         app,
         "settings",
         tauri::WebviewUrl::App("index.html?window=settings".into()),
@@ -72,18 +77,34 @@ pub fn open_settings_window(app: &AppHandle) {
     .transparent(true)
     .resizable(true)
     .center()
+    .focused(true)
     .build();
+
+    if let Ok(win) = win {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+        #[cfg(target_os = "windows")]
+        if let Ok(hwnd) = win.hwnd() {
+            wheel_win::force_focus_window(hwnd.0 as isize);
+        }
+    }
 }
 
 pub fn open_palette_window(app: &AppHandle) {
     use tauri::Manager;
     if let Some(win) = app.get_webview_window("palette") {
+        let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();
+        #[cfg(target_os = "windows")]
+        if let Ok(hwnd) = win.hwnd() {
+            wheel_win::force_focus_window(hwnd.0 as isize);
+        }
         return;
     }
 
-    let _ = tauri::WebviewWindowBuilder::new(
+    let win = tauri::WebviewWindowBuilder::new(
         app,
         "palette",
         tauri::WebviewUrl::App("index.html?window=palette".into()),
@@ -95,5 +116,16 @@ pub fn open_palette_window(app: &AppHandle) {
     .resizable(false)
     .center()
     .always_on_top(true)
+    .focused(true)
     .build();
+
+    if let Ok(win) = win {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+        #[cfg(target_os = "windows")]
+        if let Ok(hwnd) = win.hwnd() {
+            wheel_win::force_focus_window(hwnd.0 as isize);
+        }
+    }
 }

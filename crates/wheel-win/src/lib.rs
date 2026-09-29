@@ -5,6 +5,7 @@ pub mod drop_target;
 pub mod dpi;
 pub mod vibrancy;
 pub mod shell;
+pub use vibrancy::force_focus_window;
 
 #[cfg(not(windows))]
 pub mod stubs {

@@ -58,6 +58,12 @@ export function ToolWindowLayout({
   };
 
   useEffect(() => {
+    appWindow.unminimize().catch(() => {});
+    appWindow.show().catch(() => {});
+    appWindow.setFocus().catch(() => {});
+  }, [appWindow]);
+
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         handleClose();

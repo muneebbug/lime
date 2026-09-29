@@ -5,6 +5,11 @@
   "windows": ["main", "overlay", "tool-*", "settings", "palette"],
   "permissions": [
     "core:default",
+    "core:window:default",
+    "core:window:allow-show",
+    "core:window:allow-set-focus",
+    "core:window:allow-unminimize",
+    "core:window:allow-close",
     "opener:default",
     "notification:default",
     "store:default",
