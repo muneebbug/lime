@@ -161,7 +161,7 @@ export function CompressTool({ filePath }: CompressToolProps) {
                 setPreset("balanced");
                 setUseTargetSize(false);
               }}
-              className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+              className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-default ${
                 preset === "balanced" && !useTargetSize
                   ? "bg-white/[0.08] border-white/20 text-white shadow-sm"
                   : "bg-[#242424] border-white/[0.06] text-neutral-400 hover:text-neutral-200 hover:bg-[#2a2a2a]"
@@ -188,7 +188,7 @@ export function CompressTool({ filePath }: CompressToolProps) {
                 setPreset("strong");
                 setUseTargetSize(false);
               }}
-              className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-pointer ${
+              className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all cursor-default ${
                 preset === "strong" && !useTargetSize
                   ? "bg-white/[0.08] border-white/20 text-white shadow-sm"
                   : "bg-[#242424] border-white/[0.06] text-neutral-400 hover:text-neutral-200 hover:bg-[#2a2a2a]"
@@ -242,7 +242,7 @@ export function CompressTool({ filePath }: CompressToolProps) {
                 max={fileSize ? Math.round(fileSize / 1024) : 2048}
                 value={targetSizeKb}
                 onChange={(e) => setTargetSizeKb(parseInt(e.target.value))}
-                className="flex-1 accent-[#ff6339] cursor-pointer"
+                className="flex-1 accent-[#ff6339] cursor-default"
               />
               <div className="flex items-center gap-1">
                 <input

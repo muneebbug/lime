@@ -206,7 +206,7 @@ export function RedactTool({ filePath }: RedactToolProps) {
           <div className="flex items-center gap-0.5 p-0.5 bg-[#242424] rounded-lg border border-white/[0.08]">
             <button
               onClick={() => setActiveMode("black_bar")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-default ${
                 activeMode === "black_bar"
                   ? "bg-white/[0.14] text-white shadow-sm font-semibold"
                   : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
@@ -218,7 +218,7 @@ export function RedactTool({ filePath }: RedactToolProps) {
 
             <button
               onClick={() => setActiveMode("pixelate")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-default ${
                 activeMode === "pixelate"
                   ? "bg-white/[0.14] text-white shadow-sm font-semibold"
                   : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
@@ -230,7 +230,7 @@ export function RedactTool({ filePath }: RedactToolProps) {
 
             <button
               onClick={() => setActiveMode("blur")}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all cursor-default ${
                 activeMode === "blur"
                   ? "bg-white/[0.14] text-white shadow-sm font-semibold"
                   : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
@@ -246,7 +246,7 @@ export function RedactTool({ filePath }: RedactToolProps) {
             <button
               onClick={handleUndo}
               disabled={regions.length === 0}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-neutral-300 hover:text-white bg-[#242424] hover:bg-[#2c2c2c] border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-neutral-300 hover:text-white bg-[#242424] hover:bg-[#2c2c2c] border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-default"
               title="Undo last box (Ctrl+Z)"
             >
               <Undo2 size={12} />
@@ -256,7 +256,7 @@ export function RedactTool({ filePath }: RedactToolProps) {
             <button
               onClick={handleClear}
               disabled={regions.length === 0}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-neutral-400 hover:text-red-400 bg-[#242424] hover:bg-red-500/10 border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium text-neutral-400 hover:text-red-400 bg-[#242424] hover:bg-red-500/10 border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-default"
               title="Clear all redactions"
             >
               <Trash2 size={12} />
@@ -328,7 +328,7 @@ export function RedactTool({ filePath }: RedactToolProps) {
                         e.stopPropagation();
                         handleDeleteRegion(region.id);
                       }}
-                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg cursor-pointer text-xs"
+                      className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg cursor-default text-xs"
                       title="Delete region"
                     >
                       ×

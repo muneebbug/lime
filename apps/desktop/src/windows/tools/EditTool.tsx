@@ -142,14 +142,14 @@ export function EditTool({ filePath }: EditToolProps) {
               </span>
               <button
                 onClick={() => handleRotate(-90)}
-                className="p-1.5 rounded-lg bg-[#1c1c1c] border border-white/[0.08] hover:bg-white/[0.08] text-neutral-300 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg bg-[#1c1c1c] border border-white/[0.08] hover:bg-white/[0.08] text-neutral-300 transition-colors cursor-default"
                 title="Rotate 90° CCW"
               >
                 <RotateCcw size={14} />
               </button>
               <button
                 onClick={() => handleRotate(90)}
-                className="p-1.5 rounded-lg bg-[#1c1c1c] border border-white/[0.08] hover:bg-white/[0.08] text-neutral-300 transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg bg-[#1c1c1c] border border-white/[0.08] hover:bg-white/[0.08] text-neutral-300 transition-colors cursor-default"
                 title="Rotate 90° CW"
               >
                 <RotateCw size={14} />
@@ -157,7 +157,7 @@ export function EditTool({ filePath }: EditToolProps) {
               <div className="w-px h-5 bg-white/[0.08] mx-1" />
               <button
                 onClick={() => setFlipH(!flipH)}
-                className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                className={`p-1.5 rounded-lg border transition-colors cursor-default ${
                   flipH
                     ? "bg-white/[0.14] border-white/30 text-white font-medium shadow-sm"
                     : "bg-[#1c1c1c] border-white/[0.08] hover:bg-white/[0.08] text-neutral-300"
@@ -168,7 +168,7 @@ export function EditTool({ filePath }: EditToolProps) {
               </button>
               <button
                 onClick={() => setFlipV(!flipV)}
-                className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                className={`p-1.5 rounded-lg border transition-colors cursor-default ${
                   flipV
                     ? "bg-white/[0.14] border-white/30 text-white font-medium shadow-sm"
                     : "bg-[#1c1c1c] border-white/[0.08] hover:bg-white/[0.08] text-neutral-300"
@@ -200,7 +200,7 @@ export function EditTool({ filePath }: EditToolProps) {
                 />
                 <button
                   onClick={() => setLockAspect(!lockAspect)}
-                  className="p-1 rounded text-neutral-400 hover:text-neutral-200 cursor-pointer ml-0.5"
+                  className="p-1 rounded text-neutral-400 hover:text-neutral-200 cursor-default ml-0.5"
                   title={lockAspect ? "Aspect ratio locked" : "Aspect ratio unlocked"}
                 >
                   {lockAspect ? (
@@ -229,7 +229,7 @@ export function EditTool({ filePath }: EditToolProps) {
                 max={100}
                 value={brightness}
                 onChange={(e) => setBrightness(parseInt(e.target.value) || 0)}
-                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#181818] rounded"
+                className="accent-[#ff6339] cursor-default h-1.5 bg-[#181818] rounded"
               />
             </div>
 
@@ -247,7 +247,7 @@ export function EditTool({ filePath }: EditToolProps) {
                 max={100}
                 value={contrast}
                 onChange={(e) => setContrast(parseInt(e.target.value) || 0)}
-                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#181818] rounded"
+                className="accent-[#ff6339] cursor-default h-1.5 bg-[#181818] rounded"
               />
             </div>
 
@@ -263,7 +263,7 @@ export function EditTool({ filePath }: EditToolProps) {
                 max={100}
                 value={saturation}
                 onChange={(e) => setSaturation(parseInt(e.target.value) || 0)}
-                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#181818] rounded"
+                className="accent-[#ff6339] cursor-default h-1.5 bg-[#181818] rounded"
               />
             </div>
 
@@ -281,7 +281,7 @@ export function EditTool({ filePath }: EditToolProps) {
                 max={100}
                 value={temperature}
                 onChange={(e) => setTemperature(parseInt(e.target.value) || 0)}
-                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#181818] rounded"
+                className="accent-[#ff6339] cursor-default h-1.5 bg-[#181818] rounded"
               />
             </div>
           </div>

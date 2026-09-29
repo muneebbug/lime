@@ -424,7 +424,7 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
           <div className="flex items-center gap-0.5 p-0.5 bg-[#242424] rounded-lg border border-white/[0.08]">
             <button
               onClick={() => setActiveTool("arrow")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-default ${
                 activeTool === "arrow"
                   ? "bg-white/[0.14] text-white shadow-sm font-semibold"
                   : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
@@ -437,7 +437,7 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
 
             <button
               onClick={() => setActiveTool("pen")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-default ${
                 activeTool === "pen"
                   ? "bg-white/[0.14] text-white shadow-sm font-semibold"
                   : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
@@ -450,7 +450,7 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
 
             <button
               onClick={() => setActiveTool("highlighter")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-default ${
                 activeTool === "highlighter"
                   ? "bg-white/[0.14] text-white shadow-sm font-semibold"
                   : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
@@ -463,7 +463,7 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
 
             <button
               onClick={() => setActiveTool("rectangle")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-default ${
                 activeTool === "rectangle"
                   ? "bg-white/[0.14] text-white shadow-sm font-semibold"
                   : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
@@ -476,7 +476,7 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
 
             <button
               onClick={() => setActiveTool("text")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-default ${
                 activeTool === "text"
                   ? "bg-white/[0.14] text-white shadow-sm font-semibold"
                   : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
@@ -489,7 +489,7 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
 
             <button
               onClick={() => setActiveTool("step")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-all cursor-default ${
                 activeTool === "step"
                   ? "bg-white/[0.14] text-white shadow-sm font-semibold"
                   : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
@@ -508,7 +508,7 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
                 key={swatch.hex}
                 onClick={() => setActiveColor(swatch.hex)}
                 style={{ backgroundColor: swatch.hex }}
-                className={`w-4 h-4 rounded-full border transition-transform cursor-pointer flex items-center justify-center ${
+                className={`w-4 h-4 rounded-full border transition-transform cursor-default flex items-center justify-center ${
                   activeColor === swatch.hex
                     ? "scale-125 border-white shadow-md ring-2 ring-white/20"
                     : "border-white/20 hover:scale-110 opacity-70 hover:opacity-100"
@@ -533,7 +533,7 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
                 <button
                   key={sw.val}
                   onClick={() => setStrokeWidth(sw.val)}
-                  className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-pointer ${
+                  className={`px-2 py-1 rounded-md text-[11px] font-medium transition-colors cursor-default ${
                     strokeWidth === sw.val
                       ? "bg-white/[0.14] text-white font-semibold"
                       : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
@@ -547,7 +547,7 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
             <button
               onClick={handleUndo}
               disabled={history.length === 0}
-              className="p-1.5 rounded-lg text-neutral-400 hover:text-white bg-[#242424] hover:bg-[#2c2c2c] border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-neutral-400 hover:text-white bg-[#242424] hover:bg-[#2c2c2c] border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-default"
               title="Undo (Ctrl+Z)"
             >
               <Undo2 size={13} />
@@ -556,7 +556,7 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
             <button
               onClick={handleRedo}
               disabled={redoStack.length === 0}
-              className="p-1.5 rounded-lg text-neutral-400 hover:text-white bg-[#242424] hover:bg-[#2c2c2c] border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-neutral-400 hover:text-white bg-[#242424] hover:bg-[#2c2c2c] border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-default"
               title="Redo (Ctrl+Y)"
             >
               <Redo2 size={13} />
@@ -565,7 +565,7 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
             <button
               onClick={handleClear}
               disabled={history.length === 0}
-              className="p-1.5 rounded-lg text-neutral-400 hover:text-red-400 bg-[#242424] hover:bg-red-500/10 border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-pointer"
+              className="p-1.5 rounded-lg text-neutral-400 hover:text-red-400 bg-[#242424] hover:bg-red-500/10 border border-white/[0.08] disabled:opacity-40 disabled:pointer-events-none transition-colors cursor-default"
               title="Clear all"
             >
               <Trash2 size={13} />
@@ -630,7 +630,7 @@ export function AnnotateTool({ filePath }: AnnotateToolProps) {
                 />
                 <button
                   onClick={handleCommitText}
-                  className="px-2 py-1 bg-orange-500 text-white rounded text-xs font-medium cursor-pointer hover:bg-orange-600"
+                  className="px-2 py-1 bg-orange-500 text-white rounded text-xs font-medium cursor-default hover:bg-orange-600"
                 >
                   OK
                 </button>

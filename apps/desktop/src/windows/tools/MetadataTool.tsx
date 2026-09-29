@@ -196,7 +196,7 @@ export function MetadataTool({ filePath }: MetadataToolProps) {
             </div>
             <button
               onClick={openMap}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-neutral-300 font-medium text-[11px] transition-colors cursor-pointer"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-neutral-300 font-medium text-[11px] transition-colors cursor-default"
             >
               <ExternalLink size={11} />
               <span>View Map</span>
@@ -221,7 +221,7 @@ export function MetadataTool({ filePath }: MetadataToolProps) {
                 >
                   <button
                     onClick={() => toggleGroup(group.name)}
-                    className="w-full flex items-center justify-between px-3.5 py-2 bg-[#282828] hover:bg-[#2e2e2e] transition-colors text-left cursor-pointer"
+                    className="w-full flex items-center justify-between px-3.5 py-2 bg-[#282828] hover:bg-[#2e2e2e] transition-colors text-left cursor-default"
                   >
                     <span className="text-xs font-semibold text-neutral-200">
                       {group.name} ({group.entries.length})
@@ -249,7 +249,7 @@ export function MetadataTool({ filePath }: MetadataToolProps) {
                             </span>
                             <button
                               onClick={() => copyToClipboard(itemKey, entry.value)}
-                              className="text-neutral-500 hover:text-white p-1 rounded transition-colors cursor-pointer"
+                              className="text-neutral-500 hover:text-white p-1 rounded transition-colors cursor-default"
                               title="Copy value"
                             >
                               {isCopied ? (

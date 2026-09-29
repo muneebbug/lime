@@ -213,7 +213,7 @@ export function RemoveBgTool({ filePath }: RemoveBgToolProps) {
             </div>
             <button
               onClick={handleDeleteModel}
-              className="text-neutral-500 hover:text-red-400 p-1 rounded transition-colors cursor-pointer"
+              className="text-neutral-500 hover:text-red-400 p-1 rounded transition-colors cursor-default"
               title="Remove model to free disk space"
             >
               <Trash2 size={13} />
@@ -234,7 +234,7 @@ export function RemoveBgTool({ filePath }: RemoveBgToolProps) {
               max={8}
               value={featherRadius}
               onChange={(e) => setFeatherRadius(parseInt(e.target.value) || 0)}
-              className="accent-[#ff6339] cursor-pointer h-1.5 w-24 bg-[#1c1c1c] rounded"
+              className="accent-[#ff6339] cursor-default h-1.5 w-24 bg-[#1c1c1c] rounded"
             />
             <span className="font-mono text-[11px] text-neutral-200 w-5 text-right">
               {featherRadius}px

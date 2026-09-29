@@ -81,7 +81,7 @@ export function ToolWindowLayout({
   }, [onPrimaryAction]);
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#181818] text-neutral-200 font-sans select-none overflow-hidden rounded-xl border border-white/[0.08] shadow-2xl">
+    <div className="flex flex-col h-screen w-screen bg-[#151516] text-neutral-200 font-sans select-none overflow-hidden rounded-xl border border-white/[0.08] shadow-2xl">
       {/* Window Titlebar Header */}
       <header
         data-tauri-drag-region
@@ -90,7 +90,7 @@ export function ToolWindowLayout({
             appWindow.startDragging();
           }
         }}
-        className="h-10 flex items-center justify-between pl-3 pr-0 border-b border-white/[0.06] bg-[#181818] select-none cursor-move shrink-0 z-20"
+        className="h-10 flex items-center justify-between pl-3 pr-0 border-b border-white/[0.06] bg-[#151516] select-none shrink-0 z-20"
       >
         {/* Left: Tool identity & filename badge */}
         <div data-tauri-drag-region className="flex items-center gap-2.5 min-w-0 pointer-events-none">
@@ -119,12 +119,12 @@ export function ToolWindowLayout({
       </header>
 
       {/* Main Tool Content Workspace */}
-      <main className="flex-1 bg-[#1e1e1e] flex flex-col overflow-hidden relative">
+      <main className="flex-1 bg-[#19191a] flex flex-col overflow-hidden relative">
         {children}
       </main>
 
       {/* Action Bar Footer */}
-      <footer className="h-12 px-4 bg-[#181818] border-t border-white/[0.06] flex items-center justify-between shrink-0 select-none z-20">
+      <footer className="h-12 px-4 bg-[#151516] border-t border-white/[0.06] flex items-center justify-between shrink-0 select-none z-20">
         {/* Left: Secondary actions or success state */}
         <div className="flex items-center gap-2">
           {successResultPath ? (
@@ -133,14 +133,14 @@ export function ToolWindowLayout({
               <span>Saved successfully</span>
               <button
                 onClick={handleOpenFolder}
-                className="ml-2 flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-neutral-200 border border-white/[0.08] transition-colors cursor-pointer text-xs"
+                className="ml-2 flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-neutral-200 border border-white/[0.08] transition-colors cursor-default text-xs"
               >
                 <FolderOpen size={12} />
                 <span>Show in folder</span>
               </button>
               <button
                 onClick={handleOpenFile}
-                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-neutral-200 border border-white/[0.08] transition-colors cursor-pointer text-xs"
+                className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.1] text-neutral-200 border border-white/[0.08] transition-colors cursor-default text-xs"
               >
                 <ExternalLink size={12} />
                 <span>Open</span>

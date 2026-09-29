@@ -225,7 +225,7 @@ export function CommandPalette() {
   return (
     <div
       onKeyDown={handleKeyDown}
-      className="flex flex-col h-screen w-screen bg-[#181818] text-neutral-200 font-sans select-none overflow-hidden rounded-xl border border-white/[0.08] shadow-2xl"
+      className="flex flex-col h-screen w-screen bg-[#151516] text-neutral-200 font-sans select-none overflow-hidden rounded-xl border border-white/[0.08] shadow-2xl"
     >
       {/* Search Input Bar with integrated window controls */}
       <div
@@ -235,7 +235,7 @@ export function CommandPalette() {
             appWindow.startDragging();
           }
         }}
-        className="relative z-10 flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#181818] cursor-move"
+        className="relative z-10 flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#151516]"
       >
         <Search size={16} className="text-neutral-400 shrink-0" />
         <input
@@ -244,7 +244,7 @@ export function CommandPalette() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search commands, tools, conversions, or history..."
-          className="flex-1 bg-transparent text-[13px] text-white placeholder-neutral-500 outline-none"
+          className="flex-1 bg-transparent text-[13px] text-white placeholder-neutral-500 outline-none cursor-text"
         />
 
         <div className="flex items-center gap-2">
@@ -253,7 +253,7 @@ export function CommandPalette() {
           </kbd>
           <button
             onClick={handleClose}
-            className="w-6 h-6 rounded flex items-center justify-center text-neutral-400 hover:text-white hover:bg-[#e81123] transition-colors cursor-pointer"
+            className="w-6 h-6 rounded flex items-center justify-center text-neutral-400 hover:text-white hover:bg-[#e81123] transition-colors cursor-default"
             title="Close"
           >
             <X size={13} />
@@ -263,14 +263,14 @@ export function CommandPalette() {
 
       {/* Selected target file pill (if any) */}
       {selectedFile && (
-        <div className="px-4 py-1.5 bg-[#222222] border-b border-white/[0.06] flex items-center justify-between text-xs text-neutral-300">
+        <div className="px-4 py-1.5 bg-[#19191a] border-b border-white/[0.06] flex items-center justify-between text-xs text-neutral-300">
           <div className="flex items-center gap-2 truncate">
             <FileImage size={13} className="text-[#ff6339] shrink-0" />
             <span className="truncate">Active file: <strong>{selectedFile}</strong></span>
           </div>
           <button
             onClick={() => setSelectedFile(null)}
-            className="text-neutral-400 hover:text-white cursor-pointer ml-2 text-xs"
+            className="text-neutral-400 hover:text-white cursor-default ml-2 text-xs"
           >
             Clear
           </button>
@@ -280,7 +280,7 @@ export function CommandPalette() {
       {/* Results List */}
       <div
         ref={listRef}
-        className="flex-1 overflow-y-auto p-1.5 relative z-10 space-y-0.5"
+        className="flex-1 overflow-y-auto p-1.5 relative z-10 space-y-0.5 bg-[#19191a]"
       >
         {filteredItems.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-48 text-neutral-500 gap-1.5 text-xs">
@@ -295,14 +295,14 @@ export function CommandPalette() {
                 key={item.id}
                 onClick={() => handleSelectItem(item)}
                 onMouseEnter={() => setSelectedIndex(index)}
-                className={`flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                className={`flex items-center justify-between px-3 py-2 rounded-md cursor-default transition-colors ${
                   isSelected
-                    ? "bg-white/[0.1] text-white shadow-sm"
+                    ? "bg-white/[0.12] text-white shadow-xs"
                     : "text-neutral-300 hover:bg-white/[0.04]"
                 }`}
               >
                 <div className="flex items-center gap-2.5 truncate">
-                  <div className="w-6 h-6 rounded-md bg-[#252525] border border-white/[0.06] flex items-center justify-center shrink-0">
+                  <div className="w-6 h-6 rounded-md bg-[#222225] border border-white/[0.06] flex items-center justify-center shrink-0">
                     {item.icon}
                   </div>
                   <div className="truncate">
@@ -328,7 +328,7 @@ export function CommandPalette() {
       </div>
 
       {/* Action Bar */}
-      <footer className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] bg-[#1e1e1e] text-xs text-neutral-400 relative z-10 shrink-0">
+      <footer className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] bg-[#151516] text-xs text-neutral-400 relative z-10 shrink-0">
         <div className="flex items-center gap-2 truncate">
           <span className="text-neutral-500 text-[11px]">Wheel Command Palette</span>
           {filteredItems[selectedIndex] && (
@@ -344,7 +344,7 @@ export function CommandPalette() {
         <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={() => filteredItems[selectedIndex] && handleSelectItem(filteredItems[selectedIndex])}
-            className="flex items-center gap-1.5 px-3 py-1 bg-[#ff6339] hover:bg-[#ff7247] text-white font-medium rounded-md transition-all cursor-pointer shadow-sm active:scale-[0.98] text-xs"
+            className="flex items-center gap-1.5 px-3 py-1 bg-[#ff6339] hover:bg-[#ff7247] text-white font-medium rounded-md transition-all cursor-default shadow-xs active:scale-[0.98] text-xs"
           >
             <span>Open Action</span>
             <kbd className="text-[10px] bg-black/25 text-white/90 px-1 py-0.5 rounded font-mono font-bold">

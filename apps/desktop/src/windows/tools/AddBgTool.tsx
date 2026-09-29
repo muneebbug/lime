@@ -142,7 +142,7 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
                   key={g.name}
                   onClick={() => setSelectedGradient(g)}
                   style={{ background: g.css }}
-                  className={`w-6 h-6 rounded-full shrink-0 transition-transform cursor-pointer shadow-sm ${
+                  className={`w-6 h-6 rounded-full shrink-0 transition-transform cursor-default shadow-sm ${
                     selectedGradient.name === g.name
                       ? "ring-2 ring-[#ff6339] scale-110 ring-offset-2 ring-offset-[#181818]"
                       : "opacity-80 hover:opacity-100 hover:scale-105"
@@ -164,7 +164,7 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
                     })
                   }
                   style={{ backgroundColor: s.hex }}
-                  className={`w-6 h-6 rounded-full shrink-0 border border-white/15 transition-transform cursor-pointer shadow-sm ${
+                  className={`w-6 h-6 rounded-full shrink-0 border border-white/15 transition-transform cursor-default shadow-sm ${
                     selectedGradient.css === s.hex
                       ? "ring-2 ring-[#ff6339] scale-110 ring-offset-2 ring-offset-[#181818]"
                       : "opacity-80 hover:opacity-100 hover:scale-105"
@@ -189,7 +189,7 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
                 max={160}
                 value={padding}
                 onChange={(e) => setPadding(parseInt(e.target.value) || 0)}
-                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#1c1c1c] rounded"
+                className="accent-[#ff6339] cursor-default h-1.5 bg-[#1c1c1c] rounded"
               />
             </div>
 
@@ -205,7 +205,7 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
                 max={48}
                 value={cornerRadius}
                 onChange={(e) => setCornerRadius(parseInt(e.target.value) || 0)}
-                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#1c1c1c] rounded"
+                className="accent-[#ff6339] cursor-default h-1.5 bg-[#1c1c1c] rounded"
               />
             </div>
 
@@ -221,7 +221,7 @@ export function AddBgTool({ filePath }: AddBgToolProps) {
                 max={60}
                 value={shadowBlur}
                 onChange={(e) => setShadowBlur(parseInt(e.target.value) || 0)}
-                className="accent-[#ff6339] cursor-pointer h-1.5 bg-[#1c1c1c] rounded"
+                className="accent-[#ff6339] cursor-default h-1.5 bg-[#1c1c1c] rounded"
               />
             </div>
           </div>
