@@ -29,11 +29,21 @@ pub async fn get_settings(state: State<'_, AppState>) -> Result<WheelSettings, S
 /// Save updated settings
 #[tauri::command]
 pub async fn save_settings(
+    app: tauri::AppHandle,
     state: State<'_, AppState>,
     settings: WheelSettings,
 ) -> Result<(), String> {
     let migrated = settings.migrate();
     *state.settings.lock().await = migrated.clone();
+
+    // Immediately update live Win32 hooks at runtime without requiring an app relaunch
+    wheel_win::hooks::set_threshold(migrated.trigger.movement_threshold_px as i32);
+    wheel_win::hooks::set_always_show(migrated.trigger.always_show);
+    wheel_win::hooks::set_modifier(migrated.trigger.modifier.clone());
+    wheel_win::hooks::set_paused(migrated.trigger.paused);
+
+    // Broadcast settings update to frontend windows
+    let _ = app.emit("settings-updated", &migrated);
 
     let local_app_data = std::env::var("LOCALAPPDATA")
         .or_else(|_| std::env::var("APPDATA"))

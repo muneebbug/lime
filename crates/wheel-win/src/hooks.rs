@@ -11,7 +11,7 @@
 
 #[cfg(windows)]
 mod windows_impl {
-    use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU64, AtomicU8, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
     use tokio::sync::mpsc::UnboundedSender;
     use tracing::debug;
@@ -25,17 +25,23 @@ mod windows_impl {
         WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_MBUTTONDOWN,
     };
     use windows::Win32::UI::Input::KeyboardAndMouse::{
-        GetAsyncKeyState, VK_ESCAPE, VK_LSHIFT, VK_RSHIFT, VK_SHIFT,
-        VK_TAB, VK_SPACE,
+        GetAsyncKeyState, VK_CONTROL, VK_ESCAPE, VK_LCONTROL, VK_LMENU, VK_LSHIFT,
+        VK_MENU, VK_RCONTROL, VK_RMENU, VK_RSHIFT, VK_SHIFT, VK_SPACE, VK_TAB,
     };
 
     use crate::WinEvent;
 
     const WM_MOUSEHWHEEL_MSG: u32 = 0x020E;
 
+    pub const MOD_SHIFT: u8 = 0;
+    pub const MOD_CTRL: u8 = 1;
+    pub const MOD_ALT: u8 = 2;
+    pub const MOD_NONE: u8 = 3;
+
     // Global state shared between the hook callback and the processing thread.
     // Using atomics to avoid locks in the hook callback.
-    static SHIFT_DOWN: AtomicBool = AtomicBool::new(false);
+    static MODIFIER: AtomicU8 = AtomicU8::new(MOD_SHIFT);
+    static MODIFIER_DOWN: AtomicBool = AtomicBool::new(false);
     static LBUTTON_DOWN: AtomicBool = AtomicBool::new(false);
     static BUTTON_X: AtomicI32 = AtomicI32::new(0);
     static BUTTON_Y: AtomicI32 = AtomicI32::new(0);
@@ -80,13 +86,61 @@ mod windows_impl {
     }
 
     #[inline]
-    fn is_shift_pressed() -> bool {
-        SHIFT_DOWN.load(Ordering::Relaxed)
-            || unsafe {
-                (GetAsyncKeyState(VK_SHIFT.0 as i32) as u16 & 0x8000) != 0
-                    || (GetAsyncKeyState(VK_LSHIFT.0 as i32) as u16 & 0x8000) != 0
-                    || (GetAsyncKeyState(VK_RSHIFT.0 as i32) as u16 & 0x8000) != 0
+    fn is_matching_vk_for_active_modifier(vk: u32, mod_type: u8) -> bool {
+        match mod_type {
+            MOD_SHIFT => {
+                vk == VK_SHIFT.0 as u32
+                    || vk == VK_LSHIFT.0 as u32
+                    || vk == VK_RSHIFT.0 as u32
             }
+            MOD_CTRL => {
+                vk == VK_CONTROL.0 as u32
+                    || vk == VK_LCONTROL.0 as u32
+                    || vk == VK_RCONTROL.0 as u32
+            }
+            MOD_ALT => {
+                vk == VK_MENU.0 as u32
+                    || vk == VK_LMENU.0 as u32
+                    || vk == VK_RMENU.0 as u32
+            }
+            _ => false,
+        }
+    }
+
+    #[inline]
+    fn is_modifier_pressed() -> bool {
+        let mod_type = MODIFIER.load(Ordering::Relaxed);
+        if mod_type == MOD_NONE {
+            return true;
+        }
+
+        match mod_type {
+            MOD_SHIFT => {
+                MODIFIER_DOWN.load(Ordering::Relaxed)
+                    || unsafe {
+                        (GetAsyncKeyState(VK_SHIFT.0 as i32) as u16 & 0x8000) != 0
+                            || (GetAsyncKeyState(VK_LSHIFT.0 as i32) as u16 & 0x8000) != 0
+                            || (GetAsyncKeyState(VK_RSHIFT.0 as i32) as u16 & 0x8000) != 0
+                    }
+            }
+            MOD_CTRL => {
+                MODIFIER_DOWN.load(Ordering::Relaxed)
+                    || unsafe {
+                        (GetAsyncKeyState(VK_CONTROL.0 as i32) as u16 & 0x8000) != 0
+                            || (GetAsyncKeyState(VK_LCONTROL.0 as i32) as u16 & 0x8000) != 0
+                            || (GetAsyncKeyState(VK_RCONTROL.0 as i32) as u16 & 0x8000) != 0
+                    }
+            }
+            MOD_ALT => {
+                MODIFIER_DOWN.load(Ordering::Relaxed)
+                    || unsafe {
+                        (GetAsyncKeyState(VK_MENU.0 as i32) as u16 & 0x8000) != 0
+                            || (GetAsyncKeyState(VK_LMENU.0 as i32) as u16 & 0x8000) != 0
+                            || (GetAsyncKeyState(VK_RMENU.0 as i32) as u16 & 0x8000) != 0
+                    }
+            }
+            _ => true,
+        }
     }
 
     unsafe extern "system" fn mouse_hook_proc(
@@ -125,7 +179,7 @@ mod windows_impl {
                         let dy = (y - by).abs();
                         let threshold = THRESHOLD_PX.load(Ordering::Relaxed);
                         if (dx * dx + dy * dy) >= threshold * threshold
-                            && (ALWAYS_SHOW.load(Ordering::Relaxed) || is_shift_pressed())
+                            && (ALWAYS_SHOW.load(Ordering::Relaxed) || is_modifier_pressed())
                         {
                             DRAG_ARMED.store(true, Ordering::Relaxed);
                             send_event(WinEvent::DragArmed { x, y });
@@ -163,18 +217,17 @@ mod windows_impl {
         if code >= 0 {
             let kb = &*(lparam.0 as *const KBDLLHOOKSTRUCT);
             let vk = kb.vkCode;
-            let is_shift = vk == VK_SHIFT.0 as u32
-                || vk == VK_LSHIFT.0 as u32
-                || vk == VK_RSHIFT.0 as u32;
+            let current_mod = MODIFIER.load(Ordering::Relaxed);
+            let is_active_modifier = is_matching_vk_for_active_modifier(vk, current_mod);
 
             match wparam.0 as u32 {
                 v if v == WM_KEYDOWN || v == WM_SYSKEYDOWN => {
-                    if is_shift {
-                        SHIFT_DOWN.store(true, Ordering::Relaxed);
+                    if is_active_modifier {
+                        MODIFIER_DOWN.store(true, Ordering::Relaxed);
                         send_event(WinEvent::ShiftChanged(true));
 
                         // If left button is already held and mouse moved past threshold,
-                        // arm the drag immediately upon pressing Shift!
+                        // arm the drag immediately upon pressing the modifier key!
                         if LBUTTON_DOWN.load(Ordering::Relaxed) && !DRAG_ARMED.load(Ordering::Relaxed) {
                             let bx = BUTTON_X.load(Ordering::Relaxed);
                             let by = BUTTON_Y.load(Ordering::Relaxed);
@@ -200,8 +253,8 @@ mod windows_impl {
                     }
                 }
                 v if v == WM_KEYUP || v == WM_SYSKEYUP => {
-                    if is_shift {
-                        SHIFT_DOWN.store(false, Ordering::Relaxed);
+                    if is_active_modifier {
+                        MODIFIER_DOWN.store(false, Ordering::Relaxed);
                         send_event(WinEvent::ShiftChanged(false));
                     }
                 }
@@ -263,10 +316,23 @@ mod windows_impl {
     pub fn set_drag_armed(armed: bool) {
         DRAG_ARMED.store(armed, Ordering::Relaxed);
     }
+
+    pub fn set_modifier(modifier: wheel_core::TriggerModifier) {
+        let val = match modifier {
+            wheel_core::TriggerModifier::Shift => MOD_SHIFT,
+            wheel_core::TriggerModifier::Ctrl => MOD_CTRL,
+            wheel_core::TriggerModifier::Alt => MOD_ALT,
+            wheel_core::TriggerModifier::None => MOD_NONE,
+        };
+        MODIFIER.store(val, Ordering::Relaxed);
+        MODIFIER_DOWN.store(false, Ordering::Relaxed);
+    }
 }
 
 #[cfg(windows)]
-pub use windows_impl::{start_hooks, set_paused, set_threshold, set_always_show, set_drag_armed};
+pub use windows_impl::{
+    set_always_show, set_drag_armed, set_modifier, set_paused, set_threshold, start_hooks,
+};
 
 #[cfg(not(windows))]
 pub fn start_hooks(
@@ -288,3 +354,5 @@ pub fn set_threshold(_px: i32) {}
 pub fn set_always_show(_always: bool) {}
 #[cfg(not(windows))]
 pub fn set_drag_armed(_armed: bool) {}
+#[cfg(not(windows))]
+pub fn set_modifier(_modifier: wheel_core::TriggerModifier) {}

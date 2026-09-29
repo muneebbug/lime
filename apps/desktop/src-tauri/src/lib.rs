@@ -149,11 +149,19 @@ pub fn run() {
 async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>) {
     use wheel_win::WinEvent;
 
-    let (threshold, always_show) = {
+    let (threshold, always_show, modifier, paused) = {
         let s = settings.lock().await;
-        (s.trigger.movement_threshold_px as i32, s.trigger.always_show)
+        (
+            s.trigger.movement_threshold_px as i32,
+            s.trigger.always_show,
+            s.trigger.modifier.clone(),
+            s.trigger.paused,
+        )
     };
+    wheel_win::hooks::set_threshold(threshold);
     wheel_win::hooks::set_always_show(always_show);
+    wheel_win::hooks::set_modifier(modifier);
+    wheel_win::hooks::set_paused(paused);
 
     let (mut rx, _hook_thread) = wheel_win::hooks::start_hooks(threshold);
     info!("Hook listener started");
