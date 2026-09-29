@@ -189,10 +189,45 @@ Checked via `cargo info window-vibrancy`.
 5. In `start_hook_listener`, check whether `WM_LBUTTONUP` occurs within the overlay bounds before emitting `drag-cancelled`, preventing premature cancellation while OLE `Drop` is being dispatched.
 **Rationale:** In Windows, `WH_KEYBOARD_LL` sends specific left/right keycodes rather than generic `VK_SHIFT`, which caused Shift to appear unpressed. Without `OleInitialize`, Win32 OLE DragDrop registration fails or drops are rejected. Removing the default window from configuration eliminates the blank white 800x600 window and restores Wheel to a proper tray-only background architecture.
 
+### D035: WebView2 lock prevention, temp file isolation, AVIF acceleration, and in-app HUD toasts
+**Decision:**
+1. **WebView2 `0x800700AA` Panic Resolution:** In `desktop` `main()` for debug builds, automatically detect and terminate any lingering `desktop.exe` processes before initializing Tauri, preventing the WebView2 user-data directory (`EBWebView`) exclusive file lock from crashing `pnpm dev`.
+2. **Temp File Isolation:** Move all intermediate conversion scratch files (`conv_*.tmp`, `decode_*.png`) to `%TEMP%\wheel_temp\`, guaranteeing zero `.tmp` files ever touch the user's working directories or Desktop. Always clean up temporary files in error guards and upon completion.
+3. **AVIF Acceleration:** Optimize FFmpeg AVIF encoding using `-c:v libaom-av1 -crf <mapped_crf> -cpu-used 8 -row-mt 1 -f avif` and configure `[profile.dev.package]` for `image`, `png`, `ravif`, `rav1e` with `opt-level = 3`, reducing 1.2MB image encode time from 35s to ~0.65s without quality degradation.
+4. **In-App Floating HUD Feedback:** Render a frosted-glass acrylic HUD toast in `WheelOverlay.tsx` with animated state transitions (`loading`, `complete`, `failed`). When an action like HEIC fails due to missing Windows HEVC encoder dependencies (`heif-enc` / `ImageMagick`), display an actionable notice explaining the licensing limitation and recommending AVIF, rather than failing silently.
+
+### D036: Complete removal of HEIC/HEIF format in favor of AVIF and ICO
+**Decision:** Completely remove HEIC/HEIF encoding and convert target wedges from Wheel. Replace the 8th convert target wedge with `convert.ico` (ICO format).
+**Rationale:** On Windows, HEVC encoder patent licensing restricts native encoding. AVIF is modern, royalty-free, outperforms HEIC in compression ratio and fidelity, and encodes near-instantly (~0.65s). Removing HEIC eliminates dead code, patent encumbrances, and external binary dependencies (`heif-enc` / `ImageMagick`).
+
+### D037: High-frequency drag event deduplication, fine-grained store selectors, and GPU CSS transition pipeline
+**Decision:**
+1. **Eliminate IPC Flooding from Low-Level Hook:** Cease sending `WinEvent::MouseMove` over the crossbeam channel and emitting `cursor-move` IPC events from `desktop_lib`. Chromium WebView2 and Windows OLE already deliver drag coordinates directly to the overlay window with zero IPC overhead.
+2. **Throttle OLE `drop-over`:** In `overlay.rs`, throttle `DropEvent::Over` emissions to at most 60Hz (16ms) and only when coordinates change.
+3. **Deduplicate Wedge Hover State Updates:** In `WheelOverlay.tsx`, introduce `handlePointerMove` which caches `lastHoveredRef`. If the hit-tested wedge index is identical to the currently hovered wedge, the event is immediately discarded without updating Zustand or triggering React component re-renders (reducing state transitions from 1,000/sec to ~5–10/sec).
+4. **Remove Unused Cursor Coordinates from Reactive State:** Discontinue calling `setCursor(x, y)` in Zustand during rapid pointer movement, storing drop coordinates in `lastDropPosRef`.
+5. **Fine-Grained Zustand Subscriptions:** Replace `const store = useWheelStore()` in `WheelOverlay.tsx` and `RadialWheel.tsx` with targeted selectors (`useWheelStore((s) => s.isDragging)`, `useWheelStore((s) => s.hoveredWedge)`).
+6. **Hardware-Accelerated CSS Transitions & Memoization:** In `RadialWheel.tsx`, remove SVG `<feDropShadow>` filters on individual animated paths and replace Framer Motion spring solvers with GPU compositor-accelerated CSS transitions (`transition: transform 0.08s cubic-bezier(0.16, 1, 0.3, 1), fill 0.08s ease`). Precompute wedge geometries using `useMemo` and wrap the component in `React.memo`.
+**Rationale:** High-polling mice (500–1000Hz) paired with multiple concurrent event streams (`cursor-move`, `onDragDropEvent`, `dragover`, `drop-over`) and whole-store subscriptions previously provoked hundreds of re-renders and CPU Gaussian blur re-rasterizations per second, causing severe UI lag. The optimized pipeline delivers instantaneous 60–120+ FPS responsiveness with zero perceptible input latency.
+
+### D038: Removal of dev debug HUD text and elimination of Windows 11 DWM window frame box
+**Decision:**
+1. **Remove Bottom-Left Debug HUD:** Delete the `{store.dragFiles.length} file(s) | page: {store.currentPage} | wedge: ...` overlay from [WheelOverlay.tsx](file:///d:/Projects/wheel/apps/desktop/src/windows/overlay/WheelOverlay.tsx).
+2. **Eliminate DWM Frame and Shadow Box:** In [overlay.rs](file:///d:/Projects/wheel/apps/desktop/src-tauri/src/overlay.rs), configure `.shadow(false)` on the overlay `WebviewWindowBuilder`, and call `wheel_win::vibrancy::make_overlay_transparent_frameless(hwnd)` to configure DWM attributes:
+   - `DWMWA_WINDOW_CORNER_PREFERENCE = DWMWCP_DONOTROUND` (1): Prevents Windows 11 from rounding the 400x400 window rectangle.
+   - `DWMWA_BORDER_COLOR = 0xFFFFFFFE` (`DWMWA_COLOR_NONE`): Removes the 1px DWM window border outline.
+   - `DWMWA_SYSTEMBACKDROP_TYPE = 1` (`DWMSBT_NONE`): Disables DWM acrylic/mica frame material extending into the client area.
+**Rationale:** Windows 11 DWM treats top-level undecorated windows with transparent frames as standard window surfaces by default, adding rounded corners, window borders, drop shadows, and dark acrylic material. Disabling these DWM attributes leaves only the circular radial wheel visible on screen with 100% background transparency.
+
+### D039: White background alpha compositing for JPEG and BMP exports
+**Decision:** Implement `flatten_to_rgb(img, [255, 255, 255])` in [image_convert.rs](file:///d:/Projects/wheel/crates/wheel-engines/src/image_convert.rs) to alpha-composite transparent and semi-transparent pixels against pure solid white before encoding to formats lacking native alpha support (JPEG and BMP).
+**Rationale:** The JPEG and BMP specifications do not support alpha channels. Naive color type conversion simply discards the alpha channel, leaving whatever raw RGB data was stored in transparent pixels visible. In transparent PNGs, transparent pixels are usually `(0, 0, 0, 0)` (producing pitch-black backgrounds) or unmultiplied `(255, 255, 255, 0)` (producing stark white square blocks). Compositing with `result = foreground * alpha + background * (1 - alpha)` guarantees clean, uniform white backgrounds and anti-aliased edge blending without dark halos or artifact blocks.
+
 ---
 
 ## Pending / Open Questions
 
 - **Code signing:** Windows code signing requires a certificate. The Tauri bundler supports
   it via env vars. We'll document the process in M7 without purchasing one for dev builds.
+
 

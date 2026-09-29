@@ -94,21 +94,17 @@ mod windows_impl {
                     CURSOR_X.store(x, Ordering::Relaxed);
                     CURSOR_Y.store(y, Ordering::Relaxed);
 
-                    if LBUTTON_DOWN.load(Ordering::Relaxed) {
-                        send_event(WinEvent::MouseMove { x, y });
-
-                        if !DRAG_ARMED.load(Ordering::Relaxed) {
-                            let bx = BUTTON_X.load(Ordering::Relaxed);
-                            let by = BUTTON_Y.load(Ordering::Relaxed);
-                            let dx = (x - bx).abs();
-                            let dy = (y - by).abs();
-                            let threshold = THRESHOLD_PX.load(Ordering::Relaxed);
-                            if (dx * dx + dy * dy) >= threshold * threshold
-                                && (ALWAYS_SHOW.load(Ordering::Relaxed) || is_shift_pressed())
-                            {
-                                DRAG_ARMED.store(true, Ordering::Relaxed);
-                                send_event(WinEvent::DragArmed { x, y });
-                            }
+                    if LBUTTON_DOWN.load(Ordering::Relaxed) && !DRAG_ARMED.load(Ordering::Relaxed) {
+                        let bx = BUTTON_X.load(Ordering::Relaxed);
+                        let by = BUTTON_Y.load(Ordering::Relaxed);
+                        let dx = (x - bx).abs();
+                        let dy = (y - by).abs();
+                        let threshold = THRESHOLD_PX.load(Ordering::Relaxed);
+                        if (dx * dx + dy * dy) >= threshold * threshold
+                            && (ALWAYS_SHOW.load(Ordering::Relaxed) || is_shift_pressed())
+                        {
+                            DRAG_ARMED.store(true, Ordering::Relaxed);
+                            send_event(WinEvent::DragArmed { x, y });
                         }
                     }
                 }

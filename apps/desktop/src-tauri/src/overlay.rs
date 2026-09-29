@@ -20,6 +20,7 @@ pub fn create_overlay_window(app: &AppHandle) -> anyhow::Result<()> {
     .title("Wheel Overlay")
     .transparent(true)
     .decorations(false)
+    .shadow(false)
     .always_on_top(true)
     .skip_taskbar(true)
     .resizable(false)
@@ -48,6 +49,9 @@ pub fn create_overlay_window(app: &AppHandle) -> anyhow::Result<()> {
                         | WS_EX_TOOLWINDOW.0 as isize,
                 );
             }
+
+            // Remove all Windows 11 DWM window frame artifacts (rounded box, border, backdrop material)
+            wheel_win::vibrancy::make_overlay_transparent_frameless(hwnd.0 as isize);
 
             // Register our OLE drop target on the overlay HWND
             register_overlay_drop_target(app.clone(), hwnd.0 as isize);
@@ -92,7 +96,27 @@ fn register_overlay_drop_target(app: AppHandle, hwnd: isize) {
                     tracing::info!("OLE DragEnter: {:?}", paths);
                 }
                 DropEvent::Over { x, y } => {
-                    let _ = overlay.emit("drop-over", serde_json::json!({ "x": x, "y": y }));
+                    use std::sync::atomic::{AtomicI32, AtomicU64, Ordering};
+                    static LAST_X: AtomicI32 = AtomicI32::new(-9999);
+                    static LAST_Y: AtomicI32 = AtomicI32::new(-9999);
+                    static LAST_TIME: AtomicU64 = AtomicU64::new(0);
+
+                    let now = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap_or_default()
+                        .as_millis() as u64;
+
+                    let last_x = LAST_X.load(Ordering::Relaxed);
+                    let last_y = LAST_Y.load(Ordering::Relaxed);
+                    let last_time = LAST_TIME.load(Ordering::Relaxed);
+
+                    // Throttle to max 60Hz and only when position changes
+                    if (x != last_x || y != last_y) && (now.saturating_sub(last_time) >= 16) {
+                        LAST_X.store(x, Ordering::Relaxed);
+                        LAST_Y.store(y, Ordering::Relaxed);
+                        LAST_TIME.store(now, Ordering::Relaxed);
+                        let _ = overlay.emit("drop-over", serde_json::json!({ "x": x, "y": y }));
+                    }
                 }
                 DropEvent::Leave => {
                     let _ = overlay.emit("drop-leave", ());

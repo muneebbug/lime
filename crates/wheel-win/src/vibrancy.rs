@@ -25,6 +25,57 @@ pub fn apply_best_effect(_hwnd: isize) -> VibrancyEffect {
     VibrancyEffect::None
 }
 
+/// Remove all Windows 11 DWM window frame artifacts (rounded window corners,
+/// window border line, window drop shadow, and DWM backdrop tint) so that
+/// transparent overlay windows render strictly content pixels with zero box artifact.
+pub fn make_overlay_transparent_frameless(hwnd: isize) {
+    #[cfg(windows)]
+    {
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::Graphics::Dwm::{
+            DwmSetWindowAttribute,
+            DWMWA_BORDER_COLOR,
+            DWMWA_WINDOW_CORNER_PREFERENCE,
+            DWM_WINDOW_CORNER_PREFERENCE,
+            DWMWCP_DONOTROUND,
+            DWMWINDOWATTRIBUTE,
+        };
+
+        let hwnd = HWND(hwnd as _);
+
+        unsafe {
+            // 1. Disable Windows 11 rounded corners on the window rectangle
+            let corner_pref = DWMWCP_DONOTROUND;
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE,
+                &corner_pref as *const _ as *const _,
+                std::mem::size_of::<DWM_WINDOW_CORNER_PREFERENCE>() as u32,
+            );
+
+            // 2. Disable DWM window border (0xFFFFFFFE = DWMWA_COLOR_NONE)
+            let border_color: u32 = 0xFFFFFFFE;
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_BORDER_COLOR,
+                &border_color as *const _ as *const _,
+                std::mem::size_of::<u32>() as u32,
+            );
+
+            // 3. Disable DWM system backdrop material (attribute 38: DWMWA_SYSTEMBACKDROP_TYPE, 1 = DWMSBT_NONE)
+            let backdrop_type: u32 = 1;
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWINDOWATTRIBUTE(38),
+                &backdrop_type as *const _ as *const _,
+                std::mem::size_of::<u32>() as u32,
+            );
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = hwnd;
+}
+
 #[cfg(windows)]
 fn get_build_number() -> u32 {
     // Read build number from registry (reliable on all Windows 10/11 versions)

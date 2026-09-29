@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-import { motion } from "motion/react";
+import React, { useMemo } from "react";
 import { useWheelStore, ActionManifest, WheelPage } from "../../store/wheelStore";
 
 interface RadialWheelProps {
@@ -96,7 +95,7 @@ export function hitTestWedge(
   return index;
 }
 
-export function RadialWheel({
+function RadialWheelInner({
   files,
   extensions,
   currentPage,
@@ -105,15 +104,26 @@ export function RadialWheel({
   onWedgeHover,
   onWedgeDrop,
 }: RadialWheelProps) {
-  const { actions } = useWheelStore();
+  const actions = useWheelStore((s) => s.actions);
   const visibleActions = useMemo(
     () => filterActions(actions, currentPage, extensions),
     [actions, currentPage, extensions]
   );
 
-  const hoveredAction = visibleActions.find((a) => a.id === hoveredWedge);
   const cx = WHEEL_SIZE / 2;
   const cy = WHEEL_SIZE / 2;
+
+  const wedgeGeometries = useMemo(() => {
+    return visibleActions.map((action, i) => ({
+      action,
+      ...wedgeGeometry(i, visibleActions.length, OUTER_RADIUS, INNER_RADIUS),
+    }));
+  }, [visibleActions]);
+
+  const hoveredAction = useMemo(
+    () => visibleActions.find((a) => a.id === hoveredWedge),
+    [visibleActions, hoveredWedge]
+  );
 
   return (
     <div
@@ -124,9 +134,16 @@ export function RadialWheel({
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
         const idx = hitTestWedge(mx, my, visibleActions.length, cx, cy);
-        onWedgeHover(idx !== null ? visibleActions[idx]?.id ?? null : null);
+        const nextId = idx !== null ? visibleActions[idx]?.id ?? null : null;
+        if (nextId !== hoveredWedge) {
+          onWedgeHover(nextId);
+        }
       }}
-      onMouseLeave={() => onWedgeHover(null)}
+      onMouseLeave={() => {
+        if (hoveredWedge !== null) {
+          onWedgeHover(null);
+        }
+      }}
       onMouseUp={() => {
         if (hoveredWedge && files.length > 0) {
           onWedgeDrop(hoveredWedge, files);
@@ -141,7 +158,15 @@ export function RadialWheel({
         }}
       />
 
-      <svg width={WHEEL_SIZE} height={WHEEL_SIZE} className="absolute inset-0">
+      <svg
+        width={WHEEL_SIZE}
+        height={WHEEL_SIZE}
+        className="absolute inset-0"
+        style={{
+          filter: "drop-shadow(0 8px 24px rgba(0,0,0,0.5))",
+          willChange: "transform",
+        }}
+      >
         <defs>
           {/* Gradient for normal wedge fill */}
           <linearGradient id="wedge-grad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -153,10 +178,6 @@ export function RadialWheel({
             <stop offset="0%" stopColor="hsla(22, 95%, 60%, 0.95)" />
             <stop offset="100%" stopColor="hsla(355, 85%, 55%, 0.92)" />
           </linearGradient>
-          {/* Clip for inner circle */}
-          <filter id="wedge-shadow">
-            <feDropShadow dx="0" dy="2" stdDeviation="4" floodColor="rgba(0,0,0,0.4)" />
-          </filter>
         </defs>
 
         {/* Outer ring */}
@@ -179,29 +200,23 @@ export function RadialWheel({
         />
 
         {/* Wedges */}
-        {visibleActions.map((action, i) => {
-          const { path, labelX, labelY } = wedgeGeometry(
-            i,
-            visibleActions.length,
-            OUTER_RADIUS,
-            INNER_RADIUS
-          );
+        {wedgeGeometries.map(({ action, path, labelX, labelY }) => {
           const isHovered = hoveredWedge === action.id;
 
           return (
             <g key={action.id} style={{ cursor: "pointer" }}>
-              <motion.path
+              <path
                 d={path}
                 fill={isHovered ? "url(#wedge-active)" : "url(#wedge-grad)"}
-                stroke={isHovered ? "hsla(22, 95%, 65%, 0.6)" : "hsla(0,0%,100%,0.1)"}
+                stroke={isHovered ? "hsla(22, 95%, 65%, 0.75)" : "hsla(0,0%,100%,0.1)"}
                 strokeWidth={isHovered ? 1.5 : 1}
-                filter="url(#wedge-shadow)"
-                animate={{
-                  scale: isHovered ? 1.04 : 1,
+                style={{
+                  transformOrigin: `${cx}px ${cy}px`,
+                  transform: isHovered ? "scale(1.04)" : "scale(1)",
                   opacity: isHovered ? 1 : 0.88,
+                  transition: "transform 0.08s cubic-bezier(0.16, 1, 0.3, 1), fill 0.08s ease, stroke 0.08s ease, opacity 0.08s ease",
+                  willChange: "transform",
                 }}
-                transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                style={{ transformOrigin: `${cx}px ${cy}px` }}
               />
               {/* Wedge label */}
               <text
@@ -209,11 +224,18 @@ export function RadialWheel({
                 y={labelY}
                 textAnchor="middle"
                 dominantBaseline="central"
-                fill={isHovered ? "white" : "hsla(0,0%,90%,0.85)"}
+                fill={isHovered ? "#ffffff" : "hsla(0,0%,90%,0.85)"}
                 fontSize={action.category === "convert" ? 11 : 10}
                 fontWeight={isHovered ? "700" : "600"}
                 fontFamily="Inter, system-ui, sans-serif"
-                style={{ pointerEvents: "none", userSelect: "none" }}
+                style={{
+                  pointerEvents: "none",
+                  userSelect: "none",
+                  transformOrigin: `${cx}px ${cy}px`,
+                  transform: isHovered ? "scale(1.04)" : "scale(1)",
+                  transition: "transform 0.08s cubic-bezier(0.16, 1, 0.3, 1), fill 0.08s ease",
+                  willChange: "transform",
+                }}
               >
                 {action.title.toUpperCase()}
               </text>
@@ -224,7 +246,7 @@ export function RadialWheel({
 
       {/* Center pill */}
       <div
-        className="absolute flex flex-col items-center justify-center rounded-full cursor-pointer"
+        className="absolute flex flex-col items-center justify-center rounded-full cursor-pointer pointer-events-auto"
         style={{
           left: cx - CENTER_RADIUS,
           top: cy - CENTER_RADIUS,
@@ -239,7 +261,7 @@ export function RadialWheel({
           boxShadow: hoveredAction
             ? "0 4px 24px hsla(22,95%,55%,0.4), 0 0 0 1px hsla(22,95%,65%,0.3)"
             : "0 4px 16px rgba(0,0,0,0.3)",
-          transition: "all 0.15s ease",
+          transition: "background 0.1s ease, box-shadow 0.1s ease",
         }}
         onClick={onTogglePage}
         title="Click to switch page (or Tab/Space)"
@@ -286,3 +308,6 @@ export function RadialWheel({
     </div>
   );
 }
+
+export const RadialWheel = React.memo(RadialWheelInner);
+

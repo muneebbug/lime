@@ -189,10 +189,9 @@ async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>
                     let _ = overlay.hide();
                 }
             }
-            WinEvent::MouseMove { x, y } => {
-                if let Some(overlay) = app.get_webview_window("overlay") {
-                    let _ = overlay.emit("cursor-move", serde_json::json!({ "x": x, "y": y }));
-                }
+            WinEvent::MouseMove { .. } => {
+                // Pointer moves are handled inside the overlay window
+                // via Chromium dragover and OLE drop target, avoiding IPC saturation.
             }
             WinEvent::LButtonChanged { pressed: false, x, y } => {
                 let is_inside_overlay = if let Some((ox, oy, w, h)) = current_overlay_rect {

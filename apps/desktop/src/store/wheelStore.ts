@@ -73,7 +73,8 @@ export const useWheelStore = create<WheelStore>((set) => ({
     set({ isDragging: true, dragFiles: files, dragExtensions: extensions, cursorX: x, cursorY: y }),
   clearDragState: () =>
     set({ isDragging: false, dragFiles: [], dragExtensions: [], hoveredWedge: null }),
-  setHoveredWedge: (id) => set({ hoveredWedge: id }),
+  setHoveredWedge: (id) =>
+    set((state) => (state.hoveredWedge === id ? state : { hoveredWedge: id })),
   setCursor: (x, y) => set({ cursorX: x, cursorY: y }),
 
   currentPage: "convert",
