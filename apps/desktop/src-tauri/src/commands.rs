@@ -22,10 +22,10 @@ pub async fn get_actions(state: State<'_, AppState>) -> Result<Vec<ActionManifes
 /// Return the current settings
 #[tauri::command]
 pub async fn get_settings(state: State<'_, AppState>) -> Result<WheelSettings, String> {
-    let mut settings = state.settings.lock().await.clone();
-    settings.general.launch_at_login = wheel_win::shell::is_launch_at_login_registered();
-    settings.general.explorer_context_menu = wheel_win::shell::is_context_menu_registered();
-    Ok(settings)
+    let mut lock = state.settings.lock().await;
+    lock.general.launch_at_login = wheel_win::shell::is_launch_at_login_registered();
+    lock.general.explorer_context_menu = wheel_win::shell::is_context_menu_registered();
+    Ok(lock.clone())
 }
 
 /// Save updated settings
@@ -36,27 +36,48 @@ pub async fn save_settings(
     settings: WheelSettings,
 ) -> Result<(), String> {
     let migrated = settings.migrate();
-    *state.settings.lock().await = migrated.clone();
+
+    let old_settings = {
+        let mut lock = state.settings.lock().await;
+        if *lock == migrated {
+            return Ok(());
+        }
+        let old = lock.clone();
+        *lock = migrated.clone();
+        old
+    };
 
     // Immediately update live Win32 hooks at runtime without requiring an app relaunch
-    wheel_win::hooks::set_threshold(migrated.trigger.movement_threshold_px as i32);
-    wheel_win::hooks::set_always_show(migrated.trigger.always_show);
-    wheel_win::hooks::set_modifier(migrated.trigger.modifier.clone());
-    wheel_win::hooks::set_paused(migrated.trigger.paused);
-
-    // Synchronize Windows startup registration (Launch at Windows Login)
-    if let Err(e) = wheel_win::shell::set_launch_at_login(migrated.general.launch_at_login) {
-        tracing::warn!("Failed to synchronize launch at login: {}", e);
+    if migrated.trigger.movement_threshold_px != old_settings.trigger.movement_threshold_px {
+        wheel_win::hooks::set_threshold(migrated.trigger.movement_threshold_px as i32);
+    }
+    if migrated.trigger.always_show != old_settings.trigger.always_show {
+        wheel_win::hooks::set_always_show(migrated.trigger.always_show);
+    }
+    if migrated.trigger.modifier != old_settings.trigger.modifier {
+        wheel_win::hooks::set_modifier(migrated.trigger.modifier.clone());
+    }
+    if migrated.trigger.paused != old_settings.trigger.paused {
+        wheel_win::hooks::set_paused(migrated.trigger.paused);
     }
 
-    // Synchronize Windows Explorer context menu registration
-    if migrated.general.explorer_context_menu {
-        if let Err(e) = wheel_win::shell::register_context_menu(None) {
-            tracing::warn!("Failed to register context menu: {}", e);
+    // Synchronize Windows startup registration (Launch at Windows Login) ONLY IF CHANGED
+    if migrated.general.launch_at_login != old_settings.general.launch_at_login {
+        if let Err(e) = wheel_win::shell::set_launch_at_login(migrated.general.launch_at_login) {
+            tracing::warn!("Failed to synchronize launch at login: {}", e);
         }
-    } else {
-        if let Err(e) = wheel_win::shell::unregister_context_menu() {
-            tracing::warn!("Failed to unregister context menu: {}", e);
+    }
+
+    // Synchronize Windows Explorer context menu registration ONLY IF CHANGED
+    if migrated.general.explorer_context_menu != old_settings.general.explorer_context_menu {
+        if migrated.general.explorer_context_menu {
+            if let Err(e) = wheel_win::shell::register_context_menu(None) {
+                tracing::warn!("Failed to register context menu: {}", e);
+            }
+        } else {
+            if let Err(e) = wheel_win::shell::unregister_context_menu() {
+                tracing::warn!("Failed to unregister context menu: {}", e);
+            }
         }
     }
 

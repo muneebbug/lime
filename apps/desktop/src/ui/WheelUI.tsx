@@ -9,8 +9,9 @@ export function CaptionButtons({ className = "" }: { className?: string }) {
   const handleClose = () => appWindow.close().catch(console.error);
 
   return (
-    <div className={`h-full flex items-stretch select-none ${className}`}>
+    <div data-tauri-drag-region="false" className={`h-full flex items-stretch select-none ${className}`}>
       <button
+        data-tauri-drag-region="false"
         onClick={handleMinimize}
         className="w-[46px] h-full flex items-center justify-center text-[#9a9a9e] hover:text-white hover:bg-white/[0.08] transition-colors cursor-default"
         title="Minimize"
@@ -19,6 +20,7 @@ export function CaptionButtons({ className = "" }: { className?: string }) {
         <Minus size={15} strokeWidth={1.75} />
       </button>
       <button
+        data-tauri-drag-region="false"
         onClick={handleClose}
         className="w-[46px] h-full flex items-center justify-center text-[#9a9a9e] hover:text-white hover:bg-[#c4332a] transition-colors cursor-default"
         title="Close"

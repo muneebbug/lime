@@ -80,18 +80,12 @@ export function WheelOverlay() {
     invoke<any>("get_settings")
       .then((s) => {
         setWheelSettings(s);
-        if (s?.wheel_ui?.start_page) {
-          useWheelStore.getState().setPage(s.wheel_ui.start_page);
-        }
       })
       .catch(console.error);
 
     const unlisten = listen("settings-updated", (event: any) => {
       const s = event.payload;
       setWheelSettings(s);
-      if (s?.wheel_ui?.start_page) {
-        useWheelStore.getState().setPage(s.wheel_ui.start_page);
-      }
     });
 
     return () => {
@@ -116,8 +110,7 @@ export function WheelOverlay() {
 
     lastHoveredRef.current = null;
     useWheelStore.getState().clearDragState();
-    const startPage = wheelSettings?.wheel_ui?.start_page || "convert";
-    useWheelStore.getState().setPage(startPage);
+    useWheelStore.getState().setPage("convert");
 
     invoke("dispatch_action", {
       request: {

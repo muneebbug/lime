@@ -86,8 +86,8 @@ export function ToolWindowLayout({
       <header
         data-tauri-drag-region
         onMouseDown={(e) => {
-          if (e.button === 0 && !(e.target as HTMLElement).closest("button, input, select, textarea, [data-no-drag]")) {
-            appWindow.startDragging();
+          if (e.button === 0 && !(e.target as HTMLElement).closest("button, input, select, textarea, [data-no-drag], [data-tauri-drag-region='false']")) {
+            appWindow.startDragging().catch(() => {});
           }
         }}
         className="h-10 flex items-center justify-between pl-3 pr-0 border-b border-white/[0.06] bg-[#151516] select-none shrink-0 z-20"

@@ -36,9 +36,9 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
             "Open with Wheel",
             "/f",
         ])
-        .status()?;
+        .output()?;
 
-    if !status.success() {
+    if !status.status.success() {
         anyhow::bail!("Failed to create Wheel context menu file key");
     }
 
@@ -52,7 +52,7 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
             &exe_str,
             "/f",
         ])
-        .status();
+        .output();
 
     let status = std::process::Command::new("reg")
         .args([
@@ -63,9 +63,9 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
             &cmd_str,
             "/f",
         ])
-        .status()?;
+        .output()?;
 
-    if !status.success() {
+    if !status.status.success() {
         anyhow::bail!("Failed to create Wheel context menu command key");
     }
 
@@ -79,7 +79,7 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
             "Open with Wheel",
             "/f",
         ])
-        .status();
+        .output();
 
     let _ = std::process::Command::new("reg")
         .args([
@@ -91,7 +91,7 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
             &exe_str,
             "/f",
         ])
-        .status();
+        .output();
 
     let _ = std::process::Command::new("reg")
         .args([
@@ -102,7 +102,7 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
             &cmd_str,
             "/f",
         ])
-        .status();
+        .output();
 
     info!("Wheel Explorer context menu registered successfully");
     Ok(())
@@ -110,15 +110,19 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
 
 /// Unregister Wheel from Windows Explorer context menu
 pub fn unregister_context_menu() -> Result<()> {
+    if !is_context_menu_registered() {
+        return Ok(());
+    }
+
     info!("Unregistering Explorer context menu for Wheel");
 
     let _ = std::process::Command::new("reg")
         .args(["delete", r"HKCU\Software\Classes\*\shell\Wheel", "/f"])
-        .status();
+        .output();
 
     let _ = std::process::Command::new("reg")
         .args(["delete", r"HKCU\Software\Classes\Directory\shell\Wheel", "/f"])
-        .status();
+        .output();
 
     info!("Wheel Explorer context menu unregistered");
     Ok(())
@@ -138,6 +142,10 @@ pub fn is_launch_at_login_registered() -> bool {
 
 /// Register or unregister Wheel in the Windows startup registry (HKCU Run key)
 pub fn set_launch_at_login(enabled: bool) -> Result<()> {
+    if is_launch_at_login_registered() == enabled {
+        return Ok(());
+    }
+
     if enabled {
         let exe = std::env::current_exe().context("Failed to get current executable path")?;
         let exe_str = exe.to_string_lossy();
@@ -156,9 +164,9 @@ pub fn set_launch_at_login(enabled: bool) -> Result<()> {
                 &cmd_str,
                 "/f",
             ])
-            .status()?;
+            .output()?;
 
-        if !status.success() {
+        if !status.status.success() {
             anyhow::bail!("Failed to register Wheel in Windows startup registry");
         }
     } else {
@@ -171,7 +179,7 @@ pub fn set_launch_at_login(enabled: bool) -> Result<()> {
                 "Wheel",
                 "/f",
             ])
-            .status();
+            .output();
     }
     Ok(())
 }

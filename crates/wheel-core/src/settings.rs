@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 /// Increment SETTINGS_VERSION when making breaking changes; add a migration.
 pub const SETTINGS_VERSION: u32 = 1;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WheelSettings {
     #[serde(default = "default_version")]
     pub version: u32,
@@ -74,7 +74,7 @@ impl WheelSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GeneralSettings {
     pub launch_at_login: bool,
     pub language: String,
@@ -104,7 +104,7 @@ pub enum TriggerModifier {
     None,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct TriggerSettings {
     /// Which modifier key must be held while dragging to arm the trigger
     pub modifier: TriggerModifier,
@@ -130,11 +130,9 @@ impl Default for TriggerSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WheelUiSettings {
     pub slot_count: u32,
-    pub start_page: WheelPage,
-    pub remember_last_page: bool,
     pub theme: Theme,
     pub animation_speed: f32,
     pub reduced_motion: bool,
@@ -148,8 +146,6 @@ impl Default for WheelUiSettings {
     fn default() -> Self {
         Self {
             slot_count: 8,
-            start_page: WheelPage::Convert,
-            remember_last_page: true,
             theme: Theme::System,
             animation_speed: 1.0,
             reduced_motion: false,
@@ -159,13 +155,6 @@ impl Default for WheelUiSettings {
             context_filter_enabled: true,
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum WheelPage {
-    Convert,
-    Tools,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -189,7 +178,7 @@ pub enum OutputPolicy {
     Clipboard,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OutputSettings {
     pub policy: OutputPolicy,
     pub fixed_folder: Option<String>,
@@ -216,14 +205,14 @@ impl Default for OutputSettings {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PresetStep {
     pub action_id: String,
     #[serde(default)]
     pub params: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ActionPreset {
     pub id: String,
     pub name: String,
@@ -301,5 +290,17 @@ mod tests {
         settings.version = 0;
         let migrated = settings.migrate();
         assert_eq!(migrated.version, SETTINGS_VERSION);
+    }
+
+    #[test]
+    fn test_settings_partial_eq() {
+        let s1 = WheelSettings::default();
+        let mut s2 = WheelSettings::default();
+        assert_eq!(s1, s2);
+
+        s2.general.launch_at_login = true;
+        assert_ne!(s1, s2);
+        assert_ne!(s1.general.launch_at_login, s2.general.launch_at_login);
+        assert_eq!(s1.general.explorer_context_menu, s2.general.explorer_context_menu);
     }
 }

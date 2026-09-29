@@ -55,7 +55,9 @@ pub fn run() {
     let history = Arc::new(history);
 
     let settings_path = wheel_dir.join("settings.json");
-    let initial_settings = WheelSettings::load_or_default(&settings_path);
+    let mut initial_settings = WheelSettings::load_or_default(&settings_path);
+    initial_settings.general.launch_at_login = wheel_win::shell::is_launch_at_login_registered();
+    initial_settings.general.explorer_context_menu = wheel_win::shell::is_context_menu_registered();
     let settings = Arc::new(Mutex::new(initial_settings));
 
     let state = AppState {

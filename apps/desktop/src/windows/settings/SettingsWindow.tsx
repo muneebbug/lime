@@ -135,18 +135,13 @@ export function SettingsWindow() {
     }
   };
 
-  const handleToggleContextMenu = async (enabled: boolean) => {
-    try {
-      await invoke("set_explorer_context_menu", { enabled });
-      if (settings) {
-        const updated = {
-          ...settings,
-          general: { ...settings.general, explorer_context_menu: enabled },
-        };
-        handleSaveSettings(updated);
-      }
-    } catch (e) {
-      console.error("Failed to update context menu registration", e);
+  const handleToggleContextMenu = (enabled: boolean) => {
+    if (settings) {
+      const updated = {
+        ...settings,
+        general: { ...settings.general, explorer_context_menu: enabled },
+      };
+      handleSaveSettings(updated);
     }
   };
 
@@ -254,9 +249,9 @@ export function SettingsWindow() {
         onMouseDown={(e) => {
           if (
             e.button === 0 &&
-            !(e.target as HTMLElement).closest("button, input, select, textarea, [data-no-drag]")
+            !(e.target as HTMLElement).closest("button, input, select, textarea, [data-no-drag], [data-tauri-drag-region='false']")
           ) {
-            getCurrentWebviewWindow().startDragging();
+            getCurrentWebviewWindow().startDragging().catch(() => {});
           }
         }}
         className="h-[38px] flex items-center justify-between pl-4 pr-0 border-b border-white/[0.07] bg-[#1f1e1e] select-none shrink-0 z-20"
@@ -510,26 +505,6 @@ export function SettingsWindow() {
           {activeTab === "wheel_ui" && (
             <div className="w-full">
               <SettingSection first>
-                <SettingRow
-                  title="Default Start Page"
-                  description="Which radial wheel page is displayed when a drag starts"
-                >
-                  <SegmentedControl
-                    value={settings.wheel_ui.start_page}
-                    options={[
-                      { label: "Convert (Page 1)", value: "convert" },
-                      { label: "Tools (Page 2)", value: "tools" },
-                    ]}
-                    onChange={(val) => {
-                      const updated = {
-                        ...settings,
-                        wheel_ui: { ...settings.wheel_ui, start_page: val },
-                      };
-                      handleSaveSettings(updated);
-                    }}
-                  />
-                </SettingRow>
-
                 <SettingRow
                   title="Wheel Diameter"
                   description="Outer pixel diameter of the circular radial wheel"

@@ -231,8 +231,8 @@ export function CommandPalette() {
       <div
         data-tauri-drag-region
         onMouseDown={(e) => {
-          if (e.button === 0 && !(e.target as HTMLElement).closest("input, button, [data-no-drag]")) {
-            appWindow.startDragging();
+          if (e.button === 0 && !(e.target as HTMLElement).closest("input, button, [data-no-drag], [data-tauri-drag-region='false']")) {
+            appWindow.startDragging().catch(() => {});
           }
         }}
         className="relative z-10 flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#151516]"
