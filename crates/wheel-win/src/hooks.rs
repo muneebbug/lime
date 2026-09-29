@@ -21,9 +21,11 @@ mod windows_impl {
         TranslateMessage, MSG, KBDLLHOOKSTRUCT, MSLLHOOKSTRUCT,
         WH_KEYBOARD_LL, WH_MOUSE_LL, WM_KEYDOWN, WM_KEYUP,
         WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_SYSKEYDOWN, WM_SYSKEYUP,
+        WM_MOUSEWHEEL, WM_RBUTTONDOWN, WM_MBUTTONDOWN,
     };
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         GetAsyncKeyState, VK_ESCAPE, VK_LSHIFT, VK_RSHIFT, VK_SHIFT,
+        VK_TAB, VK_SPACE,
     };
 
     use crate::WinEvent;
@@ -108,6 +110,18 @@ mod windows_impl {
                         }
                     }
                 }
+                v if v == WM_MOUSEWHEEL => {
+                    if DRAG_ARMED.load(Ordering::Relaxed) {
+                        send_event(WinEvent::TogglePage);
+                        return LRESULT(1);
+                    }
+                }
+                v if v == WM_RBUTTONDOWN || v == WM_MBUTTONDOWN => {
+                    if DRAG_ARMED.load(Ordering::Relaxed) {
+                        send_event(WinEvent::TogglePage);
+                        return LRESULT(1);
+                    }
+                }
                 _ => {}
             }
         }
@@ -152,6 +166,9 @@ mod windows_impl {
                         DRAG_ARMED.store(false, Ordering::Relaxed);
                         send_event(WinEvent::EscapePressed);
                         send_event(WinEvent::DragCancelled);
+                    } else if (vk == VK_TAB.0 as u32 || vk == VK_SPACE.0 as u32) && DRAG_ARMED.load(Ordering::Relaxed) {
+                        send_event(WinEvent::TogglePage);
+                        return LRESULT(1);
                     }
                 }
                 v if v == WM_KEYUP || v == WM_SYSKEYUP => {

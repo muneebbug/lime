@@ -280,6 +280,19 @@ export function WheelOverlay() {
       useWheelStore.getState().clearDragState();
     }).then((u) => unlisteners.push(u));
 
+    // Toggle page event from low-level hook (scroll wheel, right-click, Tab, or Space)
+    listen("toggle-page", () => {
+      useWheelStore.getState().togglePage();
+    }).then((u) => unlisteners.push(u));
+
+    // Mouse scroll wheel inside webview to toggle page
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      useWheelStore.getState().togglePage();
+    };
+    window.addEventListener("wheel", handleWheel, { passive: false });
+    unlisteners.push(() => window.removeEventListener("wheel", handleWheel));
+
     // Keyboard: Tab/Space to toggle page while dragging
     const handleKey = (e: KeyboardEvent) => {
       const state = useWheelStore.getState();

@@ -264,7 +264,11 @@ function RadialWheelInner({
           transition: "background 0.1s ease, box-shadow 0.1s ease",
         }}
         onClick={onTogglePage}
-        title="Click to switch page (or Tab/Space)"
+        onContextMenu={(e) => {
+          e.preventDefault();
+          onTogglePage();
+        }}
+        title="Scroll wheel, Right-Click, or Tab/Space to switch wheels"
       >
         {hoveredAction ? (
           <span
@@ -276,13 +280,23 @@ function RadialWheelInner({
         ) : (
           <>
             <span
-              className="text-white/60 text-[10px] font-semibold"
+              className="text-white/80 text-[10px] font-semibold"
               style={{ fontFamily: "Inter, system-ui, sans-serif" }}
             >
               {files.length > 0 ? `${files.length} file${files.length > 1 ? "s" : ""}` : "DROP"}
             </span>
+            {/* Category label */}
+            <span
+              className="text-[9px] uppercase tracking-wider font-bold mt-0.5"
+              style={{
+                color: currentPage === "convert" ? "hsla(22,95%,65%,1)" : "hsla(210,95%,65%,1)",
+                fontFamily: "Inter, system-ui, sans-serif",
+              }}
+            >
+              {currentPage === "convert" ? "CONVERT" : "TOOLS"}
+            </span>
             {/* Page dots */}
-            <div className="flex gap-1 mt-1">
+            <div className="flex gap-1.5 mt-0.5">
               <div
                 className="rounded-full"
                 style={{

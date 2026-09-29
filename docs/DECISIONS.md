@@ -223,6 +223,14 @@ Checked via `cargo info window-vibrancy`.
 **Decision:** Implement `flatten_to_rgb(img, [255, 255, 255])` in [image_convert.rs](file:///d:/Projects/wheel/crates/wheel-engines/src/image_convert.rs) to alpha-composite transparent and semi-transparent pixels against pure solid white before encoding to formats lacking native alpha support (JPEG and BMP).
 **Rationale:** The JPEG and BMP specifications do not support alpha channels. Naive color type conversion simply discards the alpha channel, leaving whatever raw RGB data was stored in transparent pixels visible. In transparent PNGs, transparent pixels are usually `(0, 0, 0, 0)` (producing pitch-black backgrounds) or unmultiplied `(255, 255, 255, 0)` (producing stark white square blocks). Compositing with `result = foreground * alpha + background * (1 - alpha)` guarantees clean, uniform white backgrounds and anti-aliased edge blending without dark halos or artifact blocks.
 
+### D040: Multi-gesture radial wheel page switching during drag
+**Decision:** Provide multiple seamless inputs to flip between Wheel 1 (Convert) and Wheel 2 (Tools) while actively dragging files:
+1. **Mouse Scroll Wheel (`WM_MOUSEWHEEL`):** Rolling the scroll wheel up or down flips between Convert and Tools instantaneously.
+2. **Right-Click / Middle-Click Rocker Gesture (`WM_RBUTTONDOWN` / `WM_MBUTTONDOWN`):** Clicking the secondary or middle button while holding the left button toggles the wheel.
+3. **Global Keyboard Hook (`Tab` / `Space`):** Intercept `VK_TAB` and `VK_SPACE` in the low-level keyboard hook procedure (`keyboard_hook_proc`) while `DRAG_ARMED` is active, forwarding `WinEvent::TogglePage` to the overlay without requiring the unfocused `WS_EX_NOACTIVATE` window to have keyboard focus.
+4. **Visual Indicator:** The center pill displays active page labels (`CONVERT` / `TOOLS`) and pagination dots.
+**Rationale:** Transparent overlay windows with `WS_EX_NOACTIVATE` do not receive keyboard focus while dragging out of Explorer, causing local DOM key listeners to be ignored. Holding the left button during drag also prevents normal left-clicking. Low-level mouse and keyboard hooks provide effortless, single-hand wheel switching via the scroll wheel, rocker click, or keyboard.
+
 ---
 
 ## Pending / Open Questions

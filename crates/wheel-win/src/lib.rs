@@ -26,4 +26,6 @@ pub enum WinEvent {
     DragCancelled,
     /// Escape was pressed during an armed drag
     EscapePressed,
+    /// Toggle radial wheel page (Tab/Space, scroll wheel, or right-click)
+    TogglePage,
 }

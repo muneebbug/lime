@@ -193,6 +193,11 @@ async fn start_hook_listener(app: AppHandle, settings: Arc<Mutex<WheelSettings>>
                 // Pointer moves are handled inside the overlay window
                 // via Chromium dragover and OLE drop target, avoiding IPC saturation.
             }
+            WinEvent::TogglePage => {
+                if let Some(overlay) = app.get_webview_window("overlay") {
+                    let _ = overlay.emit("toggle-page", ());
+                }
+            }
             WinEvent::LButtonChanged { pressed: false, x, y } => {
                 let is_inside_overlay = if let Some((ox, oy, w, h)) = current_overlay_rect {
                     x >= ox && x <= ox + w && y >= oy && y <= oy + h
