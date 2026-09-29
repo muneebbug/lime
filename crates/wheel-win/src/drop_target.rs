@@ -113,6 +113,7 @@ mod windows_impl {
                     debug!("DragEnter: {} files at client ({}, {})", files.len(), cx, cy);
 
                     if !files.is_empty() {
+                        crate::hooks::set_file_drag_active(true);
                         (self.callback)(DropEvent::Enter {
                             files,
                             x: cx,
@@ -120,6 +121,7 @@ mod windows_impl {
                         });
                         *pdweffect = DROPEFFECT_COPY;
                     } else {
+                        crate::hooks::set_file_drag_active(false);
                         *pdweffect = DROPEFFECT_NONE;
                     }
                 }
@@ -140,6 +142,7 @@ mod windows_impl {
         }
 
         fn DragLeave(&self) -> WinResult<()> {
+            crate::hooks::set_file_drag_active(false);
             (self.callback)(DropEvent::Leave);
             Ok(())
         }
@@ -151,6 +154,7 @@ mod windows_impl {
             pt: &POINTL,
             pdweffect: *mut DROPEFFECT,
         ) -> WinResult<()> {
+            crate::hooks::set_file_drag_active(false);
             unsafe {
                 if let Some(data_obj) = pdataobj.as_ref() {
                     let files = extract_paths_from_data_object(data_obj);

@@ -373,13 +373,8 @@ async fn run_instant_action(
                     output_path: output_clone.clone(),
                     quality: 85,
                 };
-                let preserve_meta = output_settings.preserve_metadata;
-
                 let result = tokio::task::spawn_blocking(move || -> anyhow::Result<PathBuf> {
                     let out = wheel_engines::image_convert::convert_image(&input_clone, &params)?;
-                    if !preserve_meta {
-                        let _ = wheel_engines::metadata::strip_metadata(&out, &out, false);
-                    }
                     Ok(out)
                 })
                 .await;

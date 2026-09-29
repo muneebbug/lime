@@ -222,6 +222,73 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     }
 }
 
+/// Check if the window at screen coordinates (x, y) is a recognized file drag source.
+/// This prevents Wheel from arming when dragging inside games, text editors,
+/// or non-file windows.
+#[cfg(windows)]
+pub fn is_potential_file_drag_source(x: i32, y: i32) -> bool {
+    use windows::Win32::Foundation::POINT;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetAncestor, GetClassNameW, WindowFromPoint, GA_ROOT,
+    };
+
+    let pt = POINT { x, y };
+    let hwnd = unsafe { WindowFromPoint(pt) };
+    if hwnd.0.is_null() {
+        return false;
+    }
+
+    let mut class_buf = [0u16; 128];
+    let len = unsafe { GetClassNameW(hwnd, &mut class_buf) };
+    let class_name = String::from_utf16_lossy(&class_buf[..len as usize]);
+
+    let root_hwnd = unsafe { GetAncestor(hwnd, GA_ROOT) };
+    let mut root_class_buf = [0u16; 128];
+    let root_len = if !root_hwnd.0.is_null() {
+        unsafe { GetClassNameW(root_hwnd, &mut root_class_buf) }
+    } else {
+        0
+    };
+    let root_class_name = String::from_utf16_lossy(&root_class_buf[..root_len as usize]);
+
+    // Fast check strictly for Explorer, Desktop, file dialogs, and recognized file managers.
+    // Exclude general application windows (Chrome_WidgetWin_1, MozillaWindowClass, games, etc.)
+    let is_valid = class_name == "CabinetWClass"
+        || root_class_name == "CabinetWClass"
+        || class_name == "Progman"
+        || root_class_name == "Progman"
+        || class_name == "WorkerW"
+        || root_class_name == "WorkerW"
+        || class_name == "ShellTabWindowClass"
+        || root_class_name == "ShellTabWindowClass"
+        || class_name == "DUIViewWndClassName"
+        || class_name == "DirectUIHWND"
+        || class_name == "SHELLDLL_DefView"
+        || class_name == "SysListView32"
+        || class_name == "UIItem"
+        || class_name == "#32770"
+        || root_class_name == "#32770"
+        || class_name == "FilePickerHost"
+        || root_class_name == "FilePickerHost"
+        || class_name == "TTOTAL_CMD"
+        || root_class_name == "TTOTAL_CMD"
+        || class_name == "DOpus.Window"
+        || root_class_name == "DOpus.Window"
+        || class_name == "EVERYTHING"
+        || root_class_name == "EVERYTHING"
+        || class_name == "FM"
+        || root_class_name == "FM"
+        || class_name == "WinRAR"
+        || root_class_name == "WinRAR";
+
+    is_valid
+}
+
+#[cfg(not(windows))]
+pub fn is_potential_file_drag_source(_x: i32, _y: i32) -> bool {
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

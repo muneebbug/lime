@@ -48,9 +48,11 @@ mod windows_impl {
     static CURSOR_X: AtomicI32 = AtomicI32::new(0);
     static CURSOR_Y: AtomicI32 = AtomicI32::new(0);
     static DRAG_ARMED: AtomicBool = AtomicBool::new(false);
+    static DRAG_TRIGGERED_THIS_CLICK: AtomicBool = AtomicBool::new(false);
     static THRESHOLD_PX: AtomicI32 = AtomicI32::new(6);
     static PAUSED: AtomicBool = AtomicBool::new(false);
     static ALWAYS_SHOW: AtomicBool = AtomicBool::new(false);
+    static FILE_DRAG_ACTIVE: AtomicBool = AtomicBool::new(false);
     static LAST_TOGGLE_MS: AtomicU64 = AtomicU64::new(0);
 
     fn current_ms() -> u64 {
@@ -157,6 +159,7 @@ mod windows_impl {
                 v if v == WM_LBUTTONDOWN => {
                     LBUTTON_DOWN.store(true, Ordering::Relaxed);
                     DRAG_ARMED.store(false, Ordering::Relaxed);
+                    DRAG_TRIGGERED_THIS_CLICK.store(false, Ordering::Relaxed);
                     BUTTON_X.store(x, Ordering::Relaxed);
                     BUTTON_Y.store(y, Ordering::Relaxed);
                     CURSOR_X.store(x, Ordering::Relaxed);
@@ -166,13 +169,17 @@ mod windows_impl {
                 v if v == WM_LBUTTONUP => {
                     LBUTTON_DOWN.store(false, Ordering::Relaxed);
                     let _was_armed = DRAG_ARMED.swap(false, Ordering::Relaxed);
+                    DRAG_TRIGGERED_THIS_CLICK.store(false, Ordering::Relaxed);
+                    FILE_DRAG_ACTIVE.store(false, Ordering::Relaxed);
                     send_event(WinEvent::LButtonChanged { pressed: false, x, y });
                 }
                 v if v == WM_MOUSEMOVE => {
                     CURSOR_X.store(x, Ordering::Relaxed);
                     CURSOR_Y.store(y, Ordering::Relaxed);
 
-                    if LBUTTON_DOWN.load(Ordering::Relaxed) && !DRAG_ARMED.load(Ordering::Relaxed) {
+                    if LBUTTON_DOWN.load(Ordering::Relaxed)
+                        && !DRAG_TRIGGERED_THIS_CLICK.load(Ordering::Relaxed)
+                    {
                         let bx = BUTTON_X.load(Ordering::Relaxed);
                         let by = BUTTON_Y.load(Ordering::Relaxed);
                         let dx = (x - bx).abs();
@@ -181,8 +188,11 @@ mod windows_impl {
                         if (dx * dx + dy * dy) >= threshold * threshold
                             && (ALWAYS_SHOW.load(Ordering::Relaxed) || is_modifier_pressed())
                         {
-                            DRAG_ARMED.store(true, Ordering::Relaxed);
-                            send_event(WinEvent::DragArmed { x, y });
+                            if crate::shell::is_potential_file_drag_source(bx, by) {
+                                DRAG_TRIGGERED_THIS_CLICK.store(true, Ordering::Relaxed);
+                                DRAG_ARMED.store(true, Ordering::Relaxed);
+                                send_event(WinEvent::DragArmed { x, y });
+                            }
                         }
                     }
                 }
@@ -228,7 +238,9 @@ mod windows_impl {
 
                         // If left button is already held and mouse moved past threshold,
                         // arm the drag immediately upon pressing the modifier key!
-                        if LBUTTON_DOWN.load(Ordering::Relaxed) && !DRAG_ARMED.load(Ordering::Relaxed) {
+                        if LBUTTON_DOWN.load(Ordering::Relaxed)
+                            && !DRAG_TRIGGERED_THIS_CLICK.load(Ordering::Relaxed)
+                        {
                             let bx = BUTTON_X.load(Ordering::Relaxed);
                             let by = BUTTON_Y.load(Ordering::Relaxed);
                             let cx = CURSOR_X.load(Ordering::Relaxed);
@@ -237,8 +249,11 @@ mod windows_impl {
                             let dy = (cy - by).abs();
                             let threshold = THRESHOLD_PX.load(Ordering::Relaxed);
                             if (dx * dx + dy * dy) >= threshold * threshold {
-                                DRAG_ARMED.store(true, Ordering::Relaxed);
-                                send_event(WinEvent::DragArmed { x: cx, y: cy });
+                                if crate::shell::is_potential_file_drag_source(bx, by) {
+                                    DRAG_TRIGGERED_THIS_CLICK.store(true, Ordering::Relaxed);
+                                    DRAG_ARMED.store(true, Ordering::Relaxed);
+                                    send_event(WinEvent::DragArmed { x: cx, y: cy });
+                                }
                             }
                         }
                     } else if vk == VK_ESCAPE.0 as u32 && DRAG_ARMED.load(Ordering::Relaxed) {
@@ -317,6 +332,18 @@ mod windows_impl {
         DRAG_ARMED.store(armed, Ordering::Relaxed);
     }
 
+    pub fn set_file_drag_active(active: bool) {
+        FILE_DRAG_ACTIVE.store(active, Ordering::Relaxed);
+    }
+
+    pub fn is_file_drag_active() -> bool {
+        FILE_DRAG_ACTIVE.load(Ordering::Relaxed)
+    }
+
+    pub fn is_drag_armed() -> bool {
+        DRAG_ARMED.load(Ordering::Relaxed)
+    }
+
     pub fn set_modifier(modifier: wheel_core::TriggerModifier) {
         let val = match modifier {
             wheel_core::TriggerModifier::Shift => MOD_SHIFT,
@@ -331,7 +358,8 @@ mod windows_impl {
 
 #[cfg(windows)]
 pub use windows_impl::{
-    set_always_show, set_drag_armed, set_modifier, set_paused, set_threshold, start_hooks,
+    is_drag_armed, is_file_drag_active, set_always_show, set_drag_armed,
+    set_file_drag_active, set_modifier, set_paused, set_threshold, start_hooks,
 };
 
 #[cfg(not(windows))]
@@ -354,5 +382,15 @@ pub fn set_threshold(_px: i32) {}
 pub fn set_always_show(_always: bool) {}
 #[cfg(not(windows))]
 pub fn set_drag_armed(_armed: bool) {}
+#[cfg(not(windows))]
+pub fn set_file_drag_active(_active: bool) {}
+#[cfg(not(windows))]
+pub fn is_file_drag_active() -> bool {
+    false
+}
+#[cfg(not(windows))]
+pub fn is_drag_armed() -> bool {
+    false
+}
 #[cfg(not(windows))]
 pub fn set_modifier(_modifier: wheel_core::TriggerModifier) {}

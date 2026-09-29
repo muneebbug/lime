@@ -5,7 +5,26 @@ import { invoke } from "@tauri-apps/api/core";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useWheelStore } from "../../store/wheelStore";
-import { RadialWheel, hitTestWedge, filterActions } from "./RadialWheel";
+import {
+  RadialWheel,
+  hitTestWedge,
+  filterActions,
+  RASTER_IMAGE_EXTS,
+  DOCUMENT_EXTS,
+  MEDIA_EXTS,
+} from "./RadialWheel";
+
+export function isSupportedFileType(extensions: string[]): boolean {
+  if (!extensions || extensions.length === 0) return false;
+  return extensions.some((ext) => {
+    const clean = ext.toLowerCase().trim();
+    return (
+      RASTER_IMAGE_EXTS.has(clean) ||
+      DOCUMENT_EXTS.has(clean) ||
+      MEDIA_EXTS.has(clean)
+    );
+  });
+}
 
 interface DragArmedEvent {
   x: number;
@@ -49,6 +68,7 @@ export function WheelOverlay() {
   const lastHoveredRef = useRef<string | null>(null);
   const lastDropPosRef = useRef<{ x: number; y: number }>({ x: 200, y: 200 });
   const isDroppingRef = useRef(false);
+  const armTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const wheelSize = wheelSettings?.wheel_ui?.size || 320;
   const contextFilterEnabled = wheelSettings?.wheel_ui?.context_filter_enabled ?? true;
@@ -130,7 +150,8 @@ export function WheelOverlay() {
     const visible = filterActions(state.actions, state.currentPage, state.dragExtensions, contextFilterEnabled);
     const scale = wheelSize / 272;
     const idx = hitTestWedge(x, y, state.currentPage, 200, 200, scale);
-    const newHovered = idx !== null ? visible[idx]?.id ?? null : null;
+    const candidate = idx !== null ? visible[idx] : null;
+    const newHovered = candidate && candidate.enabled !== false ? candidate.id : null;
 
     if (newHovered !== lastHoveredRef.current) {
       lastHoveredRef.current = newHovered;
@@ -143,6 +164,31 @@ export function WheelOverlay() {
       lastHoveredRef.current = null;
       useWheelStore.getState().setHoveredWedge(null);
     }
+  }, []);
+
+  const handleFilesEntered = useCallback((files: string[], extensions: string[], x: number, y: number) => {
+    if (armTimeoutRef.current) {
+      clearTimeout(armTimeoutRef.current);
+      armTimeoutRef.current = null;
+    }
+
+    if (!files || files.length === 0) {
+      useWheelStore.getState().clearDragState();
+      invoke("hide_overlay");
+      return;
+    }
+
+    // Context filter: verify the file type has at least one supported action in Wheel
+    if (!isSupportedFileType(extensions)) {
+      console.log("Wheel: ignoring unsupported file type:", extensions);
+      useWheelStore.getState().clearDragState();
+      invoke("hide_overlay");
+      return;
+    }
+
+    lastHoveredRef.current = null;
+    lastDropPosRef.current = { x, y };
+    useWheelStore.getState().setDragState(files, extensions, x, y);
   }, []);
 
   useEffect(() => {
@@ -176,7 +222,18 @@ export function WheelOverlay() {
 
       const scale = wheelSize / 272;
       const idx = hitTestWedge(dropX, dropY, state.currentPage, 200, 200, scale);
-      const wedgeId = idx !== null ? visible[idx]?.id : (state.hoveredWedge ?? lastHoveredRef.current);
+      const candidate = idx !== null ? visible[idx] : null;
+
+      if (candidate && candidate.enabled === false) {
+        console.warn("Cannot drop on disabled petal:", candidate.id);
+        state.clearDragState();
+        invoke("hide_overlay");
+        return;
+      }
+
+      const wedgeId = candidate && candidate.enabled !== false
+        ? candidate.id
+        : (state.hoveredWedge ?? lastHoveredRef.current);
 
       lastHoveredRef.current = null;
 
@@ -219,13 +276,22 @@ export function WheelOverlay() {
       }, 6000);
     }).then((u) => unlisteners.push(u));
 
-    // Drag armed from low-level hook — window positioned and shown
-    listen<DragArmedEvent>("drag-armed", ({ payload }) => {
+    // Drag armed from low-level hook — window positioned and shown, but wait for drop-enter
+    listen<DragArmedEvent>("drag-armed", () => {
       lastHoveredRef.current = null;
       lastDropPosRef.current = { x: 200, y: 200 };
-      const store = useWheelStore.getState();
-      store.setPage("convert");
-      store.setDragState([], [], payload.x, payload.y);
+      // Do NOT set isDragging = true here. Keep overlay transparent until files actually enter.
+      useWheelStore.getState().clearDragState();
+
+      if (armTimeoutRef.current) {
+        clearTimeout(armTimeoutRef.current);
+      }
+      armTimeoutRef.current = setTimeout(() => {
+        const state = useWheelStore.getState();
+        if (!state.isDragging) {
+          invoke("hide_overlay");
+        }
+      }, 400);
     }).then((u) => unlisteners.push(u));
 
     // Native Tauri 2 Webview drag drop event listener
@@ -243,9 +309,7 @@ export function WheelOverlay() {
               .filter(Boolean);
             const px = payload.position.x / dpr;
             const py = payload.position.y / dpr;
-            lastHoveredRef.current = null;
-            lastDropPosRef.current = { x: px, y: py };
-            useWheelStore.getState().setDragState(files, extensions, px, py);
+            handleFilesEntered(files, extensions, px, py);
           } else if (payload.type === "over") {
             handlePointerMove(payload.position.x / dpr, payload.position.y / dpr);
           } else if (payload.type === "drop") {
@@ -263,15 +327,12 @@ export function WheelOverlay() {
       console.error("Failed to attach onDragDropEvent:", e);
     }
 
-
     // Custom OLE events from Rust IDropTarget fallback
     listen<DropEnterEvent>("drop-enter", ({ payload }) => {
       const dpr = window.devicePixelRatio || 1;
       const px = payload.x / dpr;
       const py = payload.y / dpr;
-      lastHoveredRef.current = null;
-      lastDropPosRef.current = { x: px, y: py };
-      useWheelStore.getState().setDragState(payload.files, payload.extensions, px, py);
+      handleFilesEntered(payload.files, payload.extensions, px, py);
     }).then((u) => unlisteners.push(u));
 
     listen<{ x: number; y: number }>("drop-over", ({ payload }) => {
@@ -290,6 +351,10 @@ export function WheelOverlay() {
 
     // Drag cancelled (button released outside or Escape)
     listen("drag-cancelled", () => {
+      if (armTimeoutRef.current) {
+        clearTimeout(armTimeoutRef.current);
+        armTimeoutRef.current = null;
+      }
       lastHoveredRef.current = null;
       useWheelStore.getState().clearDragState();
     }).then((u) => unlisteners.push(u));
@@ -335,6 +400,10 @@ export function WheelOverlay() {
     unlisteners.push(() => window.removeEventListener("keydown", handleKey));
 
     return () => {
+      if (armTimeoutRef.current) {
+        clearTimeout(armTimeoutRef.current);
+        armTimeoutRef.current = null;
+      }
       unlisteners.forEach((u) => u());
     };
   }, [triggerAction, handlePointerMove, handlePointerLeave]);
@@ -353,7 +422,7 @@ export function WheelOverlay() {
       style={{ background: "transparent" }}
     >
       <AnimatePresence>
-        {isDragging && (
+        {isDragging && dragFiles.length > 0 && isSupportedFileType(dragExtensions) && (
           <motion.div
             key="wheel"
             initial={reducedMotion ? { opacity: 0 } : { scale: 0.5, opacity: 0 }}

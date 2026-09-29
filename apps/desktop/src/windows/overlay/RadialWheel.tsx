@@ -9,6 +9,7 @@ export interface PetalData {
   labelX: number;
   labelY: number;
   subtitle: string;
+  disabled?: boolean;
   icon?: {
     x: number;
     y: number;
@@ -196,16 +197,78 @@ export function hitTestWedge(
   }
 }
 
+export const RASTER_IMAGE_EXTS = new Set([
+  "png", "jpg", "jpeg", "webp", "avif", "tiff", "tif", "bmp", "gif", "ico", "heic", "svg"
+]);
+export const DOCUMENT_EXTS = new Set(["pdf"]);
+export const MEDIA_EXTS = new Set(["mp4", "mov", "mkv", "webm", "avi"]);
+
+export function isPetalEnabledForExtensions(
+  actionId: string,
+  page: WheelPage,
+  extensions: string[]
+): boolean {
+  if (extensions.length === 0) return true;
+  const exts = extensions.map((e) => e.toLowerCase().trim()).filter(Boolean);
+  if (exts.length === 0) return true;
+
+  const isImage = exts.some((e) => RASTER_IMAGE_EXTS.has(e));
+  const isPdf = exts.some((e) => DOCUMENT_EXTS.has(e));
+  const isMedia = exts.some((e) => MEDIA_EXTS.has(e));
+
+  if (page === "convert") {
+    const targetFormat = actionId.replace("convert.", "").toLowerCase();
+
+    if (isImage) {
+      // Keep option enabled even if it is the same extension
+      return true;
+    }
+
+    if (isPdf) {
+      return ["png", "jpg", "webp", "tiff", "bmp", "pdf"].includes(targetFormat);
+    }
+
+    if (isMedia) {
+      return ["gif", "mp4", "webm"].includes(targetFormat);
+    }
+
+    return false;
+  } else {
+    // Tools page
+    if (isImage) {
+      return true; // All photo tools supported for images
+    }
+
+    if (isPdf) {
+      // Only Compress and Metadata supported for PDF
+      return actionId === "tool.compress" || actionId === "tool.metadata";
+    }
+
+    if (isMedia) {
+      // Compress and metadata supported for video
+      return actionId === "tool.compress" || actionId === "tool.metadata";
+    }
+
+    return false;
+  }
+}
+
 export function filterActions(
   actions: ActionManifest[],
   page: WheelPage,
-  _extensions: string[],
-  _contextFilterEnabled = true
+  extensions: string[] = [],
+  contextFilterEnabled = true
 ): ActionManifest[] {
   const petals = page === "convert" ? CONVERT_PETALS : TOOLS_PETALS;
   return petals.map((p, idx) => {
     const existing = actions.find((a) => a.id === p.id);
-    if (existing) return existing;
+    const enabled = contextFilterEnabled
+      ? isPetalEnabledForExtensions(p.id, page, extensions)
+      : true;
+
+    if (existing) {
+      return { ...existing, enabled: existing.enabled && enabled };
+    }
     return {
       id: p.id,
       title: p.title,
@@ -213,7 +276,7 @@ export function filterActions(
       category: page === "convert" ? "convert" : "tools",
       accepts: { extensions: [], multi: true },
       kind: page === "convert" ? "instant" : "window",
-      enabled: true,
+      enabled,
       order: idx,
     } as ActionManifest;
   });
@@ -319,21 +382,31 @@ interface RadialWheelProps {
 
 function RadialWheelInner({
   files,
+  extensions = [],
   currentPage,
   hoveredWedge,
   onTogglePage,
   onWedgeHover,
   onWedgeDrop,
   size = 272,
+  contextFilterEnabled = true,
   soundEnabled = false,
 }: RadialWheelProps) {
-  const activePetals = useMemo(
-    () => (currentPage === "convert" ? CONVERT_PETALS : TOOLS_PETALS),
-    [currentPage]
-  );
+  const activePetals = useMemo(() => {
+    const basePetals = currentPage === "convert" ? CONVERT_PETALS : TOOLS_PETALS;
+    return basePetals.map((p) => {
+      const isEnabled = contextFilterEnabled
+        ? isPetalEnabledForExtensions(p.id, currentPage, extensions)
+        : true;
+      return {
+        ...p,
+        disabled: !isEnabled,
+      };
+    });
+  }, [currentPage, contextFilterEnabled, extensions]);
 
   const hoveredPetal = useMemo(
-    () => activePetals.find((p) => p.id === hoveredWedge) ?? null,
+    () => activePetals.find((p) => p.id === hoveredWedge && !p.disabled) ?? null,
     [activePetals, hoveredWedge]
   );
 
@@ -356,25 +429,26 @@ function RadialWheelInner({
           wheelSize / 2,
           scale
         );
-          const nextId = idx !== null ? activePetals[idx]?.id ?? null : null;
-          if (nextId !== hoveredWedge) {
-            if (soundEnabled && nextId !== null) {
-              playHoverTick();
-            }
-            onWedgeHover(nextId);
+        const candidate = idx !== null ? activePetals[idx] : null;
+        const nextId = candidate && !candidate.disabled ? candidate.id : null;
+        if (nextId !== hoveredWedge) {
+          if (soundEnabled && nextId !== null) {
+            playHoverTick();
           }
-        }}
-        onMouseLeave={() => {
-          if (hoveredWedge !== null) {
-            onWedgeHover(null);
-          }
-        }}
-        onMouseUp={() => {
-          if (hoveredWedge && files.length > 0) {
-            onWedgeDrop(hoveredWedge, files);
-          }
-        }}
-      >
+          onWedgeHover(nextId);
+        }
+      }}
+      onMouseLeave={() => {
+        if (hoveredWedge !== null) {
+          onWedgeHover(null);
+        }
+      }}
+      onMouseUp={() => {
+        if (hoveredPetal && !hoveredPetal.disabled && files.length > 0) {
+          onWedgeDrop(hoveredPetal.id, files);
+        }
+      }}
+    >
         <svg
           viewBox="-136 -136 272 272"
           width={wheelSize}
@@ -465,24 +539,27 @@ function RadialWheelInner({
 
           {/* Individual Petal Wedges */}
           {activePetals.map((petal) => {
-            const isHighlighted = hoveredWedge === petal.id;
+            const isDisabled = petal.disabled === true;
+            const isHighlighted = hoveredWedge === petal.id && !isDisabled;
             return (
               <g
                 key={petal.id}
-                className={`preview-target ${isHighlighted ? "is-highlighted" : ""}`}
+                className={`preview-target ${isHighlighted ? "is-highlighted" : ""} ${isDisabled ? "is-disabled opacity-30" : ""}`}
                 data-action={petal.action}
                 role="button"
                 aria-label={`Preview ${petal.title}`}
                 aria-pressed={isHighlighted}
-                style={{ cursor: "pointer" }}
+                aria-disabled={isDisabled}
+                style={{ cursor: isDisabled ? "not-allowed" : "pointer" }}
                 onMouseEnter={() => {
+                  if (isDisabled) return;
                   if (soundEnabled && hoveredWedge !== petal.id) {
                     playHoverTick();
                   }
                   onWedgeHover(petal.id);
                 }}
                 onClick={() => {
-                  if (files.length > 0) {
+                  if (!isDisabled && files.length > 0) {
                     onWedgeDrop(petal.id, files);
                   }
                 }}
@@ -491,16 +568,24 @@ function RadialWheelInner({
                   d={petal.d}
                   className="preview-petal"
                   fill={
-                    isHighlighted
+                    isDisabled
+                      ? "rgba(220, 225, 230, 0.25)"
+                      : isHighlighted
                       ? "url(#petal-active-gradient)"
                       : "url(#conversion-fan-glass)"
                   }
                   stroke={
-                    isHighlighted ? "#ff7538" : "rgba(255, 255, 255, 0.85)"
+                    isDisabled
+                      ? "rgba(255, 255, 255, 0.2)"
+                      : isHighlighted
+                      ? "#ff7538"
+                      : "rgba(255, 255, 255, 0.85)"
                   }
                   strokeWidth={isHighlighted ? 1.5 : 1.2}
                   style={{
-                    filter: isHighlighted
+                    filter: isDisabled
+                      ? "none"
+                      : isHighlighted
                       ? "drop-shadow(0 4px 14px rgba(255, 84, 25, 0.45))"
                       : "drop-shadow(0 2px 5px rgba(0,0,0,0.06))",
                     transformOrigin: "0px 0px",

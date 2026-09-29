@@ -203,15 +203,31 @@ fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &Convert
                     .with_context(|| "ICO encode failed")?;
             }
             OutputFormat::Avif => {
-                // If FFmpeg is available, use libaom-av1 with fast preset (-cpu-used 8)
-                // for near-instant encoding (~1s vs 35s in pure-Rust unoptimized)
+                // Official FFmpeg documentation for AVIF handling:
+                // For transparent images, FFmpeg maps the color stream (0:0) and extracts the alpha
+                // channel (0:1) with the `alphaextract` filter, encoding as a standard MIAF still picture
+                // with libaom-av1:
+                // `ffmpeg -i input.png -map 0 -map 0 -filter:v:1 alphaextract -frames:v 1 -c:v libaom-av1 -still-picture 1 -crf <crf> output.avif`
+                //
+                // For opaque images:
+                // `ffmpeg -i input.png -frames:v 1 -c:v libaom-av1 -still-picture 1 -crf <crf> output.avif`
                 let mut ffmpeg_encoded = false;
                 if let Some(ffmpeg) = crate::media::find_ffmpeg_path() {
                     let crf = (63 - ((params.quality as f32 / 100.0) * 50.0).round() as u32).clamp(10, 50);
-                    let status = std::process::Command::new(ffmpeg)
-                        .arg("-y")
-                        .arg("-i")
-                        .arg(input)
+                    let mut cmd = std::process::Command::new(ffmpeg);
+                    cmd.arg("-y").arg("-i").arg(input);
+
+                    if img.color().has_alpha() {
+                        cmd.arg("-map")
+                            .arg("0")
+                            .arg("-map")
+                            .arg("0")
+                            .arg("-filter:v:1")
+                            .arg("alphaextract");
+                    }
+
+                    cmd.arg("-frames:v")
+                        .arg("1")
                         .arg("-c:v")
                         .arg("libaom-av1")
                         .arg("-crf")
@@ -220,18 +236,33 @@ fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &Convert
                         .arg("8")
                         .arg("-row-mt")
                         .arg("1")
+                        .arg("-still-picture")
+                        .arg("1")
                         .arg("-f")
                         .arg("avif")
-                        .arg(&tmp)
-                        .status();
-                    if let Ok(st) = status {
-                        if st.success() {
+                        .arg(&tmp);
+
+                    #[cfg(windows)]
+                    {
+                        use std::os::windows::process::CommandExt;
+                        cmd.creation_flags(0x08000000);
+                    }
+
+                    match cmd.output() {
+                        Ok(out) if out.status.success() => {
                             ffmpeg_encoded = true;
+                        }
+                        Ok(out) => {
+                            tracing::warn!("FFmpeg AVIF encode returned error: {}", String::from_utf8_lossy(&out.stderr));
+                        }
+                        Err(e) => {
+                            tracing::warn!("Failed to execute FFmpeg for AVIF: {:?}", e);
                         }
                     }
                 }
 
                 if !ffmpeg_encoded {
+                    // Pre-built fallback using the standard `image` crate AVIF encoder
                     img.save_with_format(&tmp, ImageFormat::Avif)
                         .with_context(|| "AVIF encode failed")?;
                 }
@@ -327,6 +358,46 @@ mod tests {
         let _ = std::fs::remove_file(src_path);
         let _ = std::fs::remove_file(dst_path);
         let _ = std::fs::remove_file(avif_path);
+    }
+
+    #[test]
+    fn test_avif_alpha_preservation() {
+        use image::{RgbaImage, Rgba};
+        let dir = std::env::temp_dir().join("wheel_tests");
+        let _ = std::fs::create_dir_all(&dir);
+
+        let src_path = dir.join("test_avif_alpha_input.png");
+        let dst_path = dir.join("test_avif_alpha_output.avif");
+
+        // Create an image with transparent background, AI noise dust (alpha=2), and solid object
+        let mut img = RgbaImage::new(16, 16);
+        for y in 0..16 {
+            for x in 0..16 {
+                if x >= 4 && x < 12 && y >= 4 && y < 12 {
+                    img.put_pixel(x, y, Rgba([200, 50, 50, 255])); // opaque red box
+                } else if x == 0 && y == 0 {
+                    img.put_pixel(x, y, Rgba([30, 80, 20, 3])); // low-alpha dust (should be cleared)
+                } else {
+                    img.put_pixel(x, y, Rgba([10, 20, 30, 0])); // transparent with dirty unmasked RGB
+                }
+            }
+        }
+        img.save(&src_path).expect("failed to save input image");
+
+        let params = ConvertParams {
+            output_format: OutputFormat::Avif,
+            output_path: dst_path.clone(),
+            quality: 85,
+        };
+
+        let result = convert_image(&src_path, &params).expect("convert to avif failed");
+        assert_eq!(result, dst_path);
+        assert!(dst_path.exists());
+        assert!(std::fs::metadata(&dst_path).unwrap().len() > 0);
+
+        // Clean up
+        let _ = std::fs::remove_file(src_path);
+        let _ = std::fs::remove_file(dst_path);
     }
 
     #[test]
