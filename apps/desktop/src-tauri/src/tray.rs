@@ -16,9 +16,16 @@ pub fn setup_tray(app: &AppHandle) -> anyhow::Result<()> {
         &[&pause_item, &settings_item, &separator, &quit_item],
     )?;
 
-    let _tray = TrayIconBuilder::with_id("wheel-tray")
+    let mut builder = TrayIconBuilder::with_id("wheel-tray")
         .tooltip("Wheel — drag files to convert and edit")
         .menu(&menu)
+        .show_menu_on_left_click(false);
+
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+
+    let _tray = builder
         .on_menu_event(|app, event| match event.id.as_ref() {
             "pause" => {
                 info!("Tray: pause/resume toggled");

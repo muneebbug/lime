@@ -238,6 +238,10 @@ Checked via `cargo info window-vibrancy`.
 3. In `WheelOverlay.tsx`, explicitly set `currentPage` to `"convert"` on `drag-armed` and component mount.
 **Rationale:** While users can toggle to Wheel 2 (`"tools"`) during an active drag via scroll wheel, rocker click, or Tab/Space, subsequent file drag operations should start on the primary conversion wheel by default rather than preserving stale navigation state from prior interactions.
 
+### D042: Single programmatic system tray icon configuration
+**Decision:** Configure the system tray exclusively via Rust's `TrayIconBuilder` in [tray.rs](file:///d:/Projects/wheel/apps/desktop/src-tauri/src/tray.rs) and remove the declarative `"trayIcon"` block from [tauri.conf.json](file:///d:/Projects/wheel/apps/desktop/src-tauri/tauri.conf.json). Explicitly assign `app.default_window_icon()` and set `.show_menu_on_left_click(false)` on `TrayIconBuilder`.
+**Rationale:** In Tauri v2, declaring `app.trayIcon` in `tauri.conf.json` causes Tauri to automatically instantiate a system tray icon. Calling `TrayIconBuilder::build(app)` in Rust setup subsequently registers a second tray icon with Windows Shell (`Shell_NotifyIconW`). Because the builder call omitted `.icon()`, the second tray instance rendered as an invisible/blank slot in the Windows taskbar while holding the context menu and click handlers. Consolidating all tray icon registration into the Rust setup ensures a single tray icon with the proper application icon, responsive left-click settings launcher, and right-click context menu.
+
 ---
 
 ## Pending / Open Questions
