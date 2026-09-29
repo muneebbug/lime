@@ -1,9 +1,9 @@
 import React from "react";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
-import { Minus, Square, X, RotateCcw, ChevronDown } from "lucide-react";
+import { Minus, X, RotateCcw, ChevronDown } from "lucide-react";
 
 /**
- * Native Windows caption buttons (minimize, maximize, close).
+ * Native Windows caption buttons (minimize, close).
  */
 export function CaptionButtons({ className = "" }: { className?: string }) {
   const appWindow = getCurrentWebviewWindow();
@@ -12,35 +12,23 @@ export function CaptionButtons({ className = "" }: { className?: string }) {
     appWindow.minimize().catch(console.error);
   };
 
-  const handleMaximize = () => {
-    appWindow.toggleMaximize().catch(console.error);
-  };
-
   const handleClose = () => {
     appWindow.close().catch(console.error);
   };
 
   return (
-    <div className={`flex items-center select-none ${className}`}>
+    <div className={`h-full flex items-stretch select-none ${className}`}>
       <button
         onClick={handleMinimize}
-        className="w-10 h-7 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
+        className="w-11 h-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
         title="Minimize"
         tabIndex={-1}
       >
         <Minus size={13} strokeWidth={2} />
       </button>
       <button
-        onClick={handleMaximize}
-        className="w-10 h-7 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer"
-        title="Maximize"
-        tabIndex={-1}
-      >
-        <Square size={10} strokeWidth={2} />
-      </button>
-      <button
         onClick={handleClose}
-        className="w-10 h-7 flex items-center justify-center text-neutral-400 hover:text-white hover:bg-[#e81123] transition-colors cursor-pointer rounded-tr-lg"
+        className="w-11 h-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-[#e81123] transition-colors cursor-pointer"
         title="Close (Esc)"
         tabIndex={-1}
       >

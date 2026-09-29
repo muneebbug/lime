@@ -208,6 +208,7 @@ fn open_tool_window(
         .decorations(false)
         .transparent(true)
         .resizable(win_cfg.resizable)
+        .maximizable(false)
         .center()
         .focused(true)
         .build();

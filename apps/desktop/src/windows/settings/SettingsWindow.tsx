@@ -214,15 +214,20 @@ export function SettingsWindow() {
       {/* Top Titlebar */}
       <header
         data-tauri-drag-region
-        className="h-10 flex items-center justify-between px-4 border-b border-white/[0.06] bg-[#181818] select-none cursor-move shrink-0 z-20"
+        onMouseDown={(e) => {
+          if (e.button === 0 && !(e.target as HTMLElement).closest("button, input, select, textarea, [data-no-drag]")) {
+            getCurrentWebviewWindow().startDragging();
+          }
+        }}
+        className="h-10 flex items-center justify-between pl-4 pr-0 border-b border-white/[0.06] bg-[#181818] select-none cursor-move shrink-0 z-20"
       >
-        <div className="flex items-center gap-3">
-          <span className="text-[13px] font-medium text-neutral-200 pointer-events-none">
+        <div data-tauri-drag-region className="flex items-center gap-3 pointer-events-none">
+          <span className="text-[13px] font-medium text-neutral-200">
             Wheel Settings
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 h-full">
           {isSaved && (
             <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
               <Check size={12} strokeWidth={2.5} />

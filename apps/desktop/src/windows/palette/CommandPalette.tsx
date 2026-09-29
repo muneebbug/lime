@@ -215,7 +215,12 @@ export function CommandPalette() {
       {/* Search Input Bar with integrated window controls */}
       <div
         data-tauri-drag-region
-        className="relative z-10 flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#181818]"
+        onMouseDown={(e) => {
+          if (e.button === 0 && !(e.target as HTMLElement).closest("input, button, [data-no-drag]")) {
+            appWindow.startDragging();
+          }
+        }}
+        className="relative z-10 flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#181818] cursor-move"
       >
         <Search size={16} className="text-neutral-400 shrink-0" />
         <input

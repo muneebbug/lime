@@ -85,10 +85,15 @@ export function ToolWindowLayout({
       {/* Window Titlebar Header */}
       <header
         data-tauri-drag-region
-        className="h-10 flex items-center justify-between px-3 border-b border-white/[0.06] bg-[#181818] select-none cursor-move shrink-0 z-20"
+        onMouseDown={(e) => {
+          if (e.button === 0 && !(e.target as HTMLElement).closest("button, input, select, textarea, [data-no-drag]")) {
+            appWindow.startDragging();
+          }
+        }}
+        className="h-10 flex items-center justify-between pl-3 pr-0 border-b border-white/[0.06] bg-[#181818] select-none cursor-move shrink-0 z-20"
       >
         {/* Left: Tool identity & filename badge */}
-        <div className="flex items-center gap-2.5 min-w-0 pointer-events-none">
+        <div data-tauri-drag-region className="flex items-center gap-2.5 min-w-0 pointer-events-none">
           {icon && (
             <div className="w-5 h-5 rounded-md bg-white/[0.08] border border-white/[0.06] flex items-center justify-center text-neutral-300 shrink-0">
               {icon}
@@ -105,8 +110,8 @@ export function ToolWindowLayout({
         </div>
 
         {/* Right: Keyboard shortcut badge and Windows caption buttons */}
-        <div className="flex items-center gap-3">
-          <span className="hidden sm:inline-block px-1.5 py-0.5 bg-white/[0.04] border border-white/[0.06] text-[10px] text-neutral-400 font-mono rounded">
+        <div className="flex items-center gap-3 h-full">
+          <span className="hidden sm:inline-block px-1.5 py-0.5 bg-white/[0.04] border border-white/[0.06] text-[10px] text-neutral-400 font-mono rounded pointer-events-none">
             Esc to cancel
           </span>
           <CaptionButtons />

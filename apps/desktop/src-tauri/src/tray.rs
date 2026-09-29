@@ -76,6 +76,7 @@ pub fn open_settings_window(app: &AppHandle) {
     .decorations(false)
     .transparent(true)
     .resizable(true)
+    .maximizable(false)
     .center()
     .focused(true)
     .build();
@@ -114,6 +115,7 @@ pub fn open_palette_window(app: &AppHandle) {
     .decorations(false)
     .transparent(true)
     .resizable(false)
+    .maximizable(false)
     .center()
     .always_on_top(true)
     .focused(true)
