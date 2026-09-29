@@ -33,9 +33,18 @@ pub async fn save_settings(
     settings: WheelSettings,
 ) -> Result<(), String> {
     let migrated = settings.migrate();
-    *state.settings.lock().await = migrated;
-    // TODO: persist to %APPDATA%\Wheel\settings.json via tauri-plugin-store
-    info!("Settings saved");
+    *state.settings.lock().await = migrated.clone();
+
+    let local_app_data = std::env::var("LOCALAPPDATA")
+        .or_else(|_| std::env::var("APPDATA"))
+        .unwrap_or_else(|_| ".".to_string());
+    let settings_path = std::path::PathBuf::from(local_app_data).join("Wheel").join("settings.json");
+    if let Err(e) = migrated.save_to_path(&settings_path) {
+        tracing::warn!("Failed to persist settings to disk at {:?}: {}", settings_path, e);
+    } else {
+        info!("Settings saved and persisted to disk at {:?}", settings_path);
+    }
+
     Ok(())
 }
 

@@ -48,6 +48,30 @@ impl WheelSettings {
         }
         self
     }
+
+    /// Load settings from a JSON file, or return default settings if the file does not exist.
+    pub fn load_or_default<P: AsRef<std::path::Path>>(path: P) -> Self {
+        let path = path.as_ref();
+        if path.exists() {
+            if let Ok(content) = std::fs::read_to_string(path) {
+                if let Ok(settings) = serde_json::from_str::<WheelSettings>(&content) {
+                    return settings.migrate();
+                }
+            }
+        }
+        Self::default()
+    }
+
+    /// Save settings to a JSON file, creating parent directories if necessary.
+    pub fn save_to_path<P: AsRef<std::path::Path>>(&self, path: P) -> std::io::Result<()> {
+        let path = path.as_ref();
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let json = serde_json::to_string_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+        std::fs::write(path, json)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

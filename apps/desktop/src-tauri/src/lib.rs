@@ -42,18 +42,21 @@ pub fn run() {
     let (job_queue, _event_rx) = JobQueue::new(4);
     let job_queue = Arc::new(job_queue);
 
-    // Set up persistent SQLite history
+    // Set up persistent SQLite history and settings
     let local_app_data = std::env::var("LOCALAPPDATA")
         .or_else(|_| std::env::var("APPDATA"))
         .unwrap_or_else(|_| ".".to_string());
-    let db_path = std::path::PathBuf::from(local_app_data).join("Wheel").join("history.db");
+    let wheel_dir = std::path::PathBuf::from(local_app_data).join("Wheel");
+    let db_path = wheel_dir.join("history.db");
     let history = wheel_core::HistoryDb::open(&db_path).unwrap_or_else(|e| {
         tracing::warn!("Failed to open persistent history at {:?}: {}, falling back to in-memory", db_path, e);
         wheel_core::HistoryDb::open_in_memory().expect("in-memory db must succeed")
     });
     let history = Arc::new(history);
 
-    let settings = Arc::new(Mutex::new(WheelSettings::default()));
+    let settings_path = wheel_dir.join("settings.json");
+    let initial_settings = WheelSettings::load_or_default(&settings_path);
+    let settings = Arc::new(Mutex::new(initial_settings));
 
     let state = AppState {
         settings: Arc::clone(&settings),

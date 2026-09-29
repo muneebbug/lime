@@ -5,28 +5,20 @@ import {
   Settings as SettingsIcon,
   SlidersHorizontal,
   LayoutGrid,
-  Keyboard,
-  Cloud,
-  Wrench,
-  Users,
-  Info,
+  FolderOutput,
   Sparkles,
-  AppWindow,
-  Globe,
+  Cpu,
+  History,
+  Info,
   Search,
-  ChevronLeft,
-  ChevronRight,
   Check,
   Download,
+  Trash2,
   FileCheck2,
-  Moon,
-  Sun,
 } from "lucide-react";
 import {
   RaycastCaptionButtons,
   RaycastToggle,
-  RaycastHotkeyPill,
-  RaycastSelect,
   RaycastSegmented,
   RaycastButton,
   RaycastRow,
@@ -35,43 +27,29 @@ import {
 
 type SettingsNavId =
   | "general"
-  | "launcher"
-  | "shortcuts"
-  | "keyboard"
-  | "cloud"
-  | "advanced"
-  | "orgs"
-  | "about"
-  | "ai"
-  | "applications"
-  | "browser";
+  | "trigger"
+  | "wheel_ui"
+  | "output"
+  | "presets"
+  | "engines"
+  | "history"
+  | "about";
 
 interface NavItem {
   id: SettingsNavId;
   label: string;
   icon: React.ReactNode;
-  badge?: string;
-  isSpecial?: boolean;
 }
 
 export function SettingsWindow() {
   const [activeTab, setActiveTab] = useState<SettingsNavId>("general");
   const [searchQuery, setSearchQuery] = useState("");
   const [settings, setSettings] = useState<any>(null);
-  const [actions, setActions] = useState<any[]>([]);
   const [historyCount, setHistoryCount] = useState<number>(0);
-  const [contextMenuEnabled, setContextMenuEnabled] = useState<boolean>(true);
   const [ffmpegStatus, setFfmpegStatus] = useState<any>(null);
   const [rmbgStatus, setRmbgStatus] = useState<any>(null);
   const [isSaved, setIsSaved] = useState<boolean>(false);
   const [isDownloadingModel, setIsDownloadingModel] = useState<boolean>(false);
-  const [isRecordingHotkey, setIsRecordingHotkey] = useState(false);
-
-  const [followSystem, setFollowSystem] = useState(true);
-  const [darkTheme, setDarkTheme] = useState("raycast_dark");
-  const [lightTheme, setLightTheme] = useState("raycast_light");
-  const [interfaceSize, setInterfaceSize] = useState("normal");
-  const [showTaskbar, setShowTaskbar] = useState(false);
 
   const appWindow = getCurrentWebviewWindow();
 
@@ -81,7 +59,7 @@ export function SettingsWindow() {
     appWindow.setFocus().catch(() => {});
   }, [appWindow]);
 
-  // Load initial settings and statuses
+  // Load initial settings and backend statuses
   useEffect(() => {
     async function loadData() {
       try {
@@ -92,24 +70,10 @@ export function SettingsWindow() {
       }
 
       try {
-        const acts = await invoke<any[]>("get_actions");
-        setActions(acts);
-      } catch (e) {
-        console.error("Failed to load actions", e);
-      }
-
-      try {
         const hist = await invoke<any[]>("get_history", { limit: 100 });
         setHistoryCount(hist.length);
       } catch (e) {
         console.error("Failed to load history count", e);
-      }
-
-      try {
-        const cm = await invoke<boolean>("is_explorer_context_menu_enabled");
-        setContextMenuEnabled(cm);
-      } catch (e) {
-        console.error("Failed to check context menu status", e);
       }
 
       try {
@@ -143,7 +107,6 @@ export function SettingsWindow() {
   const handleToggleContextMenu = async (enabled: boolean) => {
     try {
       await invoke("set_explorer_context_menu", { enabled });
-      setContextMenuEnabled(enabled);
       if (settings) {
         const updated = {
           ...settings,
@@ -178,67 +141,56 @@ export function SettingsWindow() {
     }
   };
 
+  const handleDeleteModel = async () => {
+    try {
+      await invoke("delete_rmbg_model");
+      const rmbg = await invoke<any>("get_rmbg_model_status");
+      setRmbgStatus(rmbg);
+    } catch (e) {
+      console.error("Failed to delete model", e);
+    }
+  };
+
   const navItems: NavItem[] = [
     {
       id: "general",
       label: "General",
-      icon: <SettingsIcon size={15} />,
+      icon: <SettingsIcon size={14} />,
     },
     {
-      id: "launcher",
-      label: "Launcher & Drag",
-      icon: <SlidersHorizontal size={15} />,
+      id: "trigger",
+      label: "Trigger & Drag",
+      icon: <SlidersHorizontal size={14} />,
     },
     {
-      id: "shortcuts",
+      id: "wheel_ui",
       label: "Radial Wheel",
-      icon: <LayoutGrid size={15} />,
+      icon: <LayoutGrid size={14} />,
     },
     {
-      id: "keyboard",
-      label: "Keyboard & Formats",
-      icon: <Keyboard size={15} />,
+      id: "output",
+      label: "Output & Files",
+      icon: <FolderOutput size={14} />,
     },
     {
-      id: "cloud",
+      id: "presets",
       label: "Presets & Workflows",
-      icon: <Cloud size={15} />,
-      badge: "Pro",
+      icon: <Sparkles size={14} />,
     },
     {
-      id: "advanced",
-      label: "Advanced",
-      icon: <Wrench size={15} />,
+      id: "engines",
+      label: "Engines & AI",
+      icon: <Cpu size={14} />,
     },
     {
-      id: "orgs",
-      label: "Extensions",
-      icon: <Users size={15} />,
+      id: "history",
+      label: "History",
+      icon: <History size={14} />,
     },
     {
       id: "about",
-      label: "About",
-      icon: <Info size={15} />,
-    },
-  ];
-
-  const specialNavItems: NavItem[] = [
-    {
-      id: "ai",
-      label: "AI & Neural Models",
-      icon: <Sparkles size={15} className="text-white" />,
-      badge: "Pro",
-      isSpecial: true,
-    },
-    {
-      id: "applications",
-      label: "Applications",
-      icon: <AppWindow size={15} className="text-emerald-400" />,
-    },
-    {
-      id: "browser",
-      label: "Browser & Media",
-      icon: <Globe size={15} className="text-blue-400" />,
+      label: "About Wheel",
+      icon: <Info size={14} />,
     },
   ];
 
@@ -264,33 +216,15 @@ export function SettingsWindow() {
         data-tauri-drag-region
         className="h-10 flex items-center justify-between px-4 border-b border-white/[0.06] bg-[#181818] select-none cursor-move shrink-0 z-20"
       >
-        <div className="flex items-center gap-4">
-          <span className="text-[13px] font-medium text-neutral-300 pointer-events-none">
-            Settings
+        <div className="flex items-center gap-3">
+          <span className="text-[13px] font-medium text-neutral-200 pointer-events-none">
+            Wheel Settings
           </span>
-
-          {/* Navigation arrows like in Raycast on Windows */}
-          <div className="flex items-center gap-0.5 text-neutral-500">
-            <button
-              onClick={() => setActiveTab("general")}
-              className="p-1 hover:text-neutral-300 hover:bg-white/[0.04] rounded transition-colors cursor-pointer"
-              title="Back"
-            >
-              <ChevronLeft size={14} />
-            </button>
-            <button
-              onClick={() => setActiveTab("about")}
-              className="p-1 hover:text-neutral-300 hover:bg-white/[0.04] rounded transition-colors cursor-pointer"
-              title="Forward"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
         </div>
 
         <div className="flex items-center gap-3">
           {isSaved && (
-            <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium animate-pulse">
+            <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
               <Check size={12} strokeWidth={2.5} />
               Saved
             </span>
@@ -300,12 +234,12 @@ export function SettingsWindow() {
         </div>
       </header>
 
-      {/* Main Body: Sidebar + Settings Content */}
+      {/* Main Body: Left Sidebar + Right Settings Panel */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Left Sidebar */}
-        <aside className="w-60 border-r border-white/[0.06] bg-[#181818] flex flex-col p-2.5 shrink-0 overflow-y-auto">
+        {/* Left Navigation Sidebar */}
+        <aside className="w-56 border-r border-white/[0.06] bg-[#181818] flex flex-col p-2.5 shrink-0 overflow-y-auto">
           {/* Search Box */}
-          <div className="relative mb-3">
+          <div className="relative mb-2.5">
             <Search
               size={13}
               className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500 pointer-events-none"
@@ -319,22 +253,7 @@ export function SettingsWindow() {
             />
           </div>
 
-          {/* User Profile Card matching screenshot */}
-          <div className="flex items-center gap-2.5 px-2 py-2 mb-2 rounded-lg bg-transparent hover:bg-white/[0.03] transition-colors cursor-default">
-            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#ff6339] via-purple-600 to-pink-500 p-[1.5px] shrink-0">
-              <div className="w-full h-full rounded-full bg-[#181818] flex items-center justify-center text-[10px] font-bold text-white tracking-wider">
-                MR
-              </div>
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-xs font-semibold text-neutral-200 truncate">
-                Muneeb Ur Rehman
-              </span>
-              <span className="text-[10px] text-neutral-500">Account</span>
-            </div>
-          </div>
-
-          {/* Sidebar Nav Items */}
+          {/* Navigation Items */}
           <nav className="flex flex-col gap-0.5">
             {filteredNavItems.map((item) => {
               const isActive = activeTab === item.id;
@@ -342,71 +261,32 @@ export function SettingsWindow() {
                 <button
                   key={item.id}
                   onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer text-left ${
+                  className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer text-left ${
                     isActive
                       ? "bg-white/[0.1] text-white font-medium"
                       : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
                   }`}
                 >
-                  <div className="flex items-center gap-2.5">
-                    <span className={isActive ? "text-white" : "text-neutral-400"}>
-                      {item.icon}
-                    </span>
-                    <span>{item.label}</span>
-                  </div>
-
-                  {item.badge && (
-                    <span className="text-[10px] font-semibold text-[#38bdf8] bg-[#38bdf8]/15 px-1.5 py-0.5 rounded-full">
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-
-            <div className="h-px bg-white/[0.04] my-2" />
-
-            {specialNavItems.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs transition-colors cursor-pointer text-left ${
-                    isActive
-                      ? "bg-white/[0.1] text-white font-medium"
-                      : "text-neutral-400 hover:text-neutral-200 hover:bg-white/[0.04]"
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5">
-                    {item.isSpecial ? (
-                      <div className="w-5 h-5 rounded-md bg-gradient-to-br from-red-500 to-rose-600 flex items-center justify-center shrink-0">
-                        {item.icon}
-                      </div>
-                    ) : (
-                      <span className="shrink-0">{item.icon}</span>
-                    )}
-                    <span>{item.label}</span>
-                  </div>
-
-                  {item.badge && (
-                    <span className="text-[10px] font-semibold text-[#38bdf8] bg-[#38bdf8]/15 px-1.5 py-0.5 rounded-full">
-                      {item.badge}
-                    </span>
-                  )}
+                  <span className={isActive ? "text-white" : "text-neutral-400"}>
+                    {item.icon}
+                  </span>
+                  <span>{item.label}</span>
                 </button>
               );
             })}
           </nav>
         </aside>
 
-        {/* Right Settings Content */}
+        {/* Right Settings Content Panel */}
         <main className="flex-1 bg-[#1e1e1e] p-7 overflow-y-auto">
           {/* TAB 1: GENERAL */}
           {activeTab === "general" && (
             <div className="max-w-xl">
-              <RaycastSection>
-                <RaycastRow title="Open at Login">
+              <RaycastSection title="System Startup & Tray">
+                <RaycastRow
+                  title="Launch at Windows Login"
+                  description="Start Wheel automatically in the background when signing into Windows"
+                >
                   <RaycastToggle
                     checked={settings.general.launch_at_login}
                     onChange={(checked) => {
@@ -419,119 +299,16 @@ export function SettingsWindow() {
                   />
                 </RaycastRow>
 
-                <RaycastRow title="Show in System Tray">
-                  <RaycastToggle
-                    checked={true}
-                    onChange={() => {}}
-                  />
-                </RaycastRow>
-
-                <RaycastRow title="Automatically Show the Taskbar">
-                  <RaycastToggle
-                    checked={showTaskbar}
-                    onChange={setShowTaskbar}
-                  />
-                </RaycastRow>
-
-                <RaycastRow title="Raycast Hotkey">
-                  <RaycastHotkeyPill
-                    sublabel="Replace Start Menu ⊞"
-                    label={settings.trigger.modifier ? `${settings.trigger.modifier.toUpperCase()} Space` : "Shift Drag"}
-                    isRecording={isRecordingHotkey}
-                    onClick={() => {
-                      setIsRecordingHotkey(!isRecordingHotkey);
-                      setTimeout(() => setIsRecordingHotkey(false), 3000);
-                    }}
-                    onReset={() => {
-                      const updated = {
-                        ...settings,
-                        trigger: { ...settings.trigger, modifier: "shift" },
-                      };
-                      handleSaveSettings(updated);
-                    }}
-                  />
-                </RaycastRow>
-              </RaycastSection>
-
-              {/* Appearance Section */}
-              <RaycastSection title="Appearance">
-                <RaycastRow title="Follow System Appearance">
-                  <RaycastToggle
-                    checked={followSystem}
-                    onChange={setFollowSystem}
-                  />
-                </RaycastRow>
-
-                <RaycastRow title="Dark Theme">
-                  <RaycastSelect
-                    value={darkTheme}
-                    options={[
-                      { label: "Raycast Dark", value: "raycast_dark", icon: <Moon size={12} /> },
-                      { label: "Midnight Black", value: "midnight", icon: <Moon size={12} /> },
-                      { label: "Charcoal Slate", value: "charcoal", icon: <Moon size={12} /> },
-                    ]}
-                    onChange={setDarkTheme}
-                  />
-                </RaycastRow>
-
-                <RaycastRow title="Light Theme">
-                  <RaycastSelect
-                    value={lightTheme}
-                    options={[
-                      { label: "Raycast Light", value: "raycast_light", icon: <Sun size={12} /> },
-                      { label: "Pure White", value: "pure_white", icon: <Sun size={12} /> },
-                    ]}
-                    onChange={setLightTheme}
-                  />
-                </RaycastRow>
-
                 <RaycastRow
-                  title="Theme Studio"
-                  description="Edit or create themes for Raycast"
-                >
-                  <RaycastButton variant="pro">
-                    Upgrade to Pro
-                  </RaycastButton>
-                </RaycastRow>
-
-                <RaycastRow
-                  title="Interface Size"
-                  description="Adjust the size of the Raycast interface"
-                >
-                  <RaycastSegmented
-                    value={interfaceSize}
-                    options={[
-                      { label: <span className="text-[10px]">Aa</span>, value: "small", title: "Compact" },
-                      { label: <span className="text-xs">Aa</span>, value: "normal", title: "Standard" },
-                      { label: <span className="text-sm font-semibold">Aa</span>, value: "large", title: "Large" },
-                    ]}
-                    onChange={setInterfaceSize}
-                  />
-                </RaycastRow>
-              </RaycastSection>
-
-              {/* Windows Shell Integration Section */}
-              <RaycastSection title="Windows Integration">
-                <RaycastRow
-                  title="Explorer Context Menu"
-                  description="Show 'Open with Wheel' in Windows 10/11 right-click context menus"
+                  title="Close to System Tray"
+                  description="Keep Wheel running in the background tray when tool windows are closed"
                 >
                   <RaycastToggle
-                    checked={contextMenuEnabled}
-                    onChange={handleToggleContextMenu}
-                  />
-                </RaycastRow>
-
-                <RaycastRow
-                  title="Send Source to Recycle Bin"
-                  description="Safely recycle original files after conversion (reversible)"
-                >
-                  <RaycastToggle
-                    checked={settings.output.recycle_source}
+                    checked={settings.general.minimize_to_tray}
                     onChange={(checked) => {
                       const updated = {
                         ...settings,
-                        output: { ...settings.output, recycle_source: checked },
+                        general: { ...settings.general, minimize_to_tray: checked },
                       };
                       handleSaveSettings(updated);
                     }}
@@ -539,34 +316,43 @@ export function SettingsWindow() {
                 </RaycastRow>
 
                 <RaycastRow
-                  title="File Output Suffix"
-                  description="Appended to converted files (leave blank to save as clean filename)"
+                  title="Automatic Updates"
+                  description="Check for new application releases automatically in the background"
                 >
-                  <input
-                    type="text"
-                    value={settings.output.suffix}
-                    onChange={(e) => {
+                  <RaycastToggle
+                    checked={settings.general.auto_update}
+                    onChange={(checked) => {
                       const updated = {
                         ...settings,
-                        output: { ...settings.output, suffix: e.target.value },
+                        general: { ...settings.general, auto_update: checked },
                       };
                       handleSaveSettings(updated);
                     }}
-                    placeholder=".converted"
-                    className="w-32 px-2.5 py-1 text-xs bg-[#242424] border border-white/[0.08] focus:border-white/30 rounded-lg text-white font-mono outline-none text-right"
+                  />
+                </RaycastRow>
+              </RaycastSection>
+
+              <RaycastSection title="Windows Explorer Integration">
+                <RaycastRow
+                  title="Explorer Context Menu"
+                  description="Add 'Open with Wheel' to Windows Explorer right-click context menus"
+                >
+                  <RaycastToggle
+                    checked={settings.general.explorer_context_menu}
+                    onChange={handleToggleContextMenu}
                   />
                 </RaycastRow>
               </RaycastSection>
             </div>
           )}
 
-          {/* TAB 2: LAUNCHER & DRAG */}
-          {activeTab === "launcher" && (
+          {/* TAB 2: TRIGGER & DRAG */}
+          {activeTab === "trigger" && (
             <div className="max-w-xl">
-              <RaycastSection title="Trigger Preferences">
+              <RaycastSection title="Gesture Activation">
                 <RaycastRow
                   title="Activation Modifier Key"
-                  description="Modifier key held while dragging to summon the radial menu"
+                  description="Key held while dragging files to summon the radial menu"
                 >
                   <RaycastSegmented
                     value={settings.trigger.modifier}
@@ -574,7 +360,7 @@ export function SettingsWindow() {
                       { label: "Shift", value: "shift" },
                       { label: "Ctrl", value: "ctrl" },
                       { label: "Alt", value: "alt" },
-                      { label: "None", value: "none" },
+                      { label: "None", value: "none", title: "Always active on drag" },
                     ]}
                     onChange={(val) => {
                       const updated = {
@@ -588,21 +374,24 @@ export function SettingsWindow() {
 
                 <RaycastRow
                   title="Movement Threshold"
-                  description="Minimum cursor movement before drag triggers"
+                  description="Minimum drag distance in pixels before the radial wheel appears"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-neutral-300">
+                    <span className="font-mono text-xs text-neutral-300 w-12 text-right">
                       {settings.trigger.movement_threshold_px} px
                     </span>
                     <input
                       type="range"
-                      min="3"
-                      max="24"
+                      min="2"
+                      max="20"
                       value={settings.trigger.movement_threshold_px}
                       onChange={(e) => {
                         const updated = {
                           ...settings,
-                          trigger: { ...settings.trigger, movement_threshold_px: Number(e.target.value) },
+                          trigger: {
+                            ...settings.trigger,
+                            movement_threshold_px: Number(e.target.value),
+                          },
                         };
                         handleSaveSettings(updated);
                       }}
@@ -612,7 +401,52 @@ export function SettingsWindow() {
                 </RaycastRow>
 
                 <RaycastRow
-                  title="Pause Wheel Globally"
+                  title="Drop Confirmation Timeout"
+                  description="Milliseconds to wait for Windows OLE drop confirmation before cancelling"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-xs text-neutral-300 w-16 text-right">
+                      {settings.trigger.confirm_timeout_ms} ms
+                    </span>
+                    <input
+                      type="range"
+                      min="100"
+                      max="800"
+                      step="50"
+                      value={settings.trigger.confirm_timeout_ms}
+                      onChange={(e) => {
+                        const updated = {
+                          ...settings,
+                          trigger: {
+                            ...settings.trigger,
+                            confirm_timeout_ms: Number(e.target.value),
+                          },
+                        };
+                        handleSaveSettings(updated);
+                      }}
+                      className="w-28 accent-[#ff6339] cursor-pointer"
+                    />
+                  </div>
+                </RaycastRow>
+
+                <RaycastRow
+                  title="Always Show on Drag"
+                  description="Display the wheel on any file drag, even without holding a modifier key"
+                >
+                  <RaycastToggle
+                    checked={settings.trigger.always_show}
+                    onChange={(checked) => {
+                      const updated = {
+                        ...settings,
+                        trigger: { ...settings.trigger, always_show: checked },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </RaycastRow>
+
+                <RaycastRow
+                  title="Pause Wheel Trigger"
                   description="Temporarily silence the radial gesture without quitting the app"
                 >
                   <RaycastToggle
@@ -630,26 +464,45 @@ export function SettingsWindow() {
             </div>
           )}
 
-          {/* TAB 3: RADIAL WHEEL */}
-          {activeTab === "shortcuts" && (
+          {/* TAB 3: RADIAL WHEEL UI */}
+          {activeTab === "wheel_ui" && (
             <div className="max-w-xl">
-              <RaycastSection title="Wheel Geometry">
+              <RaycastSection title="Wheel Layout & Display">
                 <RaycastRow
-                  title="Slot Count per Page"
-                  description="Number of radial wedges displayed per page"
+                  title="Interface Theme"
+                  description="Color appearance of the radial wheel overlay"
                 >
                   <RaycastSegmented
-                    value={String(settings.wheel_ui.slot_count)}
+                    value={settings.wheel_ui.theme}
                     options={[
-                      { label: "6", value: "6" },
-                      { label: "8", value: "8" },
-                      { label: "10", value: "10" },
-                      { label: "12", value: "12" },
+                      { label: "System", value: "system" },
+                      { label: "Dark", value: "dark" },
+                      { label: "Light", value: "light" },
                     ]}
                     onChange={(val) => {
                       const updated = {
                         ...settings,
-                        wheel_ui: { ...settings.wheel_ui, slot_count: Number(val) },
+                        wheel_ui: { ...settings.wheel_ui, theme: val },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </RaycastRow>
+
+                <RaycastRow
+                  title="Default Start Page"
+                  description="Which radial wheel page is displayed when a drag starts"
+                >
+                  <RaycastSegmented
+                    value={settings.wheel_ui.start_page}
+                    options={[
+                      { label: "Convert (Page 1)", value: "convert" },
+                      { label: "Tools (Page 2)", value: "tools" },
+                    ]}
+                    onChange={(val) => {
+                      const updated = {
+                        ...settings,
+                        wheel_ui: { ...settings.wheel_ui, start_page: val },
                       };
                       handleSaveSettings(updated);
                     }}
@@ -658,16 +511,16 @@ export function SettingsWindow() {
 
                 <RaycastRow
                   title="Wheel Diameter"
-                  description="Outer pixel diameter of the radial wheel"
+                  description="Outer pixel diameter of the circular radial wheel"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-neutral-300">
+                    <span className="font-mono text-xs text-neutral-300 w-14 text-right">
                       {settings.wheel_ui.size} px
                     </span>
                     <input
                       type="range"
-                      min="260"
-                      max="440"
+                      min="280"
+                      max="400"
                       step="10"
                       value={settings.wheel_ui.size}
                       onChange={(e) => {
@@ -684,7 +537,7 @@ export function SettingsWindow() {
 
                 <RaycastRow
                   title="Context Filtering"
-                  description="Automatically hide or dim formats incompatible with dragged files"
+                  description="Automatically dim or filter actions incompatible with dragged files"
                 >
                   <RaycastToggle
                     checked={settings.wheel_ui.context_filter_enabled}
@@ -699,8 +552,8 @@ export function SettingsWindow() {
                 </RaycastRow>
 
                 <RaycastRow
-                  title="Audio Haptic Feedback"
-                  description="Play subtle mechanical tick sounds on wedge hover"
+                  title="Audio Tick Effects"
+                  description="Play subtle mechanical tick sounds during wedge hover"
                 >
                   <RaycastToggle
                     checked={settings.wheel_ui.sound_enabled}
@@ -713,70 +566,181 @@ export function SettingsWindow() {
                     }}
                   />
                 </RaycastRow>
+
+                <RaycastRow
+                  title="Reduced Motion"
+                  description="Disable spring animations for instant radial appearance"
+                >
+                  <RaycastToggle
+                    checked={settings.wheel_ui.reduced_motion}
+                    onChange={(checked) => {
+                      const updated = {
+                        ...settings,
+                        wheel_ui: { ...settings.wheel_ui, reduced_motion: checked },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </RaycastRow>
               </RaycastSection>
             </div>
           )}
 
-          {/* TAB 4: KEYBOARD & ACTIONS */}
-          {activeTab === "keyboard" && (
+          {/* TAB 4: OUTPUT & FILES */}
+          {activeTab === "output" && (
             <div className="max-w-xl">
-              <RaycastSection title="Registered Wheel Actions">
-                <div className="bg-[#242424] border border-white/[0.06] rounded-xl divide-y divide-white/[0.04] overflow-hidden">
-                  {actions.map((act) => (
-                    <div key={act.id} className="p-3 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-7 h-7 rounded-lg bg-[#2e2e2e] border border-white/[0.08] flex items-center justify-center text-[#ff6339] text-xs font-bold font-mono">
-                          {act.title.slice(0, 3).toUpperCase()}
-                        </div>
-                        <div>
-                          <span className="text-xs font-medium text-neutral-200 block">
-                            {act.title}
-                          </span>
-                          <span className="text-[11px] text-neutral-500 capitalize">
-                            {act.category} • {act.kind}
-                          </span>
-                        </div>
-                      </div>
+              <RaycastSection title="File Destination">
+                <RaycastRow
+                  title="Save Location Policy"
+                  description="Where converted and processed files are saved"
+                >
+                  <RaycastSegmented
+                    value={settings.output.policy}
+                    options={[
+                      { label: "Next to Source", value: "next_to_source" },
+                      { label: "Fixed Folder", value: "fixed_folder" },
+                      { label: "Ask Each Time", value: "ask_each_time" },
+                      { label: "Clipboard", value: "clipboard" },
+                    ]}
+                    onChange={(val) => {
+                      const updated = {
+                        ...settings,
+                        output: { ...settings.output, policy: val },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </RaycastRow>
 
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded font-medium">
-                          Enabled
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                {settings.output.policy === "fixed_folder" && (
+                  <RaycastRow
+                    title="Fixed Folder Path"
+                    description="Absolute directory path where output files will be written"
+                  >
+                    <input
+                      type="text"
+                      value={settings.output.fixed_folder || ""}
+                      onChange={(e) => {
+                        const updated = {
+                          ...settings,
+                          output: {
+                            ...settings.output,
+                            fixed_folder: e.target.value.trim() || null,
+                          },
+                        };
+                        handleSaveSettings(updated);
+                      }}
+                      placeholder="C:\Users\...\Pictures\Wheel"
+                      className="w-56 px-2.5 py-1 text-xs bg-[#242424] border border-white/[0.08] focus:border-white/30 rounded-lg text-white font-mono outline-none"
+                    />
+                  </RaycastRow>
+                )}
+
+                <RaycastRow
+                  title="Filename Suffix"
+                  description="Appended between file stem and extension (leave blank for clean filename)"
+                >
+                  <input
+                    type="text"
+                    value={settings.output.suffix || ""}
+                    onChange={(e) => {
+                      const updated = {
+                        ...settings,
+                        output: { ...settings.output, suffix: e.target.value },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                    placeholder="_converted"
+                    className="w-32 px-2.5 py-1 text-xs bg-[#242424] border border-white/[0.08] focus:border-white/30 rounded-lg text-white font-mono outline-none text-right"
+                  />
+                </RaycastRow>
+              </RaycastSection>
+
+              <RaycastSection title="File Safety & Preservation">
+                <RaycastRow
+                  title="Preserve EXIF Metadata"
+                  description="Retain camera, timestamp, and device metadata during conversions"
+                >
+                  <RaycastToggle
+                    checked={settings.output.preserve_metadata}
+                    onChange={(checked) => {
+                      const updated = {
+                        ...settings,
+                        output: { ...settings.output, preserve_metadata: checked },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </RaycastRow>
+
+                <RaycastRow
+                  title="Send Source to Recycle Bin"
+                  description="Safely move original files to the Windows Recycle Bin after successful conversion"
+                >
+                  <RaycastToggle
+                    checked={settings.output.recycle_source}
+                    onChange={(checked) => {
+                      const updated = {
+                        ...settings,
+                        output: { ...settings.output, recycle_source: checked },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </RaycastRow>
+
+                <RaycastRow
+                  title="Overwrite Existing Files"
+                  description="Replace existing files if an output file with the same name already exists"
+                >
+                  <RaycastToggle
+                    checked={settings.output.overwrite_source}
+                    onChange={(checked) => {
+                      const updated = {
+                        ...settings,
+                        output: { ...settings.output, overwrite_source: checked },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </RaycastRow>
               </RaycastSection>
             </div>
           )}
 
           {/* TAB 5: PRESETS & WORKFLOWS */}
-          {activeTab === "cloud" && (
+          {activeTab === "presets" && (
             <div className="max-w-xl">
-              <RaycastSection title="Multi-Step Recipes">
+              <RaycastSection title="Multi-Step Automated Recipes">
                 <div className="space-y-2.5">
-                  {(settings.presets || []).map((preset: any) => (
+                  {(settings.presets || []).map((preset: any, index: number) => (
                     <div
                       key={preset.id}
-                      className="p-3.5 bg-[#242424] border border-white/[0.06] rounded-xl flex items-center justify-between"
+                      className="p-3.5 bg-[#242424] border border-white/[0.06] rounded-xl flex items-center justify-between gap-4"
                     >
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-neutral-200">
+                          <span className="text-xs font-semibold text-neutral-200">
                             {preset.name}
                           </span>
-                          <span className="text-[10px] text-neutral-400 bg-white/[0.06] px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] text-neutral-400 bg-white/[0.06] px-1.5 py-0.5 rounded font-mono">
                             {preset.steps.length} steps
                           </span>
                         </div>
-                        <p className="text-[11px] text-neutral-500 mt-0.5">
+                        <p className="text-[11px] text-neutral-400 mt-1 leading-relaxed">
                           {preset.description}
                         </p>
                       </div>
 
-                      <RaycastButton variant="secondary">
-                        Edit
-                      </RaycastButton>
+                      <RaycastToggle
+                        checked={preset.enabled}
+                        onChange={(checked) => {
+                          const updatedPresets = [...settings.presets];
+                          updatedPresets[index] = { ...preset, enabled: checked };
+                          const updated = { ...settings, presets: updatedPresets };
+                          handleSaveSettings(updated);
+                        }}
+                      />
                     </div>
                   ))}
                 </div>
@@ -784,13 +748,78 @@ export function SettingsWindow() {
             </div>
           )}
 
-          {/* TAB 6: ADVANCED */}
-          {activeTab === "advanced" && (
+          {/* TAB 6: ENGINES & AI */}
+          {activeTab === "engines" && (
             <div className="max-w-xl">
-              <RaycastSection title="Diagnostics & Maintenance">
+              <RaycastSection title="AI Background Removal Model">
                 <RaycastRow
-                  title="Local SQLite History"
-                  description={`${historyCount} operations stored in local database`}
+                  title="RMBG-1.4 Neural Model"
+                  description={
+                    rmbgStatus?.installed
+                      ? `Installed locally (${(
+                          (rmbgStatus.file_size_bytes || 176000000) /
+                          (1024 * 1024)
+                        ).toFixed(1)} MB)`
+                      : "Local neural network for high-fidelity background removal"
+                  }
+                >
+                  {rmbgStatus?.installed ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-emerald-400 font-medium text-xs flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
+                        <FileCheck2 size={13} />
+                        Ready
+                      </span>
+                      <button
+                        onClick={handleDeleteModel}
+                        className="p-1.5 text-neutral-400 hover:text-red-400 bg-white/[0.04] hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer"
+                        title="Delete model file from disk"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ) : (
+                    <RaycastButton
+                      variant="primary"
+                      disabled={isDownloadingModel}
+                      onClick={handleDownloadModel}
+                    >
+                      <Download size={12} className="inline mr-1" />
+                      {isDownloadingModel ? "Downloading (~176 MB)..." : "Download Model (176 MB)"}
+                    </RaycastButton>
+                  )}
+                </RaycastRow>
+              </RaycastSection>
+
+              <RaycastSection title="Multimedia Conversion Engine">
+                <RaycastRow
+                  title="FFmpeg Sidecar Status"
+                  description={
+                    ffmpegStatus?.installed
+                      ? ffmpegStatus.version || "Installed and operational"
+                      : "Optional sidecar engine for video, audio, and high-quality GIF creation"
+                  }
+                >
+                  <span
+                    className={`text-xs font-medium px-2.5 py-1 rounded-lg ${
+                      ffmpegStatus?.installed
+                        ? "text-emerald-400 bg-emerald-500/10"
+                        : "text-amber-400 bg-amber-500/10"
+                    }`}
+                  >
+                    {ffmpegStatus?.installed ? "Installed" : "Not Found"}
+                  </span>
+                </RaycastRow>
+              </RaycastSection>
+            </div>
+          )}
+
+          {/* TAB 7: HISTORY */}
+          {activeTab === "history" && (
+            <div className="max-w-xl">
+              <RaycastSection title="Conversion & Job History">
+                <RaycastRow
+                  title="SQLite Database History"
+                  description={`${historyCount} completed file operation records stored in local database`}
                 >
                   <RaycastButton
                     variant="danger"
@@ -799,43 +828,6 @@ export function SettingsWindow() {
                   >
                     Clear History
                   </RaycastButton>
-                </RaycastRow>
-
-                <RaycastRow
-                  title="FFmpeg Sidecar Status"
-                  description={ffmpegStatus?.installed ? ffmpegStatus.version || "Installed" : "Not detected in system PATH"}
-                >
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded ${ffmpegStatus?.installed ? "text-emerald-400 bg-emerald-500/10" : "text-amber-400 bg-amber-500/10"}`}>
-                    {ffmpegStatus?.installed ? "Ready" : "Optional"}
-                  </span>
-                </RaycastRow>
-              </RaycastSection>
-            </div>
-          )}
-
-          {/* TAB 7: AI & MODELS */}
-          {activeTab === "ai" && (
-            <div className="max-w-xl">
-              <RaycastSection title="Neural Background Removal Model">
-                <RaycastRow
-                  title="RMBG-1.4 Neural Model"
-                  description={rmbgStatus?.installed ? "Installed in Local AppData with DirectML execution" : "Requires one-time download (176MB)"}
-                >
-                  {rmbgStatus?.installed ? (
-                    <span className="text-emerald-400 font-medium text-xs flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1 rounded-lg">
-                      <FileCheck2 size={13} />
-                      Installed
-                    </span>
-                  ) : (
-                    <RaycastButton
-                      variant="primary"
-                      disabled={isDownloadingModel}
-                      onClick={handleDownloadModel}
-                    >
-                      <Download size={12} className="inline mr-1" />
-                      {isDownloadingModel ? "Downloading..." : "Download (176MB)"}
-                    </RaycastButton>
-                  )}
                 </RaycastRow>
               </RaycastSection>
             </div>
@@ -847,34 +839,25 @@ export function SettingsWindow() {
               <RaycastSection title="About Wheel">
                 <div className="p-4 bg-[#242424] border border-white/[0.06] rounded-xl space-y-3">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-neutral-400">Application Version</span>
-                    <span className="font-mono text-neutral-200">v0.1.0 (Windows x86_64)</span>
+                    <span className="text-neutral-400">Application</span>
+                    <span className="text-neutral-200 font-medium">Wheel — File Toolkit for Windows</span>
                   </div>
 
                   <div className="h-px bg-white/[0.04]" />
 
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-neutral-400">Tauri Engine</span>
-                    <span className="font-mono text-neutral-200">Tauri v2 + WebView2</span>
+                    <span className="text-neutral-400">Version</span>
+                    <span className="font-mono text-neutral-200">v0.1.0</span>
                   </div>
 
                   <div className="h-px bg-white/[0.04]" />
 
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-neutral-400">Design Framework</span>
-                    <span className="text-neutral-200">Raycast on Windows Design System</span>
+                    <span className="text-neutral-400">Local Data Storage</span>
+                    <span className="font-mono text-neutral-400 text-[11px] truncate max-w-xs">
+                      %LOCALAPPDATA%\Wheel\
+                    </span>
                   </div>
-                </div>
-              </RaycastSection>
-            </div>
-          )}
-
-          {/* FALLBACK / OTHER TABS */}
-          {(activeTab === "orgs" || activeTab === "applications" || activeTab === "browser") && (
-            <div className="max-w-xl">
-              <RaycastSection title={activeTab.toUpperCase()}>
-                <div className="p-8 text-center text-neutral-500 text-xs bg-[#242424] border border-white/[0.06] rounded-xl">
-                  <span>No custom settings configured for this section yet.</span>
                 </div>
               </RaycastSection>
             </div>
