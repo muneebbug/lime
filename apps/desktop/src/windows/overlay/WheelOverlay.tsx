@@ -99,14 +99,12 @@ export function WheelOverlay() {
       ? actionId.replace("convert.", "").toUpperCase()
       : actionId.replace("tool.", "");
 
-    if (isConvert) {
-      setToast({
-        id: Date.now().toString(),
-        type: "loading",
-        message: `Converting to ${targetName}...`,
-        subtext: files.map((f) => f.split(/[/\\]/).pop()).join(", "),
-      });
-    }
+    setToast({
+      id: Date.now().toString(),
+      type: "loading",
+      message: isConvert ? `Converting to ${targetName}...` : `Trimming image...`,
+      subtext: files.map((f) => f.split(/[/\\]/).pop()).join(", "),
+    });
 
     lastHoveredRef.current = null;
     useWheelStore.getState().clearDragState();

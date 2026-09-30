@@ -2,7 +2,7 @@
 name = "wheel-engines"
 version = "0.1.0"
 edition = "2021"
-description = "Wheel: image, PDF, video, metadata conversion engines"
+description = "Wheel: image, PDF, video conversion and trim engines"
 
 [dependencies]
 serde = { workspace = true }
@@ -17,7 +17,3 @@ wheel-core = { path = "../wheel-core" }
 # Image processing
 image = { version = "0.25", features = ["avif"] }
 lopdf = { version = "0.45", default-features = false, features = ["embed_image"] }
-kamadak-exif = "0.6"
-sha2 = "0.10"
-ureq = "3.4"
-base64 = "0.22"

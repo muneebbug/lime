@@ -3,12 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   Search,
-  Wrench,
   RefreshCw,
   Sparkles,
   History,
   FileImage,
   X,
+  Scissors,
 } from "lucide-react";
 
 interface PaletteItem {
@@ -78,12 +78,13 @@ export function CommandPalette() {
       items.push({
         id: a.id,
         title: a.title,
-        subtitle: `Launch ${a.title} tool window`,
+        subtitle: a.id === "tool.trim" ? "Trim transparent blank pixels (Photoshop Trim)" : `Launch ${a.title} tool`,
         category: "tools",
-        icon: <Wrench size={14} className="text-orange-400" />,
+        icon: <Scissors size={14} className="text-orange-400" />,
         actionId: a.id,
       });
     }
+
 
     // 2. Convert Actions
     for (const a of actions.filter((x) => x.category === "convert")) {
@@ -100,21 +101,15 @@ export function CommandPalette() {
     // 3. Preset Chains (only enabled presets from settings)
     const activePresets = settings?.presets ?? [
       {
-        id: "preset.clean_web",
-        name: "Clean Web Asset",
-        description: "Strip EXIF metadata + Convert to optimized WebP",
+        id: "preset.trim_webp",
+        name: "Trim & WebP",
+        description: "Trim transparent blank pixels and convert to WebP",
         enabled: true,
       },
       {
-        id: "preset.share_screenshot",
-        name: "Share Screenshot",
-        description: "Add stylish background canvas padding + PNG export",
-        enabled: true,
-      },
-      {
-        id: "preset.transparent_png",
-        name: "Cutout PNG",
-        description: "Remove background + export transparent PNG",
+        id: "preset.trim_png",
+        name: "Trim PNG",
+        description: "Trim transparent blank pixels from PNG",
         enabled: true,
       },
     ];

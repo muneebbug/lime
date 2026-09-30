@@ -225,34 +225,23 @@ pub struct ActionPreset {
 pub fn default_presets() -> Vec<ActionPreset> {
     vec![
         ActionPreset {
-            id: "preset.clean_web".into(),
-            name: "Clean Web Asset".into(),
-            description: "Strip EXIF metadata and convert to WebP".into(),
+            id: "preset.trim_webp".into(),
+            name: "Trim & WebP".into(),
+            description: "Trim transparent blank pixels and convert to WebP".into(),
             icon: "sparkles".into(),
             steps: vec![
-                PresetStep { action_id: "tool.metadata".into(), params: serde_json::json!({ "strip": "all" }) },
+                PresetStep { action_id: "tool.trim".into(), params: serde_json::json!({}) },
                 PresetStep { action_id: "convert.webp".into(), params: serde_json::json!({}) },
             ],
             enabled: true,
         },
         ActionPreset {
-            id: "preset.share_screenshot".into(),
-            name: "Share Screenshot".into(),
-            description: "Add stylish background padding and export as PNG".into(),
-            icon: "image".into(),
-            steps: vec![
-                PresetStep { action_id: "tool.addbg".into(), params: serde_json::json!({ "padding": 40 }) },
-                PresetStep { action_id: "convert.png".into(), params: serde_json::json!({}) },
-            ],
-            enabled: true,
-        },
-        ActionPreset {
-            id: "preset.transparent_png".into(),
-            name: "Cutout PNG".into(),
-            description: "Remove background and export as transparent PNG".into(),
+            id: "preset.trim_png".into(),
+            name: "Trim PNG".into(),
+            description: "Trim transparent blank pixels from PNG".into(),
             icon: "scissors".into(),
             steps: vec![
-                PresetStep { action_id: "tool.removebg".into(), params: serde_json::json!({ "feather": 2 }) },
+                PresetStep { action_id: "tool.trim".into(), params: serde_json::json!({}) },
                 PresetStep { action_id: "convert.png".into(), params: serde_json::json!({}) },
             ],
             enabled: true,

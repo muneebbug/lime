@@ -3,19 +3,17 @@ import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   Check,
-  Download,
-  Trash2,
-  FileCheck2,
   FolderOpen,
   ChevronLeft,
   ChevronRight,
+  Trash2,
 } from "lucide-react";
 import {
   GearSix,
   HandGrabbing,
   CircleDashed,
   FolderOpen as PhFolderOpen,
-  Brain,
+  Cpu,
   ClockCounterClockwise,
   Info as PhInfo,
 } from "@phosphor-icons/react";
@@ -52,9 +50,7 @@ export function SettingsWindow() {
   const [historyCount, setHistoryCount] = useState<number>(0);
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [ffmpegStatus, setFfmpegStatus] = useState<any>(null);
-  const [rmbgStatus, setRmbgStatus] = useState<any>(null);
   const [isSaved, setIsSaved] = useState<boolean>(false);
-  const [isDownloadingModel, setIsDownloadingModel] = useState<boolean>(false);
 
   const appWindow = getCurrentWebviewWindow();
 
@@ -87,13 +83,6 @@ export function SettingsWindow() {
         setFfmpegStatus(ff);
       } catch (e) {
         console.error("Failed to check ffmpeg status", e);
-      }
-
-      try {
-        const rmbg = await invoke<any>("get_rmbg_model_status");
-        setRmbgStatus(rmbg);
-      } catch (e) {
-        console.error("Failed to check rmbg status", e);
       }
     }
     loadData();
@@ -165,28 +154,7 @@ export function SettingsWindow() {
     }
   };
 
-  const handleDownloadModel = async () => {
-    setIsDownloadingModel(true);
-    try {
-      await invoke("download_rmbg_model");
-      const rmbg = await invoke<any>("get_rmbg_model_status");
-      setRmbgStatus(rmbg);
-    } catch (e) {
-      console.error("Failed to download model", e);
-    } finally {
-      setIsDownloadingModel(false);
-    }
-  };
 
-  const handleDeleteModel = async () => {
-    try {
-      await invoke("delete_rmbg_model");
-      const rmbg = await invoke<any>("get_rmbg_model_status");
-      setRmbgStatus(rmbg);
-    } catch (e) {
-      console.error("Failed to delete model", e);
-    }
-  };
 
   const navItems: NavItem[] = [
     {
@@ -215,8 +183,8 @@ export function SettingsWindow() {
     },
     {
       id: "engines",
-      label: "Engines & AI",
-      icon: <Brain size={18} weight="bold" />,
+      label: "Engines",
+      icon: <Cpu size={18} weight="bold" />,
       group: "features",
     },
     {
@@ -729,49 +697,10 @@ export function SettingsWindow() {
           )}
 
 
-          {/* TAB 5: ENGINES & AI */}
+          {/* TAB 5: ENGINES */}
           {activeTab === "engines" && (
             <div className="w-full">
-              <SettingSection first>
-                <SettingRow
-                  title="RMBG-1.4 Neural Model"
-                  description={
-                    rmbgStatus?.installed
-                      ? `Installed locally (${(
-                          (rmbgStatus.file_size_bytes || 176000000) /
-                          (1024 * 1024)
-                        ).toFixed(1)} MB)`
-                      : "Local neural network for high-fidelity background removal"
-                  }
-                >
-                  {rmbgStatus?.installed ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-emerald-400 font-medium text-xs flex items-center gap-1.5 bg-emerald-500/10 px-2.5 py-1 rounded-md">
-                        <FileCheck2 size={13} />
-                        Ready
-                      </span>
-                      <button
-                        onClick={handleDeleteModel}
-                        className="p-1.5 text-neutral-400 hover:text-red-400 bg-white/[0.04] hover:bg-red-500/10 rounded-md transition-colors cursor-default"
-                        title="Delete model file from disk"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  ) : (
-                    <WheelButton
-                      variant="primary"
-                      disabled={isDownloadingModel}
-                      onClick={handleDownloadModel}
-                    >
-                      <Download size={12} className="inline mr-1" />
-                      {isDownloadingModel ? "Downloading (~176 MB)..." : "Download Model (176 MB)"}
-                    </WheelButton>
-                  )}
-                </SettingRow>
-              </SettingSection>
-
-              <SettingSection title="Multimedia Conversion Engine">
+              <SettingSection first title="Multimedia Conversion Engine">
                 <SettingRow
                   title="FFmpeg Sidecar Status"
                   description={

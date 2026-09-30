@@ -15,7 +15,7 @@ export interface PetalData {
     y: number;
     width: number;
     height: number;
-    type: "compress" | "metadata" | "edit" | "addbg" | "crop" | "redact";
+    type: "trim";
   };
 }
 
@@ -96,64 +96,15 @@ export const CONVERT_PETALS: PetalData[] = [
 
 export const TOOLS_PETALS: PetalData[] = [
   {
-    id: "tool.compress",
-    action: "compress",
-    title: "COMPRESS",
-    d: "M 27.2093 -51.1279 L 47.9379 -87.0309 Q 58.0196 -104.4929 41.7529 -111.9899 A 119.52000000000001 119.52000000000001 0 0 0 -41.7529 -111.9899 Q -58.0196 -104.4929 -47.9379 -87.0309 L -27.2093 -51.1279 Q -22.9392 -43.7319 -14.7815 -46.3396 A 48.64000000000001 48.64000000000001 0 0 1 14.7815 -46.3396 Q 22.9392 -43.7319 27.2093 -51.1279 Z",
-    icon: { x: -9, y: -101.0312, width: 18, height: 18, type: "compress" },
+    id: "tool.trim",
+    action: "trim",
+    title: "TRIM",
+    // 360-degree smooth circular ring with inner radius 48.64 and outer radius 119.52
+    d: "M 0 -119.52 A 119.52 119.52 0 1 0 0 119.52 A 119.52 119.52 0 1 0 0 -119.52 M 0 -48.64 A 48.64 48.64 0 1 1 0 48.64 A 48.64 48.64 0 1 1 0 -48.64 Z",
+    icon: { x: -10, y: -98, width: 20, height: 20, type: "trim" },
     labelX: 0,
-    labelY: -74.0312,
-    subtitle: "Compress Image",
-  },
-  {
-    id: "tool.metadata",
-    action: "removeMetadata",
-    title: "METADATA",
-    d: "M 57.8827 -2.0000 L 99.3399 -2.0000 Q 119.5033 -2.0000 117.8625 -19.8359 A 119.52000000000001 119.52000000000001 0 0 0 76.1096 -92.1540 Q 61.4837 -102.4929 51.4020 -85.0309 L 30.6734 -49.1279 Q 26.4033 -41.7319 32.7405 -35.9710 A 48.64000000000001 48.64000000000001 0 0 1 47.5220 -10.3686 Q 49.3425 -2.0000 57.8827 -2.0000 Z",
-    icon: { x: 64.206, y: -58.7656, width: 18, height: 18, type: "metadata" },
-    labelX: 73.206,
-    labelY: -31.7656,
-    subtitle: "View & Clean Metadata",
-  },
-  {
-    id: "tool.edit",
-    action: "editImage",
-    title: "EDIT",
-    d: "M 30.6734 49.1279 L 51.4020 85.0309 Q 61.4837 102.4929 76.1096 92.1540 A 119.52000000000001 119.52000000000001 0 0 0 117.8625 19.8359 Q 119.5033 2.0000 99.3399 2.0000 L 57.8827 2.0000 Q 49.3425 2.0000 47.5220 10.3686 A 48.64000000000001 48.64000000000001 0 0 1 32.7405 35.9710 Q 26.4033 41.7319 30.6734 49.1279 Z",
-    icon: { x: 64.206, y: 25.7656, width: 18, height: 18, type: "edit" },
-    labelX: 73.206,
-    labelY: 52.7656,
-    subtitle: "Edit Photo",
-  },
-  {
-    id: "tool.addbg",
-    action: "frameImage",
-    title: "ADD BG",
-    d: "M -27.2093 51.1279 L -47.9379 87.0309 Q -58.0196 104.4929 -41.7529 111.9899 A 119.52000000000001 119.52000000000001 0 0 0 41.7529 111.9899 Q 58.0196 104.4929 47.9379 87.0309 L 27.2093 51.1279 Q 22.9392 43.7319 14.7815 46.3396 A 48.64000000000001 48.64000000000001 0 0 1 -14.7815 46.3396 Q -22.9392 43.7319 -27.2093 51.1279 Z",
-    icon: { x: -9, y: 68.0312, width: 18, height: 18, type: "addbg" },
-    labelX: 0,
-    labelY: 95.0312,
-    subtitle: "Add Background",
-  },
-  {
-    id: "tool.crop",
-    action: "cropImage",
-    title: "CROP",
-    d: "M -57.8827 2.0000 L -99.3399 2.0000 Q -119.5033 2.0000 -117.8625 19.8359 A 119.52000000000001 119.52000000000001 0 0 0 -76.1096 92.1540 Q -61.4837 102.4929 -51.4020 85.0309 L -30.6734 49.1279 Q -26.4033 41.7319 -32.7405 35.9710 A 48.64000000000001 48.64000000000001 0 0 1 -47.5220 10.3686 Q -49.3425 2.0000 -57.8827 2.0000 Z",
-    icon: { x: -82.206, y: 25.7656, width: 18, height: 18, type: "crop" },
-    labelX: -73.206,
-    labelY: 52.7656,
-    subtitle: "Crop Image",
-  },
-  {
-    id: "tool.redact",
-    action: "redactImage",
-    title: "REDACT",
-    d: "M -30.6734 -49.1279 L -51.4020 -85.0309 Q -61.4837 -102.4929 -76.1096 -92.1540 A 119.52000000000001 119.52000000000001 0 0 0 -117.8625 -19.8359 Q -119.5033 -2.0000 -99.3399 -2.0000 L -57.8827 -2.0000 Q -49.3425 -2.0000 -47.5220 -10.3686 A 48.64000000000001 48.64000000000001 0 0 1 -32.7405 -35.9710 Q -26.4033 -41.7319 -30.6734 -49.1279 Z",
-    icon: { x: -82.206, y: -58.7656, width: 18, height: 18, type: "redact" },
-    labelX: -73.206,
-    labelY: -31.7656,
-    subtitle: "Redact Photo",
+    labelY: -72,
+    subtitle: "Trim Blank Pixels",
   },
 ];
 
@@ -167,7 +118,7 @@ export function hitTestWedge(
   _innerRadius?: number
 ): number | null {
   const isCount = typeof pageOrCount === "number";
-  const count = isCount ? pageOrCount : pageOrCount === "convert" ? 8 : 6;
+  const count = isCount ? pageOrCount : pageOrCount === "convert" ? 8 : 1;
   const scale =
     isCount && _innerRadius !== undefined
       ? scaleOrOuter / 148
@@ -179,8 +130,12 @@ export function hitTestWedge(
   const dy = (cursorY - wheelCenterY) / (scale || 1);
   const dist = Math.sqrt(dx * dx + dy * dy);
 
-  // Inner petal boundary is 48.64, outer boundary is 119.52
+  // Inner petal boundary is 44, outer boundary is 125
   if (dist < 44 || dist > 125) return null;
+
+  if (count === 1) {
+    return 0;
+  }
 
   const angle = Math.atan2(dy, dx);
 
@@ -190,10 +145,10 @@ export function hitTestWedge(
     const index = Math.floor(normalized / (Math.PI / 4));
     return index >= 0 && index < 8 ? index : null;
   } else {
-    let normalized = (angle + Math.PI / 2 + Math.PI / 6) % (2 * Math.PI);
+    let normalized = (angle + Math.PI / 2 + Math.PI / count) % (2 * Math.PI);
     if (normalized < 0) normalized += 2 * Math.PI;
-    const index = Math.floor(normalized / (Math.PI / 3));
-    return index >= 0 && index < 6 ? index : null;
+    const index = Math.floor(normalized / ((2 * Math.PI) / count));
+    return index >= 0 && index < count ? index : null;
   }
 }
 
@@ -234,24 +189,11 @@ export function isPetalEnabledForExtensions(
 
     return false;
   } else {
-    // Tools page
-    if (isImage) {
-      return true; // All photo tools supported for images
-    }
-
-    if (isPdf) {
-      // Only Compress and Metadata supported for PDF
-      return actionId === "tool.compress" || actionId === "tool.metadata";
-    }
-
-    if (isMedia) {
-      // Compress and metadata supported for video
-      return actionId === "tool.compress" || actionId === "tool.metadata";
-    }
-
-    return false;
+    // Tools page (TRIM operates on transparent/raster images)
+    return isImage;
   }
 }
+
 
 export function filterActions(
   actions: ActionManifest[],
@@ -309,63 +251,23 @@ function ToolIcon({
   stroke?: string;
 }) {
   switch (type) {
-    case "compress":
+    case "trim":
       return (
         <g fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 14h6v6" />
-          <path d="M10 14L3 21" />
-          <path d="M20 10h-6V4" />
-          <path d="M14 10l7-7" />
-        </g>
-      );
-    case "metadata":
-      return (
-        <g fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12.5 2.5a2 2 0 0 0-1.4-.5H4a2 2 0 0 0-2 2v7.1a2 2 0 0 0 .6 1.4l8.7 8.7a2.4 2.4 0 0 0 3.4 0l6.6-6.6a2.4 2.4 0 0 0 0-3.4z" />
-          <circle cx="7.5" cy="7.5" r="1.5" fill={stroke} />
-        </g>
-      );
-    case "edit":
-      return (
-        <g fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="4" y1="21" x2="4" y2="14" />
-          <line x1="4" y1="10" x2="4" y2="3" />
-          <line x1="12" y1="21" x2="12" y2="12" />
-          <line x1="12" y1="8" x2="12" y2="3" />
-          <line x1="20" y1="21" x2="20" y2="16" />
-          <line x1="20" y1="12" x2="20" y2="3" />
-          <line x1="1" y1="14" x2="7" y2="14" />
-          <line x1="9" y1="8" x2="15" y2="8" />
-          <line x1="17" y1="16" x2="23" y2="16" />
-        </g>
-      );
-    case "addbg":
-      return (
-        <g fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-          <circle cx="8.5" cy="8.5" r="1.5" />
-          <polyline points="21 15 16 10 5 21" />
-        </g>
-      );
-    case "crop":
-      return (
-        <g fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M6 2v14a2 2 0 0 0 2 2h14" />
-          <path d="M18 22V8a2 2 0 0 0-2-2H2" />
-        </g>
-      );
-    case "redact":
-      return (
-        <g fill="none" stroke={stroke} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="9.5" width="18" height="5" rx="1.5" fill={stroke} />
-          <line x1="3" y1="5.5" x2="17" y2="5.5" />
-          <line x1="3" y1="18.5" x2="13" y2="18.5" />
+          {/* 4 outer framing corners */}
+          <path d="M4 8V4h4" />
+          <path d="M20 8V4h-4" />
+          <path d="M4 16v4h4" />
+          <path d="M20 16v4h-4" />
+          {/* Inner tight content box */}
+          <rect x="7" y="7" width="10" height="10" rx="1.5" fill={stroke} fillOpacity="0.25" />
         </g>
       );
     default:
       return null;
   }
 }
+
 
 interface RadialWheelProps {
   files: string[];
@@ -632,6 +534,29 @@ function RadialWheelInner({
                 >
                   {petal.title}
                 </text>
+
+                {petal.id === "tool.trim" && (
+                  <text
+                    x={0}
+                    y={76}
+                    textAnchor="middle"
+                    dominantBaseline="central"
+                    fill={isHighlighted ? "rgba(255, 255, 255, 0.9)" : "#4b5563"}
+                    fontSize="9.5px"
+                    fontWeight="700"
+                    fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+                    letterSpacing="0.06em"
+                    style={{
+                      pointerEvents: "none",
+                      userSelect: "none",
+                      transformOrigin: "0px 0px",
+                      transform: isHighlighted ? "scale(1.025)" : "scale(1)",
+                      transition: "fill 0.12s ease, transform 0.12s ease",
+                    }}
+                  >
+                    TRIM BLANK PIXELS
+                  </text>
+                )}
               </g>
             );
           })}

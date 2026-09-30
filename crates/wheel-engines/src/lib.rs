@@ -1,10 +1,4 @@
 pub mod image_convert;
 pub mod pdf;
-pub mod image_tool;
-pub mod metadata;
-pub mod bg;
-pub mod edit;
-pub mod remove_bg;
-pub mod annotate;
-pub mod redact;
 pub mod media;
+pub mod trim;

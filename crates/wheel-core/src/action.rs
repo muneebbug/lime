@@ -179,39 +179,21 @@ pub fn default_actions() -> Vec<ActionManifest> {
     }
 
     // --- Tool actions ---
-    let tools = [
-        ("tool.crop",      "Crop",       "crop",       640u32,  860u32),
-        ("tool.compress",  "Compress",   "compress",   580,     480),
-        ("tool.metadata",  "Metadata",   "metadata",   680,     700),
-        ("tool.addbg",     "Add BG",     "add-bg",     720,     820),
-        ("tool.removebg",  "Remove BG",  "remove-bg",  720,     600),
-        ("tool.edit",      "Edit",       "edit",       720,     840),
-        ("tool.annotate",  "Annotate",   "annotate",   800,     700),
-        ("tool.redact",    "Redact",     "redact",     800,     700),
-    ];
-
-    for (i, (id, title, icon, w, h)) in tools.iter().enumerate() {
-        actions.push(ActionManifest {
-            id: id.to_string(),
-            title: title.to_string(),
-            icon: icon.to_string(),
-            category: ActionCategory::Tools,
-            accepts: AcceptedInput {
-                extensions: image_exts.clone(),
-                multi: false,
-            },
-            kind: ActionKind::Window,
-            window: Some(WindowConfig {
-                width: *w,
-                height: *h,
-                resizable: true,
-                mica: true,
-            }),
-            defaults: serde_json::json!({}),
-            enabled: true,
-            order: i as u32,
-        });
-    }
+    actions.push(ActionManifest {
+        id: "tool.trim".to_string(),
+        title: "TRIM".to_string(),
+        icon: "trim".to_string(),
+        category: ActionCategory::Tools,
+        accepts: AcceptedInput {
+            extensions: image_exts.clone(),
+            multi: true,
+        },
+        kind: ActionKind::Instant,
+        window: None,
+        defaults: serde_json::json!({}),
+        enabled: true,
+        order: 0,
+    });
 
     actions
 }
@@ -223,11 +205,11 @@ mod tests {
     #[test]
     fn test_default_actions_populated() {
         let actions = default_actions();
-        assert_eq!(actions.len(), 16);
+        assert_eq!(actions.len(), 9);
         let convert_count = actions.iter().filter(|a| a.category == ActionCategory::Convert).count();
         let tools_count = actions.iter().filter(|a| a.category == ActionCategory::Tools).count();
         assert_eq!(convert_count, 8);
-        assert_eq!(tools_count, 8);
+        assert_eq!(tools_count, 1);
     }
 
     #[test]
@@ -238,7 +220,7 @@ mod tests {
         }
 
         assert!(registry.get("convert.png").is_some());
-        assert!(registry.get("tool.crop").is_some());
+        assert!(registry.get("tool.trim").is_some());
         assert!(registry.get("nonexistent").is_none());
 
         let converts: Vec<_> = registry.for_category(&ActionCategory::Convert).collect();
