@@ -225,6 +225,7 @@ export function SettingsWindow() {
         className="h-[38px] flex items-center justify-between pl-4 pr-0 border-b border-white/[0.07] bg-[#1f1e1e] select-none shrink-0 z-20"
       >
         <div data-tauri-drag-region className="flex items-center gap-2">
+          <img src="/logo.svg" alt="Wheel" className="w-4 h-4 object-contain pointer-events-none" />
           <span className="text-[13px] font-medium text-neutral-200 pointer-events-none">
             Settings
           </span>
@@ -805,6 +806,16 @@ export function SettingsWindow() {
           {activeTab === "about" && (
             <div className="w-full">
               <SettingSection first>
+                <div className="flex flex-col items-center justify-center p-6 bg-[#2a2929] border border-white/[0.06] rounded-lg mb-4 text-center">
+                  <img
+                    src="/logo.svg"
+                    alt="Wheel"
+                    className="w-20 h-20 object-contain mb-3 drop-shadow-md select-none pointer-events-none"
+                  />
+                  <h2 className="text-base font-semibold text-white tracking-wide">Wheel</h2>
+                  <p className="text-xs text-neutral-400 mt-1">High-performance file toolkit for Windows</p>
+                </div>
+
                 <div className="p-4 bg-[#2a2929] border border-white/[0.06] rounded-lg space-y-3">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-neutral-400">Application</span>

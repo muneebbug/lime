@@ -36,6 +36,7 @@ wheel-win = { path = "../../../crates/wheel-win" }
 wheel-engines = { path = "../../../crates/wheel-engines" }
 trash = "5.2"
 uuid = { version = "1", features = ["v4"] }
+image = "0.25"
 
 [target.'cfg(windows)'.dependencies]
 window-vibrancy = "0.6"

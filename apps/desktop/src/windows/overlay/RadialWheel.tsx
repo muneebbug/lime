@@ -613,13 +613,22 @@ function RadialWheelInner({
               </text>
             ) : (
               <>
+                <image
+                  href="/logo.svg"
+                  x="-16"
+                  y="-26"
+                  width="32"
+                  height="32"
+                  preserveAspectRatio="xMidYMid meet"
+                  style={{ pointerEvents: "none", userSelect: "none" }}
+                />
                 <text
                   x="0"
-                  y="-4"
+                  y="10"
                   textAnchor="middle"
                   dominantBaseline="central"
                   fill="#2d3135"
-                  fontSize="10px"
+                  fontSize="8.5px"
                   fontWeight="700"
                   fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
                   letterSpacing="0.06em"
@@ -630,14 +639,14 @@ function RadialWheelInner({
                 {/* 2 Page Dots */}
                 <circle
                   cx="-4"
-                  cy="11"
-                  r="2.2"
+                  cy="20"
+                  r="1.8"
                   fill={currentPage === "convert" ? "#ff5419" : "#d1d5db"}
                 />
                 <circle
                   cx="4"
-                  cy="11"
-                  r="2.2"
+                  cy="20"
+                  r="1.8"
                   fill={currentPage === "tools" ? "#ff5419" : "#d1d5db"}
                 />
               </>

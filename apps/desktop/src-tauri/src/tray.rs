@@ -21,7 +21,9 @@ pub fn setup_tray(app: &AppHandle) -> anyhow::Result<()> {
         .menu(&menu)
         .show_menu_on_left_click(false);
 
-    if let Some(icon) = app.default_window_icon() {
+    if let Some(icon) = get_tray_icon() {
+        builder = builder.icon(icon);
+    } else if let Some(icon) = app.default_window_icon() {
         builder = builder.icon(icon.clone());
     }
 
@@ -53,6 +55,21 @@ pub fn setup_tray(app: &AppHandle) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn get_app_icon() -> Option<tauri::image::Image<'static>> {
+    let img = image::load_from_memory(include_bytes!("../icons/128x128.png"))
+        .or_else(|_| image::load_from_memory(include_bytes!("../icons/32x32.png")))
+        .ok()?
+        .to_rgba8();
+    let (w, h) = img.dimensions();
+    Some(tauri::image::Image::new_owned(img.into_raw(), w, h))
+}
+
+pub fn get_tray_icon() -> Option<tauri::image::Image<'static>> {
+    let img = image::load_from_memory(include_bytes!("../icons/32x32.png")).ok()?.to_rgba8();
+    let (w, h) = img.dimensions();
+    Some(tauri::image::Image::new_owned(img.into_raw(), w, h))
+}
+
 pub fn open_settings_window(app: &AppHandle) {
     use tauri::Manager;
     if let Some(win) = app.get_webview_window("settings") {
@@ -66,7 +83,7 @@ pub fn open_settings_window(app: &AppHandle) {
         return;
     }
 
-    let win = tauri::WebviewWindowBuilder::new(
+    let mut builder = tauri::WebviewWindowBuilder::new(
         app,
         "settings",
         tauri::WebviewUrl::App("index.html?window=settings".into()),
@@ -78,8 +95,13 @@ pub fn open_settings_window(app: &AppHandle) {
     .resizable(true)
     .maximizable(false)
     .center()
-    .focused(true)
-    .build();
+    .focused(true);
+
+    if let Some(icon) = get_app_icon() {
+        builder = builder.icon(icon).expect("valid icon");
+    }
+
+    let win = builder.build();
 
     if let Ok(win) = win {
         let _ = win.unminimize();
@@ -105,7 +127,7 @@ pub fn open_palette_window(app: &AppHandle) {
         return;
     }
 
-    let win = tauri::WebviewWindowBuilder::new(
+    let mut builder = tauri::WebviewWindowBuilder::new(
         app,
         "palette",
         tauri::WebviewUrl::App("index.html?window=palette".into()),
@@ -118,8 +140,13 @@ pub fn open_palette_window(app: &AppHandle) {
     .maximizable(false)
     .center()
     .always_on_top(true)
-    .focused(true)
-    .build();
+    .focused(true);
+
+    if let Some(icon) = get_app_icon() {
+        builder = builder.icon(icon).expect("valid icon");
+    }
+
+    let win = builder.build();
 
     if let Ok(win) = win {
         let _ = win.unminimize();

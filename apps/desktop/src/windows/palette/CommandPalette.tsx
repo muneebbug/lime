@@ -232,7 +232,7 @@ export function CommandPalette() {
         }}
         className="relative z-10 flex items-center gap-3 px-4 py-3 border-b border-white/[0.06] bg-[#151516]"
       >
-        <Search size={16} className="text-neutral-400 shrink-0" />
+        <img src="/logo.svg" alt="Wheel" className="w-5 h-5 object-contain shrink-0 pointer-events-none" />
         <input
           ref={inputRef}
           type="text"
@@ -325,6 +325,7 @@ export function CommandPalette() {
       {/* Action Bar */}
       <footer className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] bg-[#151516] text-xs text-neutral-400 relative z-10 shrink-0">
         <div className="flex items-center gap-2 truncate">
+          <img src="/logo.svg" alt="Wheel" className="w-3.5 h-3.5 object-contain shrink-0 pointer-events-none" />
           <span className="text-neutral-500 text-[11px]">Wheel Command Palette</span>
           {filteredItems[selectedIndex] && (
             <>
