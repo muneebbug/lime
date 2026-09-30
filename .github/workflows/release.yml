@@ -50,16 +50,16 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: ./apps/desktop
-          tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v__VERSION__' }}
-          releaseName: 'Lime ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v__VERSION__' }}'
+          tagName: v__VERSION__
+          releaseName: "Lime v__VERSION__"
           releaseBody: |
-            Lime Windows Release ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v__VERSION__' }}
+            Lime Windows Release v__VERSION__
 
             ### Available Assets
             - **Windows NSIS Setup**: `.exe` installer (self-extracting standalone setup)
             - **Windows WiX MSI**: `.msi` package (Windows Installer format)
           releaseDraft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: true
           generateReleaseNotes: true
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
@@ -70,7 +70,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $tag = if ("${{ github.ref }}".StartsWith("refs/tags/v")) { "${{ github.ref_name }}" } else { "v0.1.0-pre-alpha.1" }
+          $tag = if ($env:GITHUB_REF -like "refs/tags/v*") { $env:GITHUB_REF_NAME } else { "v0.1.0-pre-alpha.1" }
           Write-Host "Verifying installer assets for tag $tag..."
           
           # Discover all produced Windows installer bundles, updater archives, and signatures
