@@ -2,7 +2,7 @@
 name = "wheel-engines"
 version = "0.1.0"
 edition = "2021"
-description = "Wheel: image, PDF, video conversion and trim engines"
+description = "Lime: image, PDF, video conversion and trim engines"
 
 [dependencies]
 serde = { workspace = true }

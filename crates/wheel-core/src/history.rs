@@ -7,7 +7,7 @@ use uuid::Uuid;
 
 use crate::job::{Job, JobId, JobStatus};
 
-/// SQLite-backed persistent history store for Wheel jobs.
+/// SQLite-backed persistent history store for Lime jobs.
 #[derive(Clone)]
 pub struct HistoryDb {
     conn: Arc<Mutex<Connection>>,

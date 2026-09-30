@@ -501,7 +501,7 @@ async fn run_instant_action(
         let _ = app
             .notification()
             .builder()
-            .title("Wheel — Conversion failed")
+            .title("Lime — Conversion failed")
             .body(&err)
             .show();
     } else {
@@ -543,9 +543,9 @@ async fn run_instant_action(
         );
 
         let notif_title = if is_trim {
-            "Wheel — Trim complete".to_string()
+            "Lime — Trim complete".to_string()
         } else {
-            format!("Wheel — {} complete", target_ext.to_uppercase())
+            format!("Lime — {} complete", target_ext.to_uppercase())
         };
         let notif_body = if is_trim {
             format!("Trimmed blank pixels from {} file(s) successfully", outputs.len())
@@ -689,7 +689,7 @@ pub async fn trim_image_file(
 
     use tauri_plugin_notification::NotificationExt;
     let _ = app.notification().builder()
-        .title("Wheel — Trim complete")
+        .title("Lime — Trim complete")
         .body(format!("Trimmed image saved to {:?}", res.output_path.file_name().unwrap_or_default()))
         .show();
 
@@ -759,7 +759,7 @@ pub async fn convert_media_file(
 
     use tauri_plugin_notification::NotificationExt;
     let _ = app.notification().builder()
-        .title("Wheel — Media conversion complete")
+        .title("Lime — Media conversion complete")
         .body(format!("Converted media saved to {:?}", res.file_name().unwrap_or_default()))
         .show();
 
@@ -812,13 +812,13 @@ pub async fn pick_folder() -> Result<Option<String>, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Open the %LOCALAPPDATA%\Wheel data directory in Windows Explorer
+/// Open the %LOCALAPPDATA%\Lime data directory in Windows Explorer
 #[tauri::command]
 pub async fn open_data_folder() -> Result<(), String> {
     let local_app_data = std::env::var("LOCALAPPDATA")
         .or_else(|_| std::env::var("APPDATA"))
         .unwrap_or_else(|_| ".".to_string());
-    let path = std::path::PathBuf::from(local_app_data).join("Wheel");
+    let path = std::path::PathBuf::from(local_app_data).join("Lime");
     let _ = std::fs::create_dir_all(&path);
     std::process::Command::new("explorer")
         .arg(&path)
@@ -926,7 +926,7 @@ pub async fn run_preset(
 
     use tauri_plugin_notification::NotificationExt;
     let _ = app.notification().builder()
-        .title("Wheel — Preset Complete")
+        .title("Lime — Preset Complete")
         .body(format!("{} finished: {:?}", preset.name, current_input.file_name().unwrap_or_default()))
         .show();
 

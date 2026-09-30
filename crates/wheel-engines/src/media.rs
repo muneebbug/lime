@@ -36,11 +36,15 @@ pub fn get_ffmpeg_status() -> FfmpegStatus {
 }
 
 pub fn find_ffmpeg_path() -> Option<PathBuf> {
-    // 1. App-specific sidecar directory: %LOCALAPPDATA%\Wheel\bin\ffmpeg.exe
+    // 1. App-specific sidecar directory: %LOCALAPPDATA%\Lime\bin\ffmpeg.exe (fallback to legacy Wheel)
     if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        let sidecar = PathBuf::from(local_app_data).join("Wheel").join("bin").join("ffmpeg.exe");
+        let sidecar = PathBuf::from(&local_app_data).join("Lime").join("bin").join("ffmpeg.exe");
         if sidecar.exists() {
             return Some(sidecar);
+        }
+        let legacy_sidecar = PathBuf::from(&local_app_data).join("Wheel").join("bin").join("ffmpeg.exe");
+        if legacy_sidecar.exists() {
+            return Some(legacy_sidecar);
         }
     }
 
@@ -74,7 +78,7 @@ pub fn convert_media(input: &Path, output: &Path, target_format: &str) -> Result
     );
 
     let ffmpeg = find_ffmpeg_path().ok_or_else(|| {
-        anyhow::anyhow!("FFmpeg is not installed or not found in PATH or Wheel sidecar directory")
+        anyhow::anyhow!("FFmpeg is not installed or not found in PATH or Lime sidecar directory")
     })?;
 
     if let Some(parent) = output.parent() {

@@ -2,7 +2,7 @@
 name = "wheel-win"
 version = "0.1.0"
 edition = "2021"
-description = "Wheel: Win32 hooks, OLE drop target, shell integration"
+description = "Lime: Win32 hooks, OLE drop target, shell integration"
 
 [dependencies]
 serde = { workspace = true }

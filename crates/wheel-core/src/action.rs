@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 /// The display name of the application. Change only this constant to rename.
-pub const APP_NAME: &str = "Wheel";
-pub const APP_ID: &str = "com.aediant.wheel";
+pub const APP_NAME: &str = "Lime";
+pub const APP_ID: &str = "com.limeapp.lime";
 
 /// Unique identifier for an action (e.g. "convert.png", "tool.crop")
 pub type ActionId = String;

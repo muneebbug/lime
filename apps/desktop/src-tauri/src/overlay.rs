@@ -17,7 +17,7 @@ pub fn create_overlay_window(app: &AppHandle) -> anyhow::Result<()> {
         "overlay",
         WebviewUrl::App("index.html?window=overlay".into()),
     )
-    .title("Wheel Overlay")
+    .title("Lime Overlay")
     .transparent(true)
     .decorations(false)
     .shadow(false)

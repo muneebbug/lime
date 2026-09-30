@@ -1,8 +1,8 @@
 [package]
 name = "desktop"
 version = "0.1.0"
-description = "Wheel — Windows radial drag-and-drop file toolkit"
-authors = ["Wheel Contributors"]
+description = "Lime — Windows radial drag-and-drop file toolkit"
+authors = ["Lime Contributors"]
 edition = "2021"
 
 [lib]

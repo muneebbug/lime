@@ -47,15 +47,23 @@ pub fn run() {
         .or_else(|_| std::env::var("APPDATA"))
         .or_else(|_| std::env::var("HOME"))
         .unwrap_or_else(|_| ".".to_string());
-    let wheel_dir = std::path::PathBuf::from(local_app_data).join("Wheel");
-    let db_path = wheel_dir.join("history.db");
+    let local_path = std::path::PathBuf::from(local_app_data);
+    let lime_dir = local_path.join("Lime");
+    let old_wheel_dir = local_path.join("Wheel");
+    let app_dir = if !lime_dir.exists() && old_wheel_dir.exists() {
+        let _ = std::fs::rename(&old_wheel_dir, &lime_dir);
+        if lime_dir.exists() { lime_dir } else { old_wheel_dir }
+    } else {
+        lime_dir
+    };
+    let db_path = app_dir.join("history.db");
     let history = wheel_core::HistoryDb::open(&db_path).unwrap_or_else(|e| {
         tracing::warn!("Failed to open persistent history at {:?}: {}, falling back to in-memory", db_path, e);
         wheel_core::HistoryDb::open_in_memory().expect("in-memory db must succeed")
     });
     let history = Arc::new(history);
 
-    let settings_path = wheel_dir.join("settings.json");
+    let settings_path = app_dir.join("settings.json");
     let mut initial_settings = WheelSettings::load_or_default(&settings_path);
     initial_settings.general.launch_at_login = wheel_win::shell::is_launch_at_login_registered();
     initial_settings.general.explorer_context_menu = wheel_win::shell::is_context_menu_registered();
@@ -152,7 +160,7 @@ pub fn run() {
                         label != window.label() && label != "overlay" && w.is_visible().unwrap_or(false)
                     });
                     if !other_visible {
-                        tracing::info!("Closing last window with minimize_to_tray=false, exiting Wheel");
+                        tracing::info!("Closing last window with minimize_to_tray=false, exiting Lime");
                         app.exit(0);
                     }
                 }

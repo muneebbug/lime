@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capability for all Wheel windows",
+  "description": "Default capability for all Lime windows",
   "windows": ["main", "overlay", "tool-*", "settings", "palette"],
   "permissions": [
     "core:default",

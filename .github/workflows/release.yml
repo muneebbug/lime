@@ -49,9 +49,9 @@ jobs:
         with:
           projectPath: ./apps/desktop
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v__VERSION__' }}
-          releaseName: 'Wheel ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v__VERSION__' }}'
+          releaseName: 'Lime ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v__VERSION__' }}'
           releaseBody: |
-            Wheel Windows Release ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v__VERSION__' }}
+            Lime Windows Release ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v__VERSION__' }}
 
             ### Available Assets
             - **Windows NSIS Setup**: `.exe` installer (self-extracting standalone setup)

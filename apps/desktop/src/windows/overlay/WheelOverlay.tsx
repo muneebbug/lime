@@ -169,9 +169,9 @@ export function WheelOverlay() {
       return;
     }
 
-    // Context filter: verify the file type has at least one supported action in Wheel
+    // Context filter: verify the file type has at least one supported action in Lime
     if (!isSupportedFileType(extensions)) {
-      console.log("Wheel: ignoring unsupported file type:", extensions);
+      console.log("Lime: ignoring unsupported file type:", extensions);
       useWheelStore.getState().clearDragState();
       invoke("hide_overlay");
       return;

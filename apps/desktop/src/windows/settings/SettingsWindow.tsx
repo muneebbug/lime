@@ -195,7 +195,7 @@ export function SettingsWindow() {
     },
     {
       id: "about",
-      label: "About Wheel",
+      label: "About Lime",
       icon: <PhInfo size={18} weight="bold" />,
       group: "features",
     },
@@ -225,7 +225,7 @@ export function SettingsWindow() {
         className="h-[38px] flex items-center justify-between pl-4 pr-0 border-b border-white/[0.07] bg-[#1f1e1e] select-none shrink-0 z-20"
       >
         <div data-tauri-drag-region className="flex items-center gap-2">
-          <img src="/logo.svg" alt="Wheel" className="w-4 h-4 object-contain pointer-events-none" />
+          <img src="/logo.svg" alt="Lime" className="w-4 h-4 object-contain pointer-events-none" />
           <span className="text-[13px] font-medium text-neutral-200 pointer-events-none">
             Settings
           </span>
@@ -307,7 +307,7 @@ export function SettingsWindow() {
               <SettingSection first>
                 <SettingRow
                   title="Launch at Windows Login"
-                  description="Start Wheel automatically in the background when signing into Windows"
+                  description="Start Lime automatically in the background when signing into Windows"
                 >
                   <ToggleSwitch
                     checked={settings.general.launch_at_login}
@@ -323,7 +323,7 @@ export function SettingsWindow() {
 
                 <SettingRow
                   title="Close to System Tray"
-                  description="Keep Wheel running in the background tray when tool windows are closed"
+                  description="Keep Lime running in the background tray when tool windows are closed"
                 >
                   <ToggleSwitch
                     checked={settings.general.minimize_to_tray}
@@ -341,7 +341,7 @@ export function SettingsWindow() {
               <SettingSection title="Windows Explorer Integration">
                 <SettingRow
                   title="Explorer Context Menu"
-                  description="Add 'Open with Wheel' to Windows Explorer right-click context menus"
+                  description="Add 'Open with Lime' to Windows Explorer right-click context menus"
                 >
                   <ToggleSwitch
                     checked={settings.general.explorer_context_menu}
@@ -452,7 +452,7 @@ export function SettingsWindow() {
                 </SettingRow>
 
                 <SettingRow
-                  title="Pause Wheel Trigger"
+                  title="Pause Lime Trigger"
                   description="Temporarily silence the radial gesture without quitting the app"
                 >
                   <ToggleSwitch
@@ -596,7 +596,7 @@ export function SettingsWindow() {
                           };
                           handleSaveSettings(updated);
                         }}
-                        placeholder="C:\Users\...\Pictures\Wheel"
+                        placeholder="C:\Users\...\Pictures\Lime"
                         className="w-48 px-2.5 py-1 text-xs bg-[#2a2929] border border-white/[0.08] focus:border-white/30 rounded-md text-white font-mono outline-none cursor-text"
                       />
                       <WheelButton
@@ -809,17 +809,17 @@ export function SettingsWindow() {
                 <div className="flex flex-col items-center justify-center p-6 bg-[#2a2929] border border-white/[0.06] rounded-lg mb-4 text-center">
                   <img
                     src="/logo.svg"
-                    alt="Wheel"
+                    alt="Lime"
                     className="w-20 h-20 object-contain mb-3 drop-shadow-md select-none pointer-events-none"
                   />
-                  <h2 className="text-base font-semibold text-white tracking-wide">Wheel</h2>
+                  <h2 className="text-base font-semibold text-white tracking-wide">Lime</h2>
                   <p className="text-xs text-neutral-400 mt-1">High-performance file toolkit for Windows</p>
                 </div>
 
                 <div className="p-4 bg-[#2a2929] border border-white/[0.06] rounded-lg space-y-3">
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-neutral-400">Application</span>
-                    <span className="text-neutral-200 font-medium">Wheel — File Toolkit for Windows</span>
+                    <span className="text-neutral-200 font-medium">Lime — File Toolkit for Windows</span>
                   </div>
 
                   <div className="h-px bg-white/[0.04]" />
@@ -835,7 +835,7 @@ export function SettingsWindow() {
                     <div>
                       <div className="text-neutral-400">Local Data Storage</div>
                       <div className="font-mono text-neutral-400 text-[11px] truncate max-w-xs mt-0.5">
-                        %LOCALAPPDATA%\Wheel\
+                        %LOCALAPPDATA%\Lime\
                       </div>
                     </div>
                     <WheelButton

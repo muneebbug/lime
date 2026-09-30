@@ -2,7 +2,7 @@
 name = "wheel-core"
 version = "0.1.0"
 edition = "2021"
-description = "Wheel: action registry, job queue, settings schema"
+description = "Lime: action registry, job queue, settings schema"
 
 [dependencies]
 serde = { workspace = true }

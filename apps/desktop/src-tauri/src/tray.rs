@@ -6,18 +6,18 @@ use tauri::{
 use tracing::info;
 
 pub fn setup_tray(app: &AppHandle) -> anyhow::Result<()> {
-    let pause_item = MenuItem::with_id(app, "pause", "Pause Wheel", true, None::<&str>)?;
+    let pause_item = MenuItem::with_id(app, "pause", "Pause Lime", true, None::<&str>)?;
     let settings_item = MenuItem::with_id(app, "settings", "Open Settings", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let quit_item = PredefinedMenuItem::quit(app, Some("Quit Wheel"))?;
+    let quit_item = PredefinedMenuItem::quit(app, Some("Quit Lime"))?;
 
     let menu = Menu::with_items(
         app,
         &[&pause_item, &settings_item, &separator, &quit_item],
     )?;
 
-    let mut builder = TrayIconBuilder::with_id("wheel-tray")
-        .tooltip("Wheel — drag files to convert and edit")
+    let mut builder = TrayIconBuilder::with_id("lime-tray")
+        .tooltip("Lime — drag files to convert and edit")
         .menu(&menu)
         .show_menu_on_left_click(false);
 
@@ -88,7 +88,7 @@ pub fn open_settings_window(app: &AppHandle) {
         "settings",
         tauri::WebviewUrl::App("index.html?window=settings".into()),
     )
-    .title("Wheel Settings")
+    .title("Lime Settings")
     .inner_size(900.0, 680.0)
     .decorations(false)
     .transparent(true)
@@ -132,7 +132,7 @@ pub fn open_palette_window(app: &AppHandle) {
         "palette",
         tauri::WebviewUrl::App("index.html?window=palette".into()),
     )
-    .title("Wheel Command Palette")
+    .title("Lime Command Palette")
     .inner_size(640.0, 480.0)
     .decorations(false)
     .transparent(true)

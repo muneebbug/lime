@@ -2,10 +2,10 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use tracing::info;
 
-/// Check if Wheel is registered in Windows Explorer context menu (HKCU)
+/// Check if Lime is registered in Windows Explorer context menu (HKCU)
 pub fn is_context_menu_registered() -> bool {
     let status = std::process::Command::new("reg")
-        .args(["query", r"HKCU\Software\Classes\*\shell\Wheel"])
+        .args(["query", r"HKCU\Software\Classes\*\shell\Lime"])
         .output();
 
     match status {
@@ -14,7 +14,7 @@ pub fn is_context_menu_registered() -> bool {
     }
 }
 
-/// Register Wheel in the Windows Explorer context menu under HKCU (no admin required)
+/// Register Lime in the Windows Explorer context menu under HKCU (no admin required)
 pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
     let exe = match custom_exe {
         Some(p) => p.to_path_buf(),
@@ -24,28 +24,28 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
     let exe_str = exe.to_string_lossy();
     let cmd_str = format!("\"{}\" \"%1\"", exe_str);
 
-    info!("Registering Explorer context menu for Wheel: {}", exe_str);
+    info!("Registering Explorer context menu for Lime: {}", exe_str);
 
-    // 1. Files: HKCU\Software\Classes\*\shell\Wheel
+    // 1. Files: HKCU\Software\Classes\*\shell\Lime
     let status = std::process::Command::new("reg")
         .args([
             "add",
-            r"HKCU\Software\Classes\*\shell\Wheel",
+            r"HKCU\Software\Classes\*\shell\Lime",
             "/ve",
             "/d",
-            "Open with Wheel",
+            "Open with Lime",
             "/f",
         ])
         .output()?;
 
     if !status.status.success() {
-        anyhow::bail!("Failed to create Wheel context menu file key");
+        anyhow::bail!("Failed to create Lime context menu file key");
     }
 
     let _ = std::process::Command::new("reg")
         .args([
             "add",
-            r"HKCU\Software\Classes\*\shell\Wheel",
+            r"HKCU\Software\Classes\*\shell\Lime",
             "/v",
             "Icon",
             "/d",
@@ -57,7 +57,7 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
     let status = std::process::Command::new("reg")
         .args([
             "add",
-            r"HKCU\Software\Classes\*\shell\Wheel\command",
+            r"HKCU\Software\Classes\*\shell\Lime\command",
             "/ve",
             "/d",
             &cmd_str,
@@ -66,17 +66,17 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
         .output()?;
 
     if !status.status.success() {
-        anyhow::bail!("Failed to create Wheel context menu command key");
+        anyhow::bail!("Failed to create Lime context menu command key");
     }
 
-    // 2. Directories: HKCU\Software\Classes\Directory\shell\Wheel
+    // 2. Directories: HKCU\Software\Classes\Directory\shell\Lime
     let _ = std::process::Command::new("reg")
         .args([
             "add",
-            r"HKCU\Software\Classes\Directory\shell\Wheel",
+            r"HKCU\Software\Classes\Directory\shell\Lime",
             "/ve",
             "/d",
-            "Open with Wheel",
+            "Open with Lime",
             "/f",
         ])
         .output();
@@ -84,7 +84,7 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
     let _ = std::process::Command::new("reg")
         .args([
             "add",
-            r"HKCU\Software\Classes\Directory\shell\Wheel",
+            r"HKCU\Software\Classes\Directory\shell\Lime",
             "/v",
             "Icon",
             "/d",
@@ -96,7 +96,7 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
     let _ = std::process::Command::new("reg")
         .args([
             "add",
-            r"HKCU\Software\Classes\Directory\shell\Wheel\command",
+            r"HKCU\Software\Classes\Directory\shell\Lime\command",
             "/ve",
             "/d",
             &cmd_str,
@@ -104,34 +104,34 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
         ])
         .output();
 
-    info!("Wheel Explorer context menu registered successfully");
+    info!("Lime Explorer context menu registered successfully");
     Ok(())
 }
 
-/// Unregister Wheel from Windows Explorer context menu
+/// Unregister Lime from Windows Explorer context menu
 pub fn unregister_context_menu() -> Result<()> {
     if !is_context_menu_registered() {
         return Ok(());
     }
 
-    info!("Unregistering Explorer context menu for Wheel");
+    info!("Unregistering Explorer context menu for Lime");
 
     let _ = std::process::Command::new("reg")
-        .args(["delete", r"HKCU\Software\Classes\*\shell\Wheel", "/f"])
+        .args(["delete", r"HKCU\Software\Classes\*\shell\Lime", "/f"])
         .output();
 
     let _ = std::process::Command::new("reg")
-        .args(["delete", r"HKCU\Software\Classes\Directory\shell\Wheel", "/f"])
+        .args(["delete", r"HKCU\Software\Classes\Directory\shell\Lime", "/f"])
         .output();
 
-    info!("Wheel Explorer context menu unregistered");
+    info!("Lime Explorer context menu unregistered");
     Ok(())
 }
 
-/// Check if Wheel is registered to run at Windows login under HKCU
+/// Check if Lime is registered to run at Windows login under HKCU
 pub fn is_launch_at_login_registered() -> bool {
     let status = std::process::Command::new("reg")
-        .args(["query", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "Wheel"])
+        .args(["query", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "Lime"])
         .output();
 
     match status {
@@ -140,7 +140,7 @@ pub fn is_launch_at_login_registered() -> bool {
     }
 }
 
-/// Register or unregister Wheel in the Windows startup registry (HKCU Run key)
+/// Register or unregister Lime in the Windows startup registry (HKCU Run key)
 pub fn set_launch_at_login(enabled: bool) -> Result<()> {
     if is_launch_at_login_registered() == enabled {
         return Ok(());
@@ -151,13 +151,13 @@ pub fn set_launch_at_login(enabled: bool) -> Result<()> {
         let exe_str = exe.to_string_lossy();
         let cmd_str = format!("\"{}\"", exe_str);
 
-        info!("Registering startup run key for Wheel: {}", cmd_str);
+        info!("Registering startup run key for Lime: {}", cmd_str);
         let status = std::process::Command::new("reg")
             .args([
                 "add",
                 r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
                 "/v",
-                "Wheel",
+                "Lime",
                 "/t",
                 "REG_SZ",
                 "/d",
@@ -167,16 +167,16 @@ pub fn set_launch_at_login(enabled: bool) -> Result<()> {
             .output()?;
 
         if !status.status.success() {
-            anyhow::bail!("Failed to register Wheel in Windows startup registry");
+            anyhow::bail!("Failed to register Lime in Windows startup registry");
         }
     } else {
-        info!("Unregistering startup run key for Wheel");
+        info!("Unregistering startup run key for Lime");
         let _ = std::process::Command::new("reg")
             .args([
                 "delete",
                 r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
                 "/v",
-                "Wheel",
+                "Lime",
                 "/f",
             ])
             .output();
@@ -213,7 +213,7 @@ pub fn pick_folder() -> Result<Option<std::path::PathBuf>> {
     let script = r#"
 Add-Type -AssemblyName System.Windows.Forms
 $dialog = New-Object System.Windows.Forms.FolderBrowserDialog
-$dialog.Description = "Select Wheel Output Folder"
+$dialog.Description = "Select Lime Output Folder"
 $dialog.ShowNewFolderButton = $true
 if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     [Console]::Out.Write($dialog.SelectedPath)
@@ -231,7 +231,7 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 }
 
 /// Check if the window at screen coordinates (x, y) is a recognized file drag source.
-/// This prevents Wheel from arming when dragging inside games, text editors,
+/// This prevents Lime from arming when dragging inside games, text editors,
 /// or non-file windows.
 #[cfg(windows)]
 pub fn is_potential_file_drag_source(x: i32, y: i32) -> bool {
