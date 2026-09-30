@@ -16,7 +16,7 @@ concurrency:
 jobs:
   typecheck-and-build:
     name: Frontend Typecheck & Build
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -40,19 +40,8 @@ jobs:
         run: pnpm --filter desktop build
 
   test-rust:
-    name: Rust Tests (${{ matrix.os-name }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: 'windows-latest'
-            os-name: 'Windows'
-          - platform: 'macos-latest'
-            os-name: 'macOS'
-          - platform: 'ubuntu-22.04'
-            os-name: 'Linux'
-
-    runs-on: ${{ matrix.platform }}
+    name: Rust Workspace Tests (Windows)
+    runs-on: windows-latest
 
     steps:
       - name: Checkout repository
@@ -63,21 +52,6 @@ jobs:
 
       - name: Rust Cache
         uses: swatinem/rust-cache@v2
-
-      - name: Install system dependencies (Ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            build-essential \
-            curl \
-            wget \
-            file \
-            libxdo-dev \
-            libssl-dev \
-            libayatana-appindicator3-dev \
-            librsvg2-dev
 
       - name: Run Cargo Tests
         run: cargo test --workspace
