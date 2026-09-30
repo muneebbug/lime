@@ -65,11 +65,255 @@ pub struct ConvertParams {
     pub quality: u8,
 }
 
+/// Checks if a CSS property value uses an unsupported CSS Color 4 function
+fn is_unsupported_color_fn(val: &str) -> bool {
+    let v = val.trim().to_lowercase();
+    v.starts_with("color(") || v.starts_with("oklab(") || v.starts_with("oklch(") || v.starts_with("lab(") || v.starts_with("lch(")
+}
+
+/// Convert CSS Color 4 `color(...)` function (e.g. `color(display-p3 1.0 0.3216 0.0)`) to `rgb(...)` or `rgba(...)`
+fn convert_color_fn_to_rgb(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    let lower = trimmed.to_lowercase();
+    let inner = lower.strip_prefix("color(")?.strip_suffix(')')?.trim();
+
+    let (colors_part, alpha_part) = if let Some((c, a)) = inner.split_once('/') {
+        (c.trim(), Some(a.trim()))
+    } else {
+        (inner, None)
+    };
+
+    let mut tokens = colors_part.split_whitespace();
+    let _space = tokens.next()?;
+    let r_str = tokens.next()?;
+    let g_str = tokens.next()?;
+    let b_str = tokens.next()?;
+    let extra_alpha_str = tokens.next();
+
+    let parse_channel = |s: &str| -> Option<f32> {
+        if let Some(pct) = s.strip_suffix('%') {
+            pct.parse::<f32>().ok().map(|v| (v / 100.0).clamp(0.0, 1.0))
+        } else {
+            let v = s.parse::<f32>().ok()?;
+            if v > 1.0 {
+                Some((v / 255.0).clamp(0.0, 1.0))
+            } else {
+                Some(v.clamp(0.0, 1.0))
+            }
+        }
+    };
+
+    let r_val = parse_channel(r_str)?;
+    let g_val = parse_channel(g_str)?;
+    let b_val = parse_channel(b_str)?;
+
+    let alpha_val = if let Some(a_str) = alpha_part.or(extra_alpha_str) {
+        parse_channel(a_str)
+    } else {
+        None
+    };
+
+    let r_u8 = (r_val * 255.0).round().clamp(0.0, 255.0) as u8;
+    let g_u8 = (g_val * 255.0).round().clamp(0.0, 255.0) as u8;
+    let b_u8 = (b_val * 255.0).round().clamp(0.0, 255.0) as u8;
+
+    if let Some(a) = alpha_val {
+        Some(format!("rgba({}, {}, {}, {:.3})", r_u8, g_u8, b_u8, a))
+    } else {
+        Some(format!("rgb({}, {}, {})", r_u8, g_u8, b_u8))
+    }
+}
+
+/// Sanitizes CSS declarations within a `style="..."` attribute or CSS rule `{ ... }`.
+///
+/// Figma and other modern design tools export CSS fallback patterns like:
+/// `fill:#FF5200;fill:color(display-p3 1.0000 0.3216 0.0000);fill-opacity:1;`
+/// Standard CSS parsers keep the fallback (`#FF5200`) when `color(...)` is unsupported.
+/// Resvg's parser however records the unsupported `color(...)`, fails at paint parse time,
+/// and falls back to default solid black `#000000`.
+///
+/// This function drops the unsupported `color(...)` when a standard fallback is already present,
+/// or converts standalone `color(...)` into standard `rgb(...)`.
+fn sanitize_css_declarations(block: &str) -> String {
+    let parts: Vec<&str> = block.split(';').collect();
+    let mut standard_properties = std::collections::HashSet::new();
+
+    for part in &parts {
+        let trimmed = part.trim();
+        if let Some((k, v)) = trimmed.split_once(':') {
+            let key = k.trim().to_lowercase();
+            let val = v.trim();
+            if !val.is_empty() && !is_unsupported_color_fn(val) {
+                standard_properties.insert(key);
+            }
+        }
+    }
+
+    let mut result_parts = Vec::new();
+    for part in parts {
+        let trimmed = part.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if let Some((k, v)) = trimmed.split_once(':') {
+            let key = k.trim().to_lowercase();
+            let val = v.trim();
+            if is_unsupported_color_fn(val) {
+                // If a standard fallback is already present for this property, drop the unsupported override!
+                if standard_properties.contains(&key) {
+                    continue;
+                }
+                // If no fallback was provided, convert color(...) into standard rgb(...)
+                if let Some(converted) = convert_color_fn_to_rgb(val) {
+                    result_parts.push(format!("{}: {}", k.trim(), converted));
+                    continue;
+                }
+                continue;
+            }
+        }
+        result_parts.push(trimmed.to_string());
+    }
+
+    if result_parts.is_empty() {
+        String::new()
+    } else {
+        let mut joined = result_parts.join("; ");
+        if block.trim_end().ends_with(';') {
+            joined.push(';');
+        }
+        joined
+    }
+}
+
+fn sanitize_style_tag_css(css: &str) -> String {
+    let mut out = String::with_capacity(css.len());
+    let mut i = 0;
+    while let Some(brace_start) = css[i..].find('{') {
+        let abs_start = i + brace_start;
+        out.push_str(&css[i..=abs_start]);
+        let decl_start = abs_start + 1;
+        if let Some(brace_end) = css[decl_start..].find('}') {
+            let abs_end = decl_start + brace_end;
+            let decls = &css[decl_start..abs_end];
+            out.push_str(&sanitize_css_declarations(decls));
+            out.push('}');
+            i = abs_end + 1;
+        } else {
+            out.push_str(&css[decl_start..]);
+            return out;
+        }
+    }
+    out.push_str(&css[i..]);
+    out
+}
+
+pub fn sanitize_svg_string(svg: &str) -> String {
+    if !svg.contains("color(") && !svg.contains("oklab(") && !svg.contains("oklch(") && !svg.contains("lab(") && !svg.contains("lch(") {
+        return svg.to_string();
+    }
+
+    let mut output = String::with_capacity(svg.len());
+    let chars: Vec<(usize, char)> = svg.char_indices().collect();
+    let num_chars = chars.len();
+
+    let mut char_idx = 0;
+    while char_idx < num_chars {
+        let (byte_pos, _) = chars[char_idx];
+        let slice = &svg[byte_pos..];
+
+        // Check for <style...> ... </style>
+        if slice.len() >= 6 && slice[..6].eq_ignore_ascii_case("<style") {
+            let next_ch = slice[6..].chars().next();
+            if next_ch == Some('>') || next_ch.map(|c| c.is_whitespace()).unwrap_or(false) {
+                if let Some(open_end) = slice.find('>') {
+                    let open_tag_bytes = &slice[..open_end + 1];
+                    let after_open = &slice[open_end + 1..];
+                    if let Some(close_idx) = after_open.to_ascii_lowercase().find("</style>") {
+                        output.push_str(open_tag_bytes);
+                        let css_block = &after_open[..close_idx];
+                        output.push_str(&sanitize_style_tag_css(css_block));
+                        let total_consumed = open_end + 1 + close_idx;
+                        while char_idx < num_chars && chars[char_idx].0 < byte_pos + total_consumed {
+                            char_idx += 1;
+                        }
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // Check for style=" or style='
+        if slice.len() >= 7 && slice[..5].eq_ignore_ascii_case("style") {
+            let after_style = &slice[5..];
+            let trimmed_start = after_style.trim_start();
+            if let Some(after_eq) = trimmed_start.strip_prefix('=') {
+                let trimmed_after_eq = after_eq.trim_start();
+                if trimmed_after_eq.starts_with('"') || trimmed_after_eq.starts_with('\'') {
+                    let quote = trimmed_after_eq.chars().next().unwrap();
+                    let val_content = &trimmed_after_eq[1..];
+                    if let Some(quote_end) = val_content.find(quote) {
+                        let content = &val_content[..quote_end];
+                        let sanitized_style = sanitize_css_declarations(content);
+
+                        let prefix_len = slice.len() - val_content.len();
+                        output.push_str(&slice[..prefix_len]);
+                        output.push_str(&sanitized_style);
+                        output.push(quote);
+
+                        let total_consumed = prefix_len + quote_end + 1;
+                        while char_idx < num_chars && chars[char_idx].0 < byte_pos + total_consumed {
+                            char_idx += 1;
+                        }
+                        continue;
+                    }
+                }
+            }
+        }
+
+        // Check for attribute with color(...) e.g. ="color(...) or ='color(...)
+        if slice.len() >= 8 && (slice.starts_with("=\"color(") || slice.starts_with("='color(")) {
+            let quote = slice.chars().nth(1).unwrap();
+            let val_content = &slice[2..];
+            if let Some(quote_end) = val_content.find(quote) {
+                let content = &val_content[..quote_end];
+                let converted = convert_color_fn_to_rgb(content).unwrap_or_else(|| content.to_string());
+                output.push('=');
+                output.push(quote);
+                output.push_str(&converted);
+                output.push(quote);
+
+                let total_consumed = 2 + quote_end + 1;
+                while char_idx < num_chars && chars[char_idx].0 < byte_pos + total_consumed {
+                    char_idx += 1;
+                }
+                continue;
+            }
+        }
+
+        output.push(chars[char_idx].1);
+        char_idx += 1;
+    }
+
+    output
+}
+
 pub fn decode_svg_bytes(bytes: &[u8]) -> Result<image::DynamicImage> {
     let mut opt = resvg::usvg::Options::default();
     opt.fontdb_mut().load_system_fonts();
 
-    let tree = resvg::usvg::Tree::from_data(bytes, &opt)
+    // Sanitize SVG if it contains CSS Color 4 functions (like display-p3 from Figma)
+    let sanitized_bytes: std::borrow::Cow<[u8]> = if let Ok(s) = std::str::from_utf8(bytes) {
+        if s.contains("color(") || s.contains("oklab(") || s.contains("oklch(") || s.contains("lab(") || s.contains("lch(") {
+            let clean = sanitize_svg_string(s);
+            std::borrow::Cow::Owned(clean.into_bytes())
+        } else {
+            std::borrow::Cow::Borrowed(bytes)
+        }
+    } else {
+        std::borrow::Cow::Borrowed(bytes)
+    };
+
+    let tree = resvg::usvg::Tree::from_data(&sanitized_bytes, &opt)
         .context("Failed to parse SVG data")?;
 
     let size = tree.size().to_int_size();
@@ -81,7 +325,22 @@ pub fn decode_svg_bytes(bytes: &[u8]) -> Result<image::DynamicImage> {
 
     resvg::render(&tree, resvg::tiny_skia::Transform::default(), &mut pixmap.as_mut());
 
-    let rgba = image::RgbaImage::from_raw(width, height, pixmap.take())
+    // tiny_skia renders pixels with premultiplied alpha (PremultipliedColorU8).
+    // The image crate's RgbaImage expects straight (unpremultiplied) RGBA.
+    // Un-premultiply each pixel so semi-transparent antialiased edges do not become
+    // dark/black outlines or lose color accuracy.
+    let mut raw = pixmap.take();
+    for pixel in raw.chunks_exact_mut(4) {
+        let a = pixel[3];
+        if a > 0 && a < 255 {
+            let a32 = a as u32;
+            pixel[0] = ((pixel[0] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
+            pixel[1] = ((pixel[1] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
+            pixel[2] = ((pixel[2] as u32 * 255 + a32 / 2) / a32).min(255) as u8;
+        }
+    }
+
+    let rgba = image::RgbaImage::from_raw(width, height, raw)
         .ok_or_else(|| anyhow::anyhow!("Failed to construct RgbaImage from rendered SVG pixmap"))?;
 
     Ok(image::DynamicImage::ImageRgba8(rgba))
@@ -555,5 +814,35 @@ mod tests {
         let _ = std::fs::remove_file(svg_path);
         let _ = std::fs::remove_file(png_path);
         let _ = std::fs::remove_file(jpg_path);
+    }
+
+    #[test]
+    fn test_convert_svg_display_p3_color() {
+        // Test with the exact user SVG snippet containing Display-P3 progressive enhancement from Figma
+        let svg = r##"<svg xmlns="http://www.w3.org/2000/svg" width="353" height="353" viewBox="0 0 353 353" fill="none">
+<path d="M173.328 0.0576346C174.571 0.0111346 175.813 -0.00736574 177.056 0.00263426C187.428 0.124884 197.588 0.972888 207.798 2.86414C214.823 4.16514 222.453 5.96313 227.563 11.3794C237.791 22.2204 229.836 37.8004 225.076 49.3156L186.11 141.971C182.7 150.078 171.239 150.152 167.725 142.089L127.441 49.6579C120.362 32.5411 111.38 12.1726 137.043 4.51938C148.343 1.14963 161.574 0.440135 173.328 0.0576346Z" fill="#FF5200" style="fill:#FF5200;fill:color(display-p3 1.0000 0.3216 0.0000);fill-opacity:1;"/>
+</svg>"##;
+        let img = decode_svg_bytes(svg.as_bytes()).expect("SVG decode failed");
+        let rgba = img.to_rgba8();
+
+        // Sample an interior pixel in the path (e.g. x=175, y=50)
+        let interior_pixel = rgba.get_pixel(175, 50);
+        println!("Interior pixel: {:?}", interior_pixel);
+        assert_eq!(interior_pixel[3], 255, "Interior pixel should be fully opaque");
+        assert_eq!(interior_pixel[0], 255, "Red channel must be 255 (#FF5200)");
+        assert_eq!(interior_pixel[1], 82, "Green channel must be 82 (#FF5200)");
+        assert_eq!(interior_pixel[2], 0, "Blue channel must be 0 (#FF5200)");
+
+        // Also test standalone display-p3 without fallback in style or attribute
+        let svg_no_fallback = r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+<rect width="100" height="100" style="fill:color(display-p3 1.0000 0.3216 0.0000);"/>
+</svg>"##;
+        let img2 = decode_svg_bytes(svg_no_fallback.as_bytes()).expect("SVG decode without fallback failed");
+        let rgba2 = img2.to_rgba8();
+        let p2 = rgba2.get_pixel(50, 50);
+        println!("No fallback pixel: {:?}", p2);
+        assert_eq!(p2[0], 255, "Red channel must be 255");
+        assert_eq!(p2[1], 82, "Green channel must be 82");
+        assert_eq!(p2[2], 0, "Blue channel must be 0");
     }
 }
