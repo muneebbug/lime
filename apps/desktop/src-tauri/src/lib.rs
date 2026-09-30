@@ -45,6 +45,7 @@ pub fn run() {
     // Set up persistent SQLite history and settings
     let local_app_data = std::env::var("LOCALAPPDATA")
         .or_else(|_| std::env::var("APPDATA"))
+        .or_else(|_| std::env::var("HOME"))
         .unwrap_or_else(|_| ".".to_string());
     let wheel_dir = std::path::PathBuf::from(local_app_data).join("Wheel");
     let db_path = wheel_dir.join("history.db");
