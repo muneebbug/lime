@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   Check,
@@ -16,6 +17,7 @@ import {
   Cpu,
   ClockCounterClockwise,
   Info as PhInfo,
+  ArrowsClockwise,
 } from "@phosphor-icons/react";
 import {
   CaptionButtons,
@@ -52,6 +54,14 @@ export function SettingsWindow() {
   const [ffmpegStatus, setFfmpegStatus] = useState<any>(null);
   const [isSaved, setIsSaved] = useState<boolean>(false);
 
+  // Auto-updater state
+  const [appVersion, setAppVersion] = useState<string>("v0.1.0-pre-alpha.1");
+  const [updateStatus, setUpdateStatus] = useState<
+    "idle" | "checking" | "available" | "downloading" | "ready" | "up_to_date" | "error"
+  >("idle");
+  const [updateVersion, setUpdateVersion] = useState<string | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
   const appWindow = getCurrentWebviewWindow();
 
   useEffect(() => {
@@ -84,9 +94,82 @@ export function SettingsWindow() {
       } catch (e) {
         console.error("Failed to check ffmpeg status", e);
       }
+
+      try {
+        const ver = await invoke<string>("get_app_version");
+        if (ver) setAppVersion(ver);
+      } catch (e) {
+        console.error("Failed to get app version", e);
+      }
     }
     loadData();
   }, []);
+
+  // Listen for background auto-updater events
+  useEffect(() => {
+    let unlistenDownloaded: (() => void) | null = null;
+    let unlistenProgress: (() => void) | null = null;
+
+    listen<{ version: string }>("update-downloaded", (event) => {
+      setUpdateStatus("ready");
+      setUpdateVersion(event.payload.version);
+    }).then((un) => {
+      unlistenDownloaded = un;
+    });
+
+    listen<{ chunk_length: number; content_length: number | null }>("update-download-progress", () => {
+      setUpdateStatus("downloading");
+    }).then((un) => {
+      unlistenProgress = un;
+    });
+
+    return () => {
+      if (unlistenDownloaded) unlistenDownloaded();
+      if (unlistenProgress) unlistenProgress();
+    };
+  }, []);
+
+  const handleCheckUpdate = async () => {
+    setUpdateStatus("checking");
+    setUpdateError(null);
+    try {
+      const res = await invoke<{
+        update_available: boolean;
+        current_version: string;
+        latest_version: string | null;
+        body: string | null;
+      }>("check_for_update");
+
+      if (res.update_available && res.latest_version) {
+        setUpdateStatus("available");
+        setUpdateVersion(res.latest_version);
+      } else {
+        setUpdateStatus("up_to_date");
+      }
+    } catch (e: any) {
+      console.warn("Update check error:", e);
+      setUpdateStatus("error");
+      setUpdateError(typeof e === "string" ? e : (e?.message || "Failed to check for updates"));
+    }
+  };
+
+  const handleDownloadAndInstall = async () => {
+    setUpdateStatus("downloading");
+    setUpdateError(null);
+    try {
+      const ver = await invoke<string>("download_and_install_update");
+      setUpdateStatus("ready");
+      setUpdateVersion(ver);
+    } catch (e: any) {
+      console.warn("Update install error:", e);
+      setUpdateStatus("error");
+      setUpdateError(typeof e === "string" ? e : (e?.message || "Failed to download update"));
+    }
+  };
+
+  const handleRestart = () => {
+    invoke("restart_app").catch(console.error);
+  };
 
   const handleSelectTab = (tabId: SettingsNavId) => {
     if (tabId === activeTab) return;
@@ -825,9 +908,63 @@ export function SettingsWindow() {
                   <div className="h-px bg-white/[0.04]" />
 
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-neutral-400">Version</span>
-                    <span className="font-mono text-neutral-200">v0.1.0</span>
+                    <div>
+                      <span className="text-neutral-400">Version</span>
+                      <div className="font-mono text-neutral-200 mt-0.5 flex items-center gap-2">
+                        <span>{appVersion}</span>
+                        {updateStatus === "up_to_date" && (
+                          <span className="text-[11px] text-emerald-400 font-sans flex items-center gap-1">
+                            <Check size={12} className="inline" /> Up to date
+                          </span>
+                        )}
+                        {updateStatus === "ready" && (
+                          <span className="text-[11px] text-lime-400 font-sans font-medium">
+                            • v{updateVersion} installed & ready
+                          </span>
+                        )}
+                        {updateStatus === "available" && (
+                          <span className="text-[11px] text-amber-400 font-sans font-medium">
+                            • v{updateVersion} available
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {updateStatus === "ready" ? (
+                        <WheelButton variant="primary" onClick={handleRestart}>
+                          <ArrowsClockwise size={12} className="inline mr-1" />
+                          Restart Lime
+                        </WheelButton>
+                      ) : updateStatus === "available" ? (
+                        <WheelButton variant="primary" onClick={handleDownloadAndInstall}>
+                          Install v{updateVersion}
+                        </WheelButton>
+                      ) : (
+                        <WheelButton
+                          variant="secondary"
+                          onClick={handleCheckUpdate}
+                          disabled={updateStatus === "checking" || updateStatus === "downloading"}
+                        >
+                          <ArrowsClockwise
+                            size={12}
+                            className={`inline mr-1 ${updateStatus === "checking" || updateStatus === "downloading" ? "animate-spin" : ""}`}
+                          />
+                          {updateStatus === "checking"
+                            ? "Checking…"
+                            : updateStatus === "downloading"
+                            ? "Downloading…"
+                            : "Check for Updates"}
+                        </WheelButton>
+                      )}
+                    </div>
                   </div>
+
+                  {updateStatus === "error" && (
+                    <div className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded px-2.5 py-1.5">
+                      {updateError || "Could not check for updates."}
+                    </div>
+                  )}
 
                   <div className="h-px bg-white/[0.04]" />
 

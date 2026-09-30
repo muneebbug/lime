@@ -933,4 +933,101 @@ pub async fn run_preset(
     Ok(vec![current_input.to_string_lossy().to_string()])
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCheckResult {
+    pub update_available: bool,
+    pub current_version: String,
+    pub latest_version: Option<String>,
+    pub body: Option<String>,
+    pub date: Option<String>,
+}
+
+/// Check for application updates against the GitHub Releases updater manifest
+#[tauri::command]
+pub async fn check_for_update(app: tauri::AppHandle) -> Result<UpdateCheckResult, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let update = updater.check().await.map_err(|e| e.to_string())?;
+
+    let current_version = app.package_info().version.to_string();
+    if let Some(update) = update {
+        Ok(UpdateCheckResult {
+            update_available: true,
+            current_version,
+            latest_version: Some(update.version.clone()),
+            body: update.body.clone(),
+            date: update.date.map(|d| d.to_string()),
+        })
+    } else {
+        Ok(UpdateCheckResult {
+            update_available: false,
+            current_version,
+            latest_version: None,
+            body: None,
+            date: None,
+        })
+    }
+}
+
+/// Download and install the available update
+#[tauri::command]
+pub async fn download_and_install_update(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    let update = updater
+        .check()
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "No update available".to_string())?;
+
+    let version = update.version.clone();
+    let app_clone = app.clone();
+
+    update
+        .download_and_install(
+            move |chunk, total| {
+                let _ = app_clone.emit(
+                    "update-download-progress",
+                    serde_json::json!({
+                        "chunk_length": chunk,
+                        "content_length": total,
+                    }),
+                );
+            },
+            || {
+                info!("Update installation staged; ready to apply on restart");
+            },
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+    use tauri_plugin_notification::NotificationExt;
+    let _ = app
+        .notification()
+        .builder()
+        .title("Lime — Update Ready")
+        .body(format!("Lime v{} is ready. Restart to apply!", version))
+        .show();
+
+    let _ = app.emit(
+        "update-downloaded",
+        serde_json::json!({ "version": version }),
+    );
+
+    Ok(version)
+}
+
+/// Restart the application immediately to apply updates
+#[tauri::command]
+pub fn restart_app(app: tauri::AppHandle) {
+    app.restart();
+}
+
+/// Return the application version
+#[tauri::command]
+pub fn get_app_version(app: tauri::AppHandle) -> String {
+    format!("v{}", app.package_info().version)
+}
+
+
 

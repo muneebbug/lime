@@ -46,6 +46,8 @@ jobs:
         uses: tauri-apps/tauri-action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: ./apps/desktop
           tagName: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v__VERSION__' }}
@@ -57,5 +59,28 @@ jobs:
             - **Windows NSIS Setup**: `.exe` installer (self-extracting standalone setup)
             - **Windows WiX MSI**: `.msi` package (Windows Installer format)
           releaseDraft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
           generateReleaseNotes: true
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+
+      - name: Verify and attach all installer assets
+        if: success()
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = if ("${{ github.ref }}".StartsWith("refs/tags/v")) { "${{ github.ref_name }}" } else { "v0.1.0-pre-alpha.1" }
+          Write-Host "Verifying installer assets for tag $tag..."
+          
+          # Discover all produced Windows installer bundles, updater archives, and signatures
+          $bundleFiles = Get-ChildItem -Path "target\release\bundle", "apps\desktop\src-tauri\target\release\bundle" -Recurse -Include "*.exe","*.msi","*.sig","*.zip","*.json" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName -Unique
+          
+          if ($bundleFiles) {
+            Write-Host "Found installer artifacts:"
+            $bundleFiles | ForEach-Object { Write-Host " - $_" }
+            gh release upload $tag $bundleFiles --clobber
+            Write-Host "Successfully attached all installer assets to release $tag."
+          } else {
+            Write-Host "Bundle artifacts uploaded directly by tauri-action."
+          }

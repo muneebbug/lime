@@ -99,6 +99,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             commands::get_actions,
@@ -123,6 +124,10 @@ pub fn run() {
             commands::run_preset,
             commands::pick_folder,
             commands::open_data_folder,
+            commands::check_for_update,
+            commands::download_and_install_update,
+            commands::restart_app,
+            commands::get_app_version,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();
@@ -138,6 +143,65 @@ pub fn run() {
             let handle_clone = handle.clone();
             tauri::async_runtime::spawn(async move {
                 start_hook_listener(handle_clone, settings_clone).await;
+            });
+
+            // Auto-updater: check for updates on launch in the background
+            let updater_handle = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                // Delay 5 seconds so startup remains instant
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                info!("Auto-updater: checking for updates on launch...");
+
+                use tauri_plugin_updater::UpdaterExt;
+                if let Ok(updater) = updater_handle.updater() {
+                    match updater.check().await {
+                        Ok(Some(update)) => {
+                            let new_ver = update.version.clone();
+                            info!("Auto-updater: update v{} available. Downloading and staging...", new_ver);
+                            let progress_handle = updater_handle.clone();
+                            let install_res = update
+                                .download_and_install(
+                                    move |chunk, total| {
+                                        let _ = progress_handle.emit(
+                                            "update-download-progress",
+                                            serde_json::json!({
+                                                "chunk_length": chunk,
+                                                "content_length": total,
+                                            }),
+                                        );
+                                    },
+                                    || {
+                                        info!("Auto-updater: installation staged");
+                                    },
+                                )
+                                .await;
+
+                            if install_res.is_ok() {
+                                info!("Auto-updater: successfully staged Lime v{}", new_ver);
+                                use tauri_plugin_notification::NotificationExt;
+                                let _ = updater_handle
+                                    .notification()
+                                    .builder()
+                                    .title("Lime — Update Ready")
+                                    .body(format!("Lime v{} is ready! Click restart in Settings or relaunch to apply.", new_ver))
+                                    .show();
+
+                                let _ = updater_handle.emit(
+                                    "update-downloaded",
+                                    serde_json::json!({ "version": new_ver }),
+                                );
+                            } else if let Err(e) = install_res {
+                                tracing::warn!("Auto-updater: download/install failed: {}", e);
+                            }
+                        }
+                        Ok(None) => {
+                            info!("Auto-updater: Lime is up to date");
+                        }
+                        Err(e) => {
+                            tracing::debug!("Auto-updater: update check skipped: {}", e);
+                        }
+                    }
+                }
             });
 
             info!("{} setup complete", APP_NAME);
