@@ -942,12 +942,89 @@ pub struct UpdateCheckResult {
     pub date: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+struct GithubReleaseAsset {
+    name: String,
+    browser_download_url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct GithubRelease {
+    tag_name: String,
+    prerelease: bool,
+    draft: bool,
+    assets: Vec<GithubReleaseAsset>,
+}
+
+/// Dynamically resolve the appropriate update release from GitHub API with fallback
+pub async fn resolve_update(
+    app: &tauri::AppHandle,
+    include_prereleases: bool,
+) -> Result<Option<tauri_plugin_updater::Update>, String> {
+    use tauri_plugin_updater::UpdaterExt;
+    use url::Url;
+
+    // 1. Try querying GitHub Releases API to respect release channels (Stable vs Pre-release)
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(6))
+        .build();
+
+    if let Ok(client) = client {
+        let res = client
+            .get("https://api.github.com/repos/muneebbug/lime/releases?per_page=15")
+            .header("User-Agent", "Lime-App")
+            .header("Accept", "application/vnd.github.v3+json")
+            .send()
+            .await;
+
+        if let Ok(response) = res {
+            if response.status().is_success() {
+                if let Ok(releases) = response.json::<Vec<GithubRelease>>().await {
+                    for rel in releases {
+                        if rel.draft {
+                            continue;
+                        }
+                        // Skip pre-releases if user only wants stable releases
+                        if !include_prereleases && rel.prerelease {
+                            continue;
+                        }
+
+                        info!("Auto-updater checking candidate release: {} (prerelease: {})", rel.tag_name, rel.prerelease);
+
+                        if let Some(asset) = rel.assets.into_iter().find(|a| a.name == "latest.json") {
+                            if let Ok(target_url) = Url::parse(&asset.browser_download_url) {
+                                if let Ok(builder) = app.updater_builder().endpoints(vec![target_url]) {
+                                    if let Ok(updater) = builder.build() {
+                                        if let Ok(update_opt) = updater.check().await {
+                                            return Ok(update_opt);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 2. Fallback to default configured endpoint in tauri.conf.json
+    let updater = app.updater().map_err(|e| e.to_string())?;
+    updater.check().await.map_err(|e| e.to_string())
+}
+
 /// Check for application updates against the GitHub Releases updater manifest
 #[tauri::command]
-pub async fn check_for_update(app: tauri::AppHandle) -> Result<UpdateCheckResult, String> {
-    use tauri_plugin_updater::UpdaterExt;
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    let update = updater.check().await.map_err(|e| e.to_string())?;
+pub async fn check_for_update(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<UpdateCheckResult, String> {
+    let include_prereleases = {
+        let lock = state.settings.lock().await;
+        lock.general.include_prereleases
+    };
+
+    let update = resolve_update(&app, include_prereleases).await?;
 
     let current_version = app.package_info().version.to_string();
     if let Some(update) = update {
@@ -971,13 +1048,17 @@ pub async fn check_for_update(app: tauri::AppHandle) -> Result<UpdateCheckResult
 
 /// Download and install the available update
 #[tauri::command]
-pub async fn download_and_install_update(app: tauri::AppHandle) -> Result<String, String> {
-    use tauri_plugin_updater::UpdaterExt;
-    let updater = app.updater().map_err(|e| e.to_string())?;
-    let update = updater
-        .check()
-        .await
-        .map_err(|e| e.to_string())?
+pub async fn download_and_install_update(
+    app: tauri::AppHandle,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let include_prereleases = {
+        let lock = state.settings.lock().await;
+        lock.general.include_prereleases
+    };
+
+    let update = resolve_update(&app, include_prereleases)
+        .await?
         .ok_or_else(|| "No update available".to_string())?;
 
     let version = update.version.clone();

@@ -81,6 +81,12 @@ pub struct GeneralSettings {
     pub auto_update: bool,
     pub minimize_to_tray: bool,
     pub explorer_context_menu: bool,
+    #[serde(default = "default_true")]
+    pub include_prereleases: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for GeneralSettings {
@@ -91,6 +97,7 @@ impl Default for GeneralSettings {
             auto_update: true,
             minimize_to_tray: true,
             explorer_context_menu: true,
+            include_prereleases: true,
         }
     }
 }

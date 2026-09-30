@@ -421,6 +421,40 @@ export function SettingsWindow() {
                 </SettingRow>
               </SettingSection>
 
+              <SettingSection title="Updates & Release Channel">
+                <SettingRow
+                  title="Automatically Check for Updates"
+                  description="Check for new versions in the background on startup"
+                >
+                  <ToggleSwitch
+                    checked={settings.general.auto_update ?? true}
+                    onChange={(checked) => {
+                      const updated = {
+                        ...settings,
+                        general: { ...settings.general, auto_update: checked },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </SettingRow>
+
+                <SettingRow
+                  title="Receive Pre-release Updates"
+                  description="Include Beta and Alpha preview releases before general availability"
+                >
+                  <ToggleSwitch
+                    checked={settings.general.include_prereleases ?? true}
+                    onChange={(checked) => {
+                      const updated = {
+                        ...settings,
+                        general: { ...settings.general, include_prereleases: checked },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </SettingRow>
+              </SettingSection>
+
               <SettingSection title="Windows Explorer Integration">
                 <SettingRow
                   title="Explorer Context Menu"
@@ -965,6 +999,33 @@ export function SettingsWindow() {
                       {updateError || "Could not check for updates."}
                     </div>
                   )}
+
+                  <div className="h-px bg-white/[0.04]" />
+
+                  <div className="flex items-center justify-between text-xs">
+                    <div>
+                      <div className="text-neutral-400">Update Channel</div>
+                      <div className="text-neutral-300 text-[11px] mt-0.5">
+                        {settings?.general?.include_prereleases ?? true ? (
+                          <span className="text-amber-400 font-medium">Pre-release Channel (Alpha & Beta)</span>
+                        ) : (
+                          <span className="text-emerald-400 font-medium">Stable Channel</span>
+                        )}
+                      </div>
+                    </div>
+                    <ToggleSwitch
+                      checked={settings?.general?.include_prereleases ?? true}
+                      onChange={(checked) => {
+                        if (settings) {
+                          const updated = {
+                            ...settings,
+                            general: { ...settings.general, include_prereleases: checked },
+                          };
+                          handleSaveSettings(updated);
+                        }
+                      }}
+                    />
+                  </div>
 
                   <div className="h-px bg-white/[0.04]" />
 

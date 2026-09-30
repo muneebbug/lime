@@ -147,17 +147,26 @@ pub fn run() {
 
             // Auto-updater: check for updates on launch in the background
             let updater_handle = handle.clone();
+            let settings_for_updater = Arc::clone(&settings);
             tauri::async_runtime::spawn(async move {
                 // Delay 5 seconds so startup remains instant
                 tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                 info!("Auto-updater: checking for updates on launch...");
 
-                use tauri_plugin_updater::UpdaterExt;
-                if let Ok(updater) = updater_handle.updater() {
-                    match updater.check().await {
-                        Ok(Some(update)) => {
-                            let new_ver = update.version.clone();
-                            info!("Auto-updater: update v{} available. Downloading and staging...", new_ver);
+                let (auto_update, include_prereleases) = {
+                    let lock = settings_for_updater.lock().await;
+                    (lock.general.auto_update, lock.general.include_prereleases)
+                };
+
+                if !auto_update {
+                    info!("Auto-updater: auto-updates disabled in settings");
+                    return;
+                }
+
+                match commands::resolve_update(&updater_handle, include_prereleases).await {
+                    Ok(Some(update)) => {
+                        let new_ver = update.version.clone();
+                        info!("Auto-updater: update v{} available. Downloading and staging...", new_ver);
                             let progress_handle = updater_handle.clone();
                             let install_res = update
                                 .download_and_install(
@@ -201,7 +210,6 @@ pub fn run() {
                             tracing::debug!("Auto-updater: update check skipped: {}", e);
                         }
                     }
-                }
             });
 
             info!("{} setup complete", APP_NAME);
