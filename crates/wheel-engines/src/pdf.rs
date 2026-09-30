@@ -42,48 +42,8 @@ fn load_image_xobject(
         }
     }
 
-    // Decode image using the image crate, with FFmpeg fallback for uncommon codecs
-    let img = match image::load_from_memory(&buffer) {
-        Ok(loaded) => loaded,
-        Err(_) => {
-            if let Some(ffmpeg) = crate::media::find_ffmpeg_path() {
-                let temp_dir = std::env::temp_dir().join("wheel_temp");
-                let _ = std::fs::create_dir_all(&temp_dir);
-                let tmp_png = temp_dir.join(format!(
-                    "pdf_decode_{}.png",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_nanos()
-                ));
-                let status = std::process::Command::new(ffmpeg)
-                    .arg("-y")
-                    .arg("-i")
-                    .arg(input)
-                    .arg(&tmp_png)
-                    .status();
-                if let Ok(st) = status {
-                    if st.success() {
-                        let loaded = image::open(&tmp_png);
-                        let _ = std::fs::remove_file(&tmp_png);
-                        if let Ok(l) = loaded {
-                            l
-                        } else {
-                            anyhow::bail!("Failed to read decoded frame for {:?}", input);
-                        }
-                    } else {
-                        let _ = std::fs::remove_file(&tmp_png);
-                        anyhow::bail!("FFmpeg failed to decode {:?}", input);
-                    }
-                } else {
-                    let _ = std::fs::remove_file(&tmp_png);
-                    anyhow::bail!("Failed to run FFmpeg for {:?}", input);
-                }
-            } else {
-                image::open(input).with_context(|| format!("Failed to open image {:?}", input))?
-            }
-        }
-    };
+    // Decode image using unified loader (supports standard formats, SVG, and FFmpeg fallback)
+    let img = crate::image_convert::load_image(input)?;
 
     let width = img.width() as i64;
     let height = img.height() as i64;

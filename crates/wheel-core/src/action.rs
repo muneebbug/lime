@@ -143,7 +143,7 @@ pub fn default_actions() -> Vec<ActionManifest> {
     let image_exts = vec![
         "png".into(), "jpg".into(), "jpeg".into(), "webp".into(),
         "avif".into(), "tiff".into(), "tif".into(),
-        "bmp".into(), "gif".into(), "ico".into(),
+        "bmp".into(), "gif".into(), "ico".into(), "svg".into(),
     ];
 
     let mut actions = Vec::new();

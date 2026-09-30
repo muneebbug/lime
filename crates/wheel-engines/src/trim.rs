@@ -157,40 +157,8 @@ pub fn trim_image(input: &Path, output: &Path) -> Result<TrimResult> {
             .with_context(|| format!("Failed to create destination directory: {:?}", parent))?;
     }
 
-    let img = match image::open(input) {
-        Ok(i) => i,
-        Err(err) => {
-            // If image::open failed on an exotic format, try FFmpeg decode to temporary PNG
-            if let Some(ffmpeg) = crate::media::find_ffmpeg_path() {
-                let temp_dir = std::env::temp_dir().join("wheel_temp");
-                let _ = std::fs::create_dir_all(&temp_dir);
-                let tmp_png = temp_dir.join(format!(
-                    "trim_decode_{}.png",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_nanos()
-                ));
-                let status = std::process::Command::new(ffmpeg)
-                    .arg("-y")
-                    .arg("-i")
-                    .arg(input)
-                    .arg(&tmp_png)
-                    .status();
-                if let Ok(st) = status {
-                    if st.success() {
-                        let decoded = image::open(&tmp_png);
-                        let _ = std::fs::remove_file(&tmp_png);
-                        if let Ok(loaded) = decoded {
-                            return trim_loaded_image(loaded, output);
-                        }
-                    }
-                }
-                let _ = std::fs::remove_file(&tmp_png);
-            }
-            return Err(err).with_context(|| format!("Failed to open image for trimming: {:?}", input));
-        }
-    };
+    let img = crate::image_convert::load_image(input)
+        .with_context(|| format!("Failed to open image for trimming: {:?}", input))?;
 
     trim_loaded_image(img, output)
 }

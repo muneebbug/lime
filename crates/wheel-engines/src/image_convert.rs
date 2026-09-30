@@ -65,12 +65,67 @@ pub struct ConvertParams {
     pub quality: u8,
 }
 
-/// Convert an image file to another format.
-/// This runs synchronously — call from `tokio::task::spawn_blocking`.
-pub fn convert_image(input: &Path, params: &ConvertParams) -> Result<PathBuf> {
-    let img = match image::open(input) {
-        Ok(img) => img,
+pub fn decode_svg_bytes(bytes: &[u8]) -> Result<image::DynamicImage> {
+    let mut opt = resvg::usvg::Options::default();
+    opt.fontdb_mut().load_system_fonts();
+
+    let tree = resvg::usvg::Tree::from_data(bytes, &opt)
+        .context("Failed to parse SVG data")?;
+
+    let size = tree.size().to_int_size();
+    let width = size.width().max(1);
+    let height = size.height().max(1);
+
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(width, height)
+        .ok_or_else(|| anyhow::anyhow!("Failed to allocate SVG pixmap of size {}x{}", width, height))?;
+
+    resvg::render(&tree, resvg::tiny_skia::Transform::default(), &mut pixmap.as_mut());
+
+    let rgba = image::RgbaImage::from_raw(width, height, pixmap.take())
+        .ok_or_else(|| anyhow::anyhow!("Failed to construct RgbaImage from rendered SVG pixmap"))?;
+
+    Ok(image::DynamicImage::ImageRgba8(rgba))
+}
+
+pub fn load_svg(path: &Path) -> Result<image::DynamicImage> {
+    let bytes = std::fs::read(path).with_context(|| format!("Failed to read SVG file at {:?}", path))?;
+    decode_svg_bytes(&bytes)
+}
+
+fn is_svg_bytes(bytes: &[u8]) -> bool {
+    let prefix_len = bytes.len().min(512);
+    if let Ok(prefix) = std::str::from_utf8(&bytes[..prefix_len]) {
+        let lower = prefix.to_lowercase();
+        lower.contains("<svg")
+    } else {
+        false
+    }
+}
+
+/// Load an image from path. Supports all standard raster formats, SVG vector files, and FFmpeg fallback.
+pub fn load_image(input: &Path) -> Result<image::DynamicImage> {
+    let ext = input
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+
+    if ext == "svg" || ext == "svgz" {
+        return load_svg(input);
+    }
+
+    match image::open(input) {
+        Ok(img) => Ok(img),
         Err(orig_err) => {
+            // Check if file is actually an SVG despite missing or mismatched extension
+            if let Ok(content) = std::fs::read(input) {
+                if is_svg_bytes(&content) {
+                    if let Ok(svg_img) = decode_svg_bytes(&content) {
+                        return Ok(svg_img);
+                    }
+                }
+            }
+
             // If image::open fails on unsupported formats, attempt to decode with FFmpeg
             if let Some(ffmpeg) = crate::media::find_ffmpeg_path() {
                 let temp_dir = std::env::temp_dir().join("wheel_temp");
@@ -93,16 +148,21 @@ pub fn convert_image(input: &Path, params: &ConvertParams) -> Result<PathBuf> {
                         let decoded = image::open(&tmp_png);
                         let _ = std::fs::remove_file(&tmp_png);
                         if let Ok(loaded) = decoded {
-                            return convert_image_loaded(loaded, input, params);
+                            return Ok(loaded);
                         }
                     }
                 }
                 let _ = std::fs::remove_file(&tmp_png);
             }
-            return Err(orig_err).with_context(|| format!("Failed to open {:?}", input));
+            Err(orig_err).with_context(|| format!("Failed to open image {:?}", input))
         }
-    };
+    }
+}
 
+/// Convert an image file to another format.
+/// This runs synchronously — call from `tokio::task::spawn_blocking`.
+pub fn convert_image(input: &Path, params: &ConvertParams) -> Result<PathBuf> {
+    let img = load_image(input)?;
     convert_image_loaded(img, input, params)
 }
 
@@ -451,5 +511,49 @@ mod tests {
         // Clean up
         let _ = std::fs::remove_file(src_path);
         let _ = std::fs::remove_file(dst_path);
+    }
+
+    #[test]
+    fn test_convert_svg_to_png_and_jpeg() {
+        let dir = std::env::temp_dir().join("wheel_tests");
+        let _ = std::fs::create_dir_all(&dir);
+
+        let svg_path = dir.join("test_shape.svg");
+        let png_path = dir.join("test_shape.png");
+        let jpg_path = dir.join("test_shape.jpg");
+
+        let svg_content = r#"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">
+            <rect width="100" height="100" fill="blue" />
+            <circle cx="50" cy="50" r="30" fill="red" />
+        </svg>"#;
+        std::fs::write(&svg_path, svg_content).expect("failed to write test svg");
+
+        // Convert SVG to PNG
+        let params_png = ConvertParams {
+            output_format: OutputFormat::Png,
+            output_path: png_path.clone(),
+            quality: 85,
+        };
+        let out_png = convert_image(&svg_path, &params_png).expect("convert svg to png failed");
+        assert_eq!(out_png, png_path);
+        assert!(png_path.exists());
+        let png_img = image::open(&png_path).expect("failed to open generated png");
+        assert_eq!(png_img.width(), 100);
+        assert_eq!(png_img.height(), 100);
+
+        // Convert SVG to JPEG
+        let params_jpg = ConvertParams {
+            output_format: OutputFormat::Jpeg,
+            output_path: jpg_path.clone(),
+            quality: 90,
+        };
+        let out_jpg = convert_image(&svg_path, &params_jpg).expect("convert svg to jpg failed");
+        assert_eq!(out_jpg, jpg_path);
+        assert!(jpg_path.exists());
+
+        // Clean up
+        let _ = std::fs::remove_file(svg_path);
+        let _ = std::fs::remove_file(png_path);
+        let _ = std::fs::remove_file(jpg_path);
     }
 }
