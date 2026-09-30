@@ -59,28 +59,18 @@ jobs:
             ### Available Assets
             - **Windows NSIS Setup**: `Lime___VERSION___x64-setup.exe` (per-user installer & auto-updater compatible)
           releaseDraft: false
-          prerelease: true
+          prerelease: false
           generateReleaseNotes: true
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
 
-      - name: Verify and attach all installer assets
+      - name: Ensure release is marked as latest
         if: success()
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = if ($env:GITHUB_REF -like "refs/tags/v*") { $env:GITHUB_REF_NAME } else { "v0.1.0-pre-alpha.1" }
-          Write-Host "Verifying installer assets for tag $tag..."
-          
-          # Discover all produced Windows installer bundles, updater archives, and signatures
-          $bundleFiles = Get-ChildItem -Path "target\release\bundle", "apps\desktop\src-tauri\target\release\bundle" -Recurse -Include "*.exe","*.msi","*.sig","*.zip","*.json" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName -Unique
-          
-          if ($bundleFiles) {
-            Write-Host "Found installer artifacts:"
-            $bundleFiles | ForEach-Object { Write-Host " - $_" }
-            gh release upload $tag $bundleFiles --clobber
-            Write-Host "Successfully attached all installer assets to release $tag."
-          } else {
-            Write-Host "Bundle artifacts uploaded directly by tauri-action."
-          }
+          Write-Host "Ensuring release $tag is published as Latest..."
+          gh release edit $tag --latest --prerelease=false
+          Write-Host "Release $tag is marked as Latest and ready for auto-updates."
