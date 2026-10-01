@@ -6,14 +6,14 @@ use tauri::{
 use tracing::info;
 
 pub fn setup_tray(app: &AppHandle) -> anyhow::Result<()> {
-    let pause_item = MenuItem::with_id(app, "pause", "Pause Lime", true, None::<&str>)?;
     let settings_item = MenuItem::with_id(app, "settings", "Open Settings", true, None::<&str>)?;
+    let pause_item = MenuItem::with_id(app, "pause", "Pause Lime", true, None::<&str>)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let quit_item = PredefinedMenuItem::quit(app, Some("Quit Lime"))?;
 
     let menu = Menu::with_items(
         app,
-        &[&pause_item, &settings_item, &separator, &quit_item],
+        &[&settings_item, &pause_item, &separator, &quit_item],
     )?;
 
     let mut builder = TrayIconBuilder::with_id("lime-tray")
@@ -95,51 +95,6 @@ pub fn open_settings_window(app: &AppHandle) {
     .resizable(true)
     .maximizable(false)
     .center()
-    .focused(true);
-
-    if let Some(icon) = get_app_icon() {
-        builder = builder.icon(icon).expect("valid icon");
-    }
-
-    let win = builder.build();
-
-    if let Ok(win) = win {
-        let _ = win.unminimize();
-        let _ = win.show();
-        let _ = win.set_focus();
-        #[cfg(target_os = "windows")]
-        if let Ok(hwnd) = win.hwnd() {
-            wheel_win::force_focus_window(hwnd.0 as isize);
-        }
-    }
-}
-
-pub fn open_palette_window(app: &AppHandle) {
-    use tauri::Manager;
-    if let Some(win) = app.get_webview_window("palette") {
-        let _ = win.unminimize();
-        let _ = win.show();
-        let _ = win.set_focus();
-        #[cfg(target_os = "windows")]
-        if let Ok(hwnd) = win.hwnd() {
-            wheel_win::force_focus_window(hwnd.0 as isize);
-        }
-        return;
-    }
-
-    let mut builder = tauri::WebviewWindowBuilder::new(
-        app,
-        "palette",
-        tauri::WebviewUrl::App("index.html?window=palette".into()),
-    )
-    .title("Lime Command Palette")
-    .inner_size(640.0, 480.0)
-    .decorations(false)
-    .transparent(true)
-    .resizable(false)
-    .maximizable(false)
-    .center()
-    .always_on_top(true)
     .focused(true);
 
     if let Some(icon) = get_app_icon() {

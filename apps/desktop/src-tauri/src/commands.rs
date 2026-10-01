@@ -788,13 +788,6 @@ pub async fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Open the Command Palette window
-#[tauri::command]
-pub async fn open_palette_window(app: tauri::AppHandle) -> Result<(), String> {
-    crate::tray::open_palette_window(&app);
-    Ok(())
-}
-
 /// Check if Windows Explorer context menu is active
 #[tauri::command]
 pub async fn is_explorer_context_menu_enabled() -> Result<bool, String> {

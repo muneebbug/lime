@@ -120,7 +120,6 @@ pub fn run() {
             commands::convert_media_file,
             commands::get_ffmpeg_status,
             commands::open_settings_window,
-            commands::open_palette_window,
             commands::is_explorer_context_menu_enabled,
             commands::set_explorer_context_menu,
             commands::run_preset,
