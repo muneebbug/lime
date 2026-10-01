@@ -7,6 +7,7 @@ use wheel_core::{ActionRegistry, JobQueue, WheelSettings, action::default_action
 mod commands;
 mod overlay;
 mod tray;
+pub mod sound;
 
 /// The name of the app — single source of truth.
 pub const APP_NAME: &str = wheel_core::action::APP_NAME;
@@ -67,6 +68,7 @@ pub fn run() {
     let mut initial_settings = WheelSettings::load_or_default(&settings_path);
     initial_settings.general.launch_at_login = wheel_win::shell::is_launch_at_login_registered();
     initial_settings.general.explorer_context_menu = wheel_win::shell::is_context_menu_registered();
+    sound::set_sound_enabled(initial_settings.wheel_ui.sound_enabled);
     let settings = Arc::new(Mutex::new(initial_settings));
 
     let state = AppState {
@@ -128,6 +130,7 @@ pub fn run() {
             commands::download_and_install_update,
             commands::restart_app,
             commands::get_app_version,
+            commands::play_hover_sound,
         ])
         .setup(move |app| {
             let handle = app.handle().clone();

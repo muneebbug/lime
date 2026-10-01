@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { ActionManifest, WheelPage } from "../../store/wheelStore";
+import { playHoverSound } from "../../utils/sound";
 
 export interface PetalData {
   id: string;
@@ -224,24 +225,6 @@ export function filterActions(
   });
 }
 
-function playHoverTick() {
-  try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.setValueAtTime(1200, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(350, ctx.currentTime + 0.015);
-    gain.gain.setValueAtTime(0.04, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.015);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.02);
-  } catch {}
-}
 
 function ToolIcon({
   type,
@@ -335,7 +318,7 @@ function RadialWheelInner({
         const nextId = candidate && !candidate.disabled ? candidate.id : null;
         if (nextId !== hoveredWedge) {
           if (soundEnabled && nextId !== null) {
-            playHoverTick();
+            playHoverSound();
           }
           onWedgeHover(nextId);
         }
@@ -456,7 +439,7 @@ function RadialWheelInner({
                 onMouseEnter={() => {
                   if (isDisabled) return;
                   if (soundEnabled && hoveredWedge !== petal.id) {
-                    playHoverTick();
+                    playHoverSound();
                   }
                   onWedgeHover(petal.id);
                 }}

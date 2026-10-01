@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { motion, AnimatePresence } from "motion/react";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useWheelStore } from "../../store/wheelStore";
+import { playHoverSound } from "../../utils/sound";
 import {
   RadialWheel,
   hitTestWedge,
@@ -75,17 +76,28 @@ export function WheelOverlay() {
   const soundEnabled = wheelSettings?.wheel_ui?.sound_enabled ?? false;
   const reducedMotion = wheelSettings?.wheel_ui?.reduced_motion ?? false;
 
+  const soundEnabledRef = useRef(soundEnabled);
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+  }, [soundEnabled]);
+
   useEffect(() => {
     loadActions();
     invoke<any>("get_settings")
       .then((s) => {
         setWheelSettings(s);
+        if (s?.wheel_ui?.sound_enabled !== undefined) {
+          soundEnabledRef.current = s.wheel_ui.sound_enabled;
+        }
       })
       .catch(console.error);
 
     const unlisten = listen("settings-updated", (event: any) => {
       const s = event.payload;
       setWheelSettings(s);
+      if (s?.wheel_ui?.sound_enabled !== undefined) {
+        soundEnabledRef.current = s.wheel_ui.sound_enabled;
+      }
     });
 
     return () => {
@@ -147,6 +159,9 @@ export function WheelOverlay() {
     if (newHovered !== lastHoveredRef.current) {
       lastHoveredRef.current = newHovered;
       state.setHoveredWedge(newHovered);
+      if (soundEnabledRef.current && newHovered !== null) {
+        playHoverSound();
+      }
     }
   }, [contextFilterEnabled, wheelSize]);
 

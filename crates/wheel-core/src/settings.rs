@@ -158,7 +158,7 @@ impl Default for WheelUiSettings {
             reduced_motion: false,
             size: 320,
             corner_radius: 16,
-            sound_enabled: false,
+            sound_enabled: true,
             context_filter_enabled: true,
         }
     }

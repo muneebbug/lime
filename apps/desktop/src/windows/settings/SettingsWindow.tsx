@@ -634,8 +634,8 @@ export function SettingsWindow() {
                 </SettingRow>
 
                 <SettingRow
-                  title="Audio Tick Effects"
-                  description="Play subtle mechanical tick sounds during wedge hover"
+                  title="Hover Audio Effects"
+                  description="Play subtle audio feedback when hovering over tools and extensions"
                 >
                   <ToggleSwitch
                     checked={settings.wheel_ui.sound_enabled}

@@ -81,13 +81,22 @@ pub async fn save_settings(
         }
     }
 
+    // Synchronize live audio effects toggle
+    crate::sound::set_sound_enabled(migrated.wheel_ui.sound_enabled);
+
     // Broadcast settings update to frontend windows
     let _ = app.emit("settings-updated", &migrated);
 
     let local_app_data = std::env::var("LOCALAPPDATA")
         .or_else(|_| std::env::var("APPDATA"))
         .unwrap_or_else(|_| ".".to_string());
-    let settings_path = std::path::PathBuf::from(local_app_data).join("Wheel").join("settings.json");
+    let local_path = std::path::PathBuf::from(local_app_data);
+    let lime_dir = local_path.join("Lime");
+    let settings_path = if lime_dir.exists() {
+        lime_dir.join("settings.json")
+    } else {
+        local_path.join("Wheel").join("settings.json")
+    };
     if let Err(e) = migrated.save_to_path(&settings_path) {
         tracing::warn!("Failed to persist settings to disk at {:?}: {}", settings_path, e);
     } else {
@@ -1108,6 +1117,16 @@ pub fn restart_app(app: tauri::AppHandle) {
 #[tauri::command]
 pub fn get_app_version(app: tauri::AppHandle) -> String {
     format!("v{}", app.package_info().version)
+}
+
+/// Play native hover sound when a tool or extension wedge is hovered
+#[tauri::command]
+pub async fn play_hover_sound(state: State<'_, AppState>) -> Result<(), ()> {
+    let settings = state.settings.lock().await;
+    if settings.wheel_ui.sound_enabled {
+        crate::sound::play_hover_sound();
+    }
+    Ok(())
 }
 
 
