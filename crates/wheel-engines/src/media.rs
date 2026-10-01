@@ -10,10 +10,20 @@ pub struct FfmpegStatus {
     pub version: Option<String>,
 }
 
+pub fn no_window_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd
+}
+
 pub fn get_ffmpeg_status() -> FfmpegStatus {
     match find_ffmpeg_path() {
         Some(path) => {
-            let version = std::process::Command::new(&path)
+            let version = no_window_command(&path)
                 .arg("-version")
                 .output()
                 .ok()
@@ -59,7 +69,7 @@ pub fn find_ffmpeg_path() -> Option<PathBuf> {
     }
 
     // 3. System PATH (check if ffmpeg runs successfully)
-    if std::process::Command::new("ffmpeg")
+    if no_window_command("ffmpeg")
         .arg("-version")
         .output()
         .is_ok()
@@ -85,7 +95,7 @@ pub fn convert_media(input: &Path, output: &Path, target_format: &str) -> Result
         std::fs::create_dir_all(parent)?;
     }
 
-    let mut cmd = std::process::Command::new(ffmpeg);
+    let mut cmd = no_window_command(ffmpeg);
     cmd.arg("-y").arg("-i").arg(input);
 
     match target_format.to_lowercase().as_str() {

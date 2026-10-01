@@ -2,16 +2,172 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use tracing::info;
 
+#[cfg(windows)]
+fn key_exists(sub_key: &str) -> bool {
+    use windows::Win32::System::Registry::{RegOpenKeyExW, RegCloseKey, HKEY_CURRENT_USER, KEY_READ, HKEY};
+    use windows::core::PCWSTR;
+
+    let wide: Vec<u16> = sub_key.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut hkey = HKEY::default();
+    let res = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            PCWSTR(wide.as_ptr()),
+            None,
+            KEY_READ,
+            &mut hkey,
+        )
+    };
+    if res.is_ok() {
+        unsafe {
+            let _ = RegCloseKey(hkey);
+        }
+        true
+    } else {
+        false
+    }
+}
+
+#[cfg(windows)]
+fn value_exists(sub_key: &str, value_name: &str) -> bool {
+    use windows::Win32::System::Registry::{
+        RegOpenKeyExW, RegQueryValueExW, RegCloseKey, HKEY_CURRENT_USER, KEY_READ, HKEY,
+    };
+    use windows::core::PCWSTR;
+
+    let sub_key_w: Vec<u16> = sub_key.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut hkey = HKEY::default();
+    let res = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            PCWSTR(sub_key_w.as_ptr()),
+            None,
+            KEY_READ,
+            &mut hkey,
+        )
+    };
+    if res.is_err() {
+        return false;
+    }
+
+    let val_w: Vec<u16> = value_name.encode_utf16().chain(std::iter::once(0)).collect();
+    let query_res = unsafe {
+        RegQueryValueExW(
+            hkey,
+            PCWSTR(val_w.as_ptr()),
+            None,
+            None,
+            None,
+            None,
+        )
+    };
+    unsafe {
+        let _ = RegCloseKey(hkey);
+    }
+    query_res.is_ok()
+}
+
+#[cfg(windows)]
+fn set_reg_string(sub_key: &str, value_name: Option<&str>, data: &str) -> Result<()> {
+    use windows::Win32::System::Registry::{
+        RegCreateKeyW, RegSetValueExW, RegCloseKey, HKEY_CURRENT_USER, HKEY,
+        REG_SZ,
+    };
+    use windows::core::PCWSTR;
+
+    let sub_key_w: Vec<u16> = sub_key.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut hkey = HKEY::default();
+    let res = unsafe {
+        RegCreateKeyW(
+            HKEY_CURRENT_USER,
+            PCWSTR(sub_key_w.as_ptr()),
+            &mut hkey,
+        )
+    };
+    if !res.is_ok() {
+        anyhow::bail!("Failed to create registry key {}: {:?}", sub_key, res);
+    }
+
+    let data_w: Vec<u16> = data.encode_utf16().chain(std::iter::once(0)).collect();
+    let bytes_len = (data_w.len() * 2) as u32;
+
+    let val_name_w: Option<Vec<u16>> = value_name.map(|v| v.encode_utf16().chain(std::iter::once(0)).collect());
+    let val_ptr = match &val_name_w {
+        Some(w) => PCWSTR(w.as_ptr()),
+        None => PCWSTR::null(),
+    };
+
+    let set_res = unsafe {
+        RegSetValueExW(
+            hkey,
+            val_ptr,
+            None,
+            REG_SZ,
+            Some(std::slice::from_raw_parts(data_w.as_ptr() as *const u8, bytes_len as usize)),
+        )
+    };
+    unsafe {
+        let _ = RegCloseKey(hkey);
+    }
+    if !set_res.is_ok() {
+        anyhow::bail!("Failed to set registry value in {}: {:?}", sub_key, set_res);
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn delete_reg_value(sub_key: &str, value_name: &str) -> Result<()> {
+    use windows::Win32::System::Registry::{
+        RegOpenKeyExW, RegDeleteValueW, RegCloseKey, HKEY_CURRENT_USER, KEY_WRITE, HKEY,
+    };
+    use windows::core::PCWSTR;
+
+    let sub_key_w: Vec<u16> = sub_key.encode_utf16().chain(std::iter::once(0)).collect();
+    let mut hkey = HKEY::default();
+    let res = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            PCWSTR(sub_key_w.as_ptr()),
+            None,
+            KEY_WRITE,
+            &mut hkey,
+        )
+    };
+    if res.is_ok() {
+        let val_w: Vec<u16> = value_name.encode_utf16().chain(std::iter::once(0)).collect();
+        let _ = unsafe { RegDeleteValueW(hkey, PCWSTR(val_w.as_ptr())) };
+        unsafe {
+            let _ = RegCloseKey(hkey);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn delete_reg_tree(sub_key: &str) -> Result<()> {
+    use windows::Win32::System::Registry::{
+        RegDeleteTreeW, HKEY_CURRENT_USER,
+    };
+    use windows::core::PCWSTR;
+
+    let sub_key_w: Vec<u16> = sub_key.encode_utf16().chain(std::iter::once(0)).collect();
+    let _ = unsafe {
+        RegDeleteTreeW(
+            HKEY_CURRENT_USER,
+            PCWSTR(sub_key_w.as_ptr()),
+        )
+    };
+    Ok(())
+}
+
 /// Check if Lime is registered in Windows Explorer context menu (HKCU)
 pub fn is_context_menu_registered() -> bool {
-    let status = std::process::Command::new("reg")
-        .args(["query", r"HKCU\Software\Classes\*\shell\Lime"])
-        .output();
-
-    match status {
-        Ok(out) => out.status.success(),
-        Err(_) => false,
+    #[cfg(windows)]
+    {
+        key_exists(r"Software\Classes\*\shell\Lime")
     }
+    #[cfg(not(windows))]
+    false
 }
 
 /// Register Lime in the Windows Explorer context menu under HKCU (no admin required)
@@ -26,83 +182,18 @@ pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
 
     info!("Registering Explorer context menu for Lime: {}", exe_str);
 
-    // 1. Files: HKCU\Software\Classes\*\shell\Lime
-    let status = std::process::Command::new("reg")
-        .args([
-            "add",
-            r"HKCU\Software\Classes\*\shell\Lime",
-            "/ve",
-            "/d",
-            "Open with Lime",
-            "/f",
-        ])
-        .output()?;
+    #[cfg(windows)]
+    {
+        // 1. Files: HKCU\Software\Classes\*\shell\Lime
+        set_reg_string(r"Software\Classes\*\shell\Lime", None, "Open with Lime")?;
+        let _ = set_reg_string(r"Software\Classes\*\shell\Lime", Some("Icon"), &exe_str);
+        set_reg_string(r"Software\Classes\*\shell\Lime\command", None, &cmd_str)?;
 
-    if !status.status.success() {
-        anyhow::bail!("Failed to create Lime context menu file key");
+        // 2. Directories: HKCU\Software\Classes\Directory\shell\Lime
+        set_reg_string(r"Software\Classes\Directory\shell\Lime", None, "Open with Lime")?;
+        let _ = set_reg_string(r"Software\Classes\Directory\shell\Lime", Some("Icon"), &exe_str);
+        set_reg_string(r"Software\Classes\Directory\shell\Lime\command", None, &cmd_str)?;
     }
-
-    let _ = std::process::Command::new("reg")
-        .args([
-            "add",
-            r"HKCU\Software\Classes\*\shell\Lime",
-            "/v",
-            "Icon",
-            "/d",
-            &exe_str,
-            "/f",
-        ])
-        .output();
-
-    let status = std::process::Command::new("reg")
-        .args([
-            "add",
-            r"HKCU\Software\Classes\*\shell\Lime\command",
-            "/ve",
-            "/d",
-            &cmd_str,
-            "/f",
-        ])
-        .output()?;
-
-    if !status.status.success() {
-        anyhow::bail!("Failed to create Lime context menu command key");
-    }
-
-    // 2. Directories: HKCU\Software\Classes\Directory\shell\Lime
-    let _ = std::process::Command::new("reg")
-        .args([
-            "add",
-            r"HKCU\Software\Classes\Directory\shell\Lime",
-            "/ve",
-            "/d",
-            "Open with Lime",
-            "/f",
-        ])
-        .output();
-
-    let _ = std::process::Command::new("reg")
-        .args([
-            "add",
-            r"HKCU\Software\Classes\Directory\shell\Lime",
-            "/v",
-            "Icon",
-            "/d",
-            &exe_str,
-            "/f",
-        ])
-        .output();
-
-    let _ = std::process::Command::new("reg")
-        .args([
-            "add",
-            r"HKCU\Software\Classes\Directory\shell\Lime\command",
-            "/ve",
-            "/d",
-            &cmd_str,
-            "/f",
-        ])
-        .output();
 
     info!("Lime Explorer context menu registered successfully");
     Ok(())
@@ -116,13 +207,11 @@ pub fn unregister_context_menu() -> Result<()> {
 
     info!("Unregistering Explorer context menu for Lime");
 
-    let _ = std::process::Command::new("reg")
-        .args(["delete", r"HKCU\Software\Classes\*\shell\Lime", "/f"])
-        .output();
-
-    let _ = std::process::Command::new("reg")
-        .args(["delete", r"HKCU\Software\Classes\Directory\shell\Lime", "/f"])
-        .output();
+    #[cfg(windows)]
+    {
+        let _ = delete_reg_tree(r"Software\Classes\*\shell\Lime");
+        let _ = delete_reg_tree(r"Software\Classes\Directory\shell\Lime");
+    }
 
     info!("Lime Explorer context menu unregistered");
     Ok(())
@@ -130,14 +219,12 @@ pub fn unregister_context_menu() -> Result<()> {
 
 /// Check if Lime is registered to run at Windows login under HKCU
 pub fn is_launch_at_login_registered() -> bool {
-    let status = std::process::Command::new("reg")
-        .args(["query", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "Lime"])
-        .output();
-
-    match status {
-        Ok(out) => out.status.success(),
-        Err(_) => false,
+    #[cfg(windows)]
+    {
+        value_exists(r"Software\Microsoft\Windows\CurrentVersion\Run", "Lime")
     }
+    #[cfg(not(windows))]
+    false
 }
 
 /// Register or unregister Lime in the Windows startup registry (HKCU Run key)
@@ -146,40 +233,19 @@ pub fn set_launch_at_login(enabled: bool) -> Result<()> {
         return Ok(());
     }
 
-    if enabled {
-        let exe = std::env::current_exe().context("Failed to get current executable path")?;
-        let exe_str = exe.to_string_lossy();
-        let cmd_str = format!("\"{}\"", exe_str);
+    #[cfg(windows)]
+    {
+        if enabled {
+            let exe = std::env::current_exe().context("Failed to get current executable path")?;
+            let exe_str = exe.to_string_lossy();
+            let cmd_str = format!("\"{}\"", exe_str);
 
-        info!("Registering startup run key for Lime: {}", cmd_str);
-        let status = std::process::Command::new("reg")
-            .args([
-                "add",
-                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
-                "/v",
-                "Lime",
-                "/t",
-                "REG_SZ",
-                "/d",
-                &cmd_str,
-                "/f",
-            ])
-            .output()?;
-
-        if !status.status.success() {
-            anyhow::bail!("Failed to register Lime in Windows startup registry");
+            info!("Registering startup run key for Lime: {}", cmd_str);
+            set_reg_string(r"Software\Microsoft\Windows\CurrentVersion\Run", Some("Lime"), &cmd_str)?;
+        } else {
+            info!("Unregistering startup run key for Lime");
+            delete_reg_value(r"Software\Microsoft\Windows\CurrentVersion\Run", "Lime")?;
         }
-    } else {
-        info!("Unregistering startup run key for Lime");
-        let _ = std::process::Command::new("reg")
-            .args([
-                "delete",
-                r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run",
-                "/v",
-                "Lime",
-                "/f",
-            ])
-            .output();
     }
     Ok(())
 }
@@ -198,9 +264,15 @@ pub fn copy_files_to_clipboard(paths: &[std::path::PathBuf]) -> Result<()> {
 
     let script = format!("Set-Clipboard -Path @({})", escaped_items);
 
-    let status = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .status();
+    let mut cmd = std::process::Command::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+
+    let status = cmd.status();
 
     if let Err(e) = status {
         tracing::warn!("Failed to set clipboard: {}", e);
@@ -219,9 +291,15 @@ if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     [Console]::Out.Write($dialog.SelectedPath)
 }
 "#;
-    let output = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
-        .output()?;
+    let mut cmd = std::process::Command::new("powershell");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+
+    let output = cmd.output()?;
     let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
     if path_str.is_empty() {
         Ok(None)

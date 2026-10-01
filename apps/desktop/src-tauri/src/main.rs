@@ -3,16 +3,18 @@
 
 #[cfg(all(windows, debug_assertions))]
 fn cleanup_stale_dev_processes() {
+    use std::os::windows::process::CommandExt;
     let current_pid = std::process::id();
-    let _ = std::process::Command::new("taskkill")
+    let mut cmd = std::process::Command::new("taskkill");
+    cmd.creation_flags(0x08000000)
         .args([
             "/FI",
             "IMAGENAME eq desktop.exe",
             "/FI",
             &format!("PID ne {}", current_pid),
             "/F",
-        ])
-        .output();
+        ]);
+    let _ = cmd.output();
     std::thread::sleep(std::time::Duration::from_millis(150));
 }
 

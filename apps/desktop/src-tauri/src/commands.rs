@@ -637,10 +637,14 @@ pub async fn open_file(path: String) -> Result<(), String> {
         return Err(format!("File does not exist: {}", path));
     }
 
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", &path])
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let mut cmd = std::process::Command::new("cmd");
+    cmd.args(["/C", "start", "", &path]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000);
+    }
+    cmd.spawn().map_err(|e| e.to_string())?;
 
     Ok(())
 }

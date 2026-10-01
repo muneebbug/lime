@@ -396,7 +396,7 @@ pub fn load_image(input: &Path) -> Result<image::DynamicImage> {
                         .unwrap_or_default()
                         .as_nanos()
                 ));
-                let status = std::process::Command::new(ffmpeg)
+                let status = crate::media::no_window_command(ffmpeg)
                     .arg("-y")
                     .arg("-i")
                     .arg(input)
@@ -533,7 +533,7 @@ fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &Convert
                 let mut ffmpeg_encoded = false;
                 if let Some(ffmpeg) = crate::media::find_ffmpeg_path() {
                     let crf = (63 - ((params.quality as f32 / 100.0) * 50.0).round() as u32).clamp(10, 50);
-                    let mut cmd = std::process::Command::new(ffmpeg);
+                    let mut cmd = crate::media::no_window_command(ffmpeg);
                     cmd.arg("-y").arg("-i").arg(input);
 
                     if img.color().has_alpha() {
