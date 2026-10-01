@@ -477,10 +477,10 @@ export function WheelOverlay() {
             }}
           >
             {toast.type === "loading" && (
-              <Loader2 className="w-6 h-6 text-sky-400 animate-spin mb-2" />
+              <Loader2 className="w-6 h-6 text-[#cbe71f] animate-spin mb-2" />
             )}
             {toast.type === "success" && (
-              <CheckCircle2 className="w-6 h-6 text-emerald-400 mb-2" />
+              <CheckCircle2 className="w-6 h-6 text-[#cbe71f] mb-2" />
             )}
             {toast.type === "error" && (
               <AlertCircle className="w-6 h-6 text-rose-400 mb-2" />

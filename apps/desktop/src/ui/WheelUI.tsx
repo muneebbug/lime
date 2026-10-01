@@ -54,12 +54,12 @@ export function ToggleSwitch({ checked, onChange, disabled = false, id }: Toggle
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-[22px] w-[38px] shrink-0 cursor-default items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none disabled:opacity-40 select-none ${
-        checked ? "bg-white" : "bg-[#3a3a3c]"
+        checked ? "bg-[#cbe71f]" : "bg-[#3a3a3c]"
       }`}
     >
       <span
         className={`pointer-events-none inline-block h-[18px] w-[18px] transform rounded-full shadow transition duration-200 ease-in-out ${
-          checked ? "translate-x-[18px] bg-[#1c1c1e]" : "translate-x-[2px] bg-white"
+          checked ? "translate-x-[18px] bg-[#123816]" : "translate-x-[2px] bg-white"
         }`}
       />
     </button>
@@ -90,7 +90,7 @@ export function HotkeyPill({ label, sublabel, onReset, isRecording = false, onCl
         onClick={onClick}
         className={`flex items-center gap-1 px-2.5 py-1 border text-[13px] font-mono rounded-md transition-colors cursor-default ${
           isRecording
-            ? "bg-[#ff6339]/20 border-[#ff6339] text-[#ff6339] animate-pulse"
+            ? "bg-[#cbe71f]/20 border-[#cbe71f] text-[#cbe71f] animate-pulse"
             : "bg-[#2c2c2e] hover:bg-[#38383a] border-white/[0.1] text-white"
         }`}
       >
@@ -194,7 +194,7 @@ export function WheelButton({ children, onClick, variant = "secondary", disabled
     "inline-flex items-center gap-1.5 px-3 py-[6px] text-[13px] font-medium rounded-[8px] transition-all cursor-default select-none disabled:opacity-40";
 
   if (variant === "primary") {
-    base += " bg-[#ff6339] hover:bg-[#ff7247] text-white active:scale-[0.98]";
+    base += " bg-[#cbe71f] hover:bg-[#d8f028] text-[#123816] font-semibold active:scale-[0.98]";
   } else if (variant === "danger") {
     base += " bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/20";
   } else {

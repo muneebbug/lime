@@ -371,7 +371,7 @@ function RadialWheelInner({
               <stop offset="1" stopColor="#f4f6f6" stopOpacity="0.82" />
             </radialGradient>
 
-            {/* Active highlighted petal gradient */}
+            {/* Active highlighted petal gradient — Lime logo match */}
             <linearGradient
               id="petal-active-gradient"
               x1="0%"
@@ -379,8 +379,8 @@ function RadialWheelInner({
               x2="100%"
               y2="100%"
             >
-              <stop offset="0%" stopColor="#ff5d1c" />
-              <stop offset="100%" stopColor="#f24500" />
+              <stop offset="0%" stopColor="#d6f224" />
+              <stop offset="100%" stopColor="#b2d415" />
             </linearGradient>
 
             {/* Shadows */}
@@ -463,7 +463,7 @@ function RadialWheelInner({
                     isDisabled
                       ? "rgba(255, 255, 255, 0.2)"
                       : isHighlighted
-                      ? "#ff7538"
+                      ? "#1e7d23"
                       : "rgba(255, 255, 255, 0.85)"
                   }
                   strokeWidth={isHighlighted ? 1.5 : 1.2}
@@ -471,7 +471,7 @@ function RadialWheelInner({
                     filter: isDisabled
                       ? "none"
                       : isHighlighted
-                      ? "drop-shadow(0 4px 14px rgba(255, 84, 25, 0.45))"
+                      ? "drop-shadow(0 4px 16px rgba(203, 231, 31, 0.55))"
                       : "drop-shadow(0 2px 5px rgba(0,0,0,0.06))",
                     transformOrigin: "0px 0px",
                     transform: isHighlighted ? "scale(1.025)" : "scale(1)",
@@ -491,7 +491,7 @@ function RadialWheelInner({
                   >
                     <ToolIcon
                       type={petal.icon.type}
-                      stroke={isHighlighted ? "#ffffff" : "#222428"}
+                      stroke={isHighlighted ? "#113a15" : "#222428"}
                     />
                   </g>
                 )}
@@ -502,7 +502,7 @@ function RadialWheelInner({
                   y={petal.labelY}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fill={isHighlighted ? "#ffffff" : "#222428"}
+                  fill={isHighlighted ? "#113a15" : "#222428"}
                   fontSize={petal.icon ? "9.5px" : "11px"}
                   fontWeight={isHighlighted ? "800" : "700"}
                   fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
@@ -524,7 +524,7 @@ function RadialWheelInner({
                     y={76}
                     textAnchor="middle"
                     dominantBaseline="central"
-                    fill={isHighlighted ? "rgba(255, 255, 255, 0.9)" : "#4b5563"}
+                    fill={isHighlighted ? "#16441b" : "#4b5563"}
                     fontSize="9.5px"
                     fontWeight="700"
                     fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
@@ -624,13 +624,13 @@ function RadialWheelInner({
                   cx="-4"
                   cy="20"
                   r="1.8"
-                  fill={currentPage === "convert" ? "#ff5419" : "#d1d5db"}
+                  fill={currentPage === "convert" ? "#1e7d23" : "#d1d5db"}
                 />
                 <circle
                   cx="4"
                   cy="20"
                   r="1.8"
-                  fill={currentPage === "tools" ? "#ff5419" : "#d1d5db"}
+                  fill={currentPage === "tools" ? "#1e7d23" : "#d1d5db"}
                 />
               </>
             )}

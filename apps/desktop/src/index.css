@@ -1,11 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  /* Wheel color palette — warm orange to coral gradient */
-  --color-wheel-primary: hsl(22, 95%, 55%);
-  --color-wheel-secondary: hsl(355, 85%, 60%);
-  --color-wheel-accent: hsl(16, 100%, 60%);
-  --color-wheel-bg: hsla(240, 10%, 8%, 0.85);
+  /* Lime brand color palette matching logo:
+     - Electric Lime accent: #cbe71f
+     - Deep Lime/Forest green: #1e7d23
+     - Cream ivory: #fbf9e1
+  */
+  --color-wheel-primary: #cbe71f;
+  --color-wheel-secondary: #1e7d23;
+  --color-wheel-accent: #cbe71f;
+  --color-wheel-bg: hsla(120, 10%, 8%, 0.85);
   --color-wheel-glass: hsla(0, 0%, 100%, 0.08);
   --color-wheel-glass-hover: hsla(0, 0%, 100%, 0.14);
   --color-wheel-border: hsla(0, 0%, 100%, 0.12);
@@ -91,6 +95,6 @@ button, [role="button"], [role="switch"], [role="tab"], select {
 }
 
 @keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 20px hsla(22, 95%, 55%, 0.3); }
-  50% { box-shadow: 0 0 40px hsla(22, 95%, 55%, 0.6); }
+  0%, 100% { box-shadow: 0 0 20px rgba(203, 231, 31, 0.35); }
+  50% { box-shadow: 0 0 40px rgba(203, 231, 31, 0.65); }
 }

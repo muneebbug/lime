@@ -337,7 +337,7 @@ export function SettingsWindow() {
 
         <div className="flex items-center gap-3 h-full">
           {isSaved && (
-            <span className="flex items-center gap-1.5 text-xs text-emerald-400 font-medium">
+            <span className="flex items-center gap-1.5 text-xs text-[#cbe71f] font-medium">
               <Check size={12} strokeWidth={2.5} />
               Saved
             </span>
@@ -367,11 +367,11 @@ export function SettingsWindow() {
                     onClick={() => handleSelectTab(item.id)}
                     className={`w-full flex items-center gap-[10px] px-2.5 py-[6px] rounded-[6px] text-[13px] transition-all cursor-default text-left select-none ${
                       isActive
-                        ? "bg-white/[0.09] text-white"
+                        ? "bg-[#cbe71f]/10 text-white font-medium"
                         : "text-[#8e8e93] hover:text-white hover:bg-white/[0.05]"
                     }`}
                   >
-                    <span className="flex-shrink-0 w-5 h-5 flex items-center justify-center text-white">
+                    <span className={`flex-shrink-0 w-5 h-5 flex items-center justify-center ${isActive ? "text-[#cbe71f]" : "text-neutral-400"}`}>
                       {item.icon}
                     </span>
                     <span className={isActive ? "text-white font-medium" : "text-[#d1d1d6]"}>{item.label}</span>
@@ -518,7 +518,7 @@ export function SettingsWindow() {
                         };
                         handleSaveSettings(updated);
                       }}
-                      className="w-28 accent-[#ff6339] cursor-default bg-[#2a2929] rounded-full h-1"
+                      className="w-28 accent-[#cbe71f] cursor-default bg-[#2a2929] rounded-full h-1"
                     />
                   </div>
                 </SettingRow>
@@ -547,7 +547,7 @@ export function SettingsWindow() {
                         };
                         handleSaveSettings(updated);
                       }}
-                      className="w-28 accent-[#ff6339] cursor-default bg-[#2a2929] rounded-full h-1"
+                      className="w-28 accent-[#cbe71f] cursor-default bg-[#2a2929] rounded-full h-1"
                     />
                   </div>
                 </SettingRow>
@@ -612,7 +612,7 @@ export function SettingsWindow() {
                         };
                         handleSaveSettings(updated);
                       }}
-                      className="w-28 accent-[#ff6339] cursor-default bg-[#2a2929] rounded-full h-1"
+                      className="w-28 accent-[#cbe71f] cursor-default bg-[#2a2929] rounded-full h-1"
                     />
                   </div>
                 </SettingRow>
