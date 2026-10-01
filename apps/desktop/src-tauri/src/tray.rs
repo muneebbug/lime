@@ -17,7 +17,7 @@ pub fn setup_tray(app: &AppHandle) -> anyhow::Result<()> {
     )?;
 
     let mut builder = TrayIconBuilder::with_id("lime-tray")
-        .tooltip("Lime — drag files to convert and edit")
+        .tooltip("Lime")
         .menu(&menu)
         .show_menu_on_left_click(false);
 

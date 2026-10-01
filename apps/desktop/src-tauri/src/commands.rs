@@ -371,27 +371,33 @@ async fn run_instant_action(
             }
         }
     } else if target_ext == "pdf" {
-        if !job.inputs.is_empty() {
+        for input in &job.inputs {
             let output_path = wheel_core::output::resolve_output_path(
-                &job.inputs[0],
+                input,
                 "pdf",
                 &output_settings.suffix,
                 &output_settings.policy,
                 effective_folder,
                 output_settings.overwrite_source,
             );
-            let inputs_clone = job.inputs.clone();
-            let output_clone = output_path.clone();
+            let in_clone = vec![input.clone()];
+            let out_clone = output_path.clone();
 
             let result = tokio::task::spawn_blocking(move || {
-                wheel_engines::pdf::images_to_pdf(&inputs_clone, &output_clone)
+                wheel_engines::pdf::images_to_pdf(&in_clone, &out_clone)
             })
             .await;
 
             match result {
                 Ok(Ok(path)) => outputs.push(path),
-                Ok(Err(e)) => error = Some(e.to_string()),
-                Err(e) => error = Some(e.to_string()),
+                Ok(Err(e)) => {
+                    error = Some(e.to_string());
+                    break;
+                }
+                Err(e) => {
+                    error = Some(e.to_string());
+                    break;
+                }
             }
         }
     } else {
