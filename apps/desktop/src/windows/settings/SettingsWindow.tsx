@@ -427,22 +427,6 @@ export function SettingsWindow() {
                     }}
                   />
                 </SettingRow>
-
-                <SettingRow
-                  title="Receive Pre-release Updates"
-                  description="Include Beta and Alpha preview releases before general availability"
-                >
-                  <ToggleSwitch
-                    checked={settings.general.include_prereleases ?? true}
-                    onChange={(checked) => {
-                      const updated = {
-                        ...settings,
-                        general: { ...settings.general, include_prereleases: checked },
-                      };
-                      handleSaveSettings(updated);
-                    }}
-                  />
-                </SettingRow>
               </SettingSection>
             </div>
           )}
@@ -908,13 +892,6 @@ export function SettingsWindow() {
 
                 <div className="p-4 bg-[#2a2929] border border-white/[0.06] rounded-lg space-y-3">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-neutral-400">Application</span>
-                    <span className="text-neutral-200 font-medium">Lime — File Toolkit for Windows</span>
-                  </div>
-
-                  <div className="h-px bg-white/[0.04]" />
-
-                  <div className="flex items-center justify-between text-xs">
                     <div>
                       <span className="text-neutral-400">Version</span>
                       <div className="font-mono text-neutral-200 mt-0.5 flex items-center gap-2">
@@ -979,20 +956,20 @@ export function SettingsWindow() {
                     <div>
                       <div className="text-neutral-400">Update Channel</div>
                       <div className="text-neutral-300 text-[11px] mt-0.5">
-                        {settings?.general?.include_prereleases ?? true ? (
-                          <span className="text-amber-400 font-medium">Pre-release Channel (Alpha & Beta)</span>
-                        ) : (
-                          <span className="text-emerald-400 font-medium">Stable Channel</span>
-                        )}
+                        Pre-release includes Alpha and Beta builds
                       </div>
                     </div>
-                    <ToggleSwitch
-                      checked={settings?.general?.include_prereleases ?? true}
-                      onChange={(checked) => {
+                    <SegmentedControl
+                      value={settings?.general?.include_prereleases ?? true ? "prerelease" : "stable"}
+                      options={[
+                        { label: "Stable", value: "stable" },
+                        { label: "Pre-release", value: "prerelease" },
+                      ]}
+                      onChange={(val) => {
                         if (settings) {
                           const updated = {
                             ...settings,
-                            general: { ...settings.general, include_prereleases: checked },
+                            general: { ...settings.general, include_prereleases: val === "prerelease" },
                           };
                           handleSaveSettings(updated);
                         }
