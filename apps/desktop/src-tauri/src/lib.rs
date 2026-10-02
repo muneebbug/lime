@@ -6,6 +6,7 @@ use wheel_core::{ActionRegistry, JobQueue, WheelSettings, action::default_action
 
 mod commands;
 mod overlay;
+mod status;
 mod tray;
 pub mod sound;
 
@@ -68,6 +69,8 @@ pub fn run() {
     let mut initial_settings = WheelSettings::load_or_default(&settings_path);
     initial_settings.general.launch_at_login = wheel_win::shell::is_launch_at_login_registered();
     sound::set_sound_enabled(initial_settings.wheel_ui.sound_enabled);
+    let status_vertical = initial_settings.wheel_ui.status_vertical;
+    let status_horizontal = initial_settings.wheel_ui.status_horizontal;
     let settings = Arc::new(Mutex::new(initial_settings));
 
     let state = AppState {
@@ -119,6 +122,9 @@ pub fn run() {
             commands::convert_media_file,
             commands::get_ffmpeg_status,
             commands::open_settings_window,
+            commands::show_status,
+            commands::hide_status,
+            commands::apply_status_position,
             commands::run_preset,
             commands::pick_folder,
             commands::open_data_folder,
@@ -133,6 +139,12 @@ pub fn run() {
 
             // Create the overlay window (pre-created, hidden)
             overlay::create_overlay_window(&handle)?;
+
+            // Create the detached status/progress HUD (pre-created, hidden)
+            status::create_status_window(&handle)?;
+            if let Err(e) = status::apply_position(&handle, status_vertical, status_horizontal) {
+                tracing::warn!("Failed to position status window: {}", e);
+            }
 
             // Set up the system tray
             tray::setup_tray(&handle)?;

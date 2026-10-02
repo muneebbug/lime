@@ -18,6 +18,7 @@ import {
   ClockCounterClockwise,
   Info as PhInfo,
   ArrowsClockwise,
+  Pulse as PhPulse,
 } from "@phosphor-icons/react";
 import {
   CaptionButtons,
@@ -32,6 +33,7 @@ type SettingsNavId =
   | "general"
   | "trigger"
   | "wheel_ui"
+  | "status"
   | "output"
   | "engines"
   | "history"
@@ -196,6 +198,24 @@ export function SettingsWindow() {
     }
   };
 
+  /** Persist a status HUD anchor change and immediately re-place the live window. */
+  const handleStatusPosition = async (key: "status_vertical" | "status_horizontal", val: string) => {
+    if (!settings) return;
+    const updated = {
+      ...settings,
+      wheel_ui: { ...settings.wheel_ui, [key]: val },
+    };
+    await handleSaveSettings(updated);
+    try {
+      await invoke("apply_status_position", {
+        vertical: updated.wheel_ui.status_vertical ?? "bottom",
+        horizontal: updated.wheel_ui.status_horizontal ?? "center",
+      });
+    } catch (e) {
+      console.error("Failed to reposition status window", e);
+    }
+  };
+
   const handleSaveSettings = async (newSettings: any) => {
     setSettings(newSettings);
     try {
@@ -246,6 +266,12 @@ export function SettingsWindow() {
       id: "wheel_ui",
       label: "Radial Wheel",
       icon: <CircleDashed size={18} weight="bold" />,
+      group: "core",
+    },
+    {
+      id: "status",
+      label: "Status & Progress",
+      icon: <PhPulse size={18} weight="bold" />,
       group: "core",
     },
     {
@@ -625,7 +651,70 @@ export function SettingsWindow() {
             </div>
           )}
 
-          {/* TAB 4: OUTPUT & FILES */}
+          {/* TAB 4: STATUS & PROGRESS */}
+          {activeTab === "status" && (
+            <div className="w-full">
+              <SettingSection first title="Appearance">
+                <SettingRow
+                  title="HUD Style"
+                  description="Compact shows a single line with no file names"
+                >
+                  <SegmentedControl
+                    value={settings.wheel_ui.hud_style ?? "standard"}
+                    options={[
+                      { label: "Standard", value: "standard" },
+                      { label: "Compact", value: "compact" },
+                    ]}
+                    onChange={(val) => {
+                      const updated = {
+                        ...settings,
+                        wheel_ui: { ...settings.wheel_ui, hud_style: val },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </SettingRow>
+              </SettingSection>
+
+              <SettingSection title="Position">
+                <SettingRow
+                  title="Vertical Position"
+                  description="Where the status and progress display appears on screen"
+                >
+                  <SegmentedControl
+                    value={settings.wheel_ui.status_vertical ?? "bottom"}
+                    options={[
+                      { label: "Top", value: "top" },
+                      { label: "Middle", value: "middle" },
+                      { label: "Bottom", value: "bottom" },
+                    ]}
+                    onChange={(val) => {
+                      handleStatusPosition("status_vertical", val);
+                    }}
+                  />
+                </SettingRow>
+
+                <SettingRow
+                  title="Horizontal Position"
+                  description="Horizontal anchor on screen"
+                >
+                  <SegmentedControl
+                    value={settings.wheel_ui.status_horizontal ?? "center"}
+                    options={[
+                      { label: "Left", value: "left" },
+                      { label: "Center", value: "center" },
+                      { label: "Right", value: "right" },
+                    ]}
+                    onChange={(val) => {
+                      handleStatusPosition("status_horizontal", val);
+                    }}
+                  />
+                </SettingRow>
+              </SettingSection>
+            </div>
+          )}
+
+          {/* TAB 5: OUTPUT & FILES */}
           {activeTab === "output" && (
             <div className="w-full">
               <SettingSection first>
@@ -772,7 +861,7 @@ export function SettingsWindow() {
           )}
 
 
-          {/* TAB 5: ENGINES */}
+          {/* TAB 6: ENGINES */}
           {activeTab === "engines" && (
             <div className="w-full">
               <SettingSection first title="Multimedia Conversion Engine">
@@ -876,7 +965,7 @@ export function SettingsWindow() {
             </div>
           )}
 
-          {/* TAB 7: ABOUT */}
+          {/* TAB 8: ABOUT */}
           {activeTab === "about" && (
             <div className="w-full">
               <SettingSection first>

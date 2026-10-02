@@ -51,6 +51,11 @@ mod windows_impl {
 pub use windows_impl::{dpi_scale_for_window, logical_to_physical, work_area_for_point, clamp_to_work_area};
 
 #[cfg(not(windows))]
+pub fn work_area_for_point(_x: i32, _y: i32) -> (i32, i32, i32, i32) {
+    (0, 0, 1920, 1080)
+}
+
+#[cfg(not(windows))]
 pub fn clamp_to_work_area(cx: i32, cy: i32, w: i32, h: i32) -> (i32, i32) {
     (cx - w / 2, cy - h / 2)
 }

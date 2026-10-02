@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { WheelOverlay } from "./windows/overlay/WheelOverlay";
 import { SettingsWindow } from "./windows/settings/SettingsWindow";
+import { StatusHud } from "./windows/status/StatusHud";
 
 /** Route to the correct window based on URL search params */
 function getWindowParams() {
@@ -23,6 +24,9 @@ export function App() {
 
     case "settings":
       return <SettingsWindow />;
+
+    case "status":
+      return <StatusHud />;
 
     default:
       return <WheelOverlay />;

@@ -162,6 +162,9 @@ pub async fn dispatch_action(
     use wheel_core::action::ActionKind;
     match manifest.kind {
         ActionKind::Instant => {
+            // Let the detached HUD show progress before any work begins.
+            emit_job_started(&app, action_id, &files);
+
             // Queue a background job
             let job = wheel_core::Job::new(action_id.clone(), files, request.params);
             let _ = state.history.insert_job(&job);
@@ -171,6 +174,8 @@ pub async fn dispatch_action(
                 .enqueue(job)
                 .await
                 .map_err(|e| e.to_string())?;
+
+            crate::status::show(&app);
 
             // Run the actual conversion in a blocking task
             let state_arc = std::sync::Arc::clone(&state.inner().job_queue);
@@ -188,6 +193,26 @@ pub async fn dispatch_action(
             Ok(format!("window:{}", action_id))
         }
     }
+}
+
+/// Announce a job to the detached status HUD (and any other listener).
+///
+/// Emitted before the job is queued, so the HUD appears the instant the user
+/// lets go of a petal rather than after engine startup.
+fn emit_job_started(app: &tauri::AppHandle, action_id: &str, files: &[PathBuf]) {
+    let names: Vec<String> = files
+        .iter()
+        .filter_map(|p| p.file_name())
+        .map(|n| n.to_string_lossy().into_owned())
+        .collect();
+
+    let _ = app.emit(
+        "job-started",
+        serde_json::json!({
+            "action_id": action_id,
+            "files": names,
+        }),
+    );
 }
 
 fn get_in_flight_tools() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
@@ -498,6 +523,7 @@ async fn run_instant_action(
             "job-failed",
             serde_json::json!({ "job_id": job_id, "error": err }),
         );
+        crate::status::hide(&app);
 
         let _ = app
             .notification()
@@ -782,6 +808,30 @@ pub async fn get_ffmpeg_status() -> Result<wheel_engines::media::FfmpegStatus, S
 pub async fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
     crate::tray::open_settings_window(&app);
     Ok(())
+}
+
+/// Show the detached status/progress HUD.
+#[tauri::command]
+pub async fn show_status(app: tauri::AppHandle) -> Result<(), String> {
+    crate::status::show(&app);
+    Ok(())
+}
+
+/// Hide the detached status/progress HUD.
+#[tauri::command]
+pub async fn hide_status(app: tauri::AppHandle) -> Result<(), String> {
+    crate::status::hide(&app);
+    Ok(())
+}
+
+/// Re-anchor the status/progress HUD after the user changes its position.
+#[tauri::command]
+pub async fn apply_status_position(
+    app: tauri::AppHandle,
+    vertical: wheel_core::StatusVertical,
+    horizontal: wheel_core::StatusHorizontal,
+) -> Result<(), String> {
+    crate::status::apply_position(&app, vertical, horizontal).map_err(|e| e.to_string())
 }
 
 /// Prompt the user to pick a folder using the native Windows dialog

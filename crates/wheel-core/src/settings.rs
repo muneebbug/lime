@@ -145,6 +145,31 @@ pub struct WheelUiSettings {
     pub corner_radius: u32,
     pub sound_enabled: bool,
     pub context_filter_enabled: bool,
+    /// Vertical anchor of the detached status/progress HUD.
+    #[serde(default)]
+    pub status_vertical: StatusVertical,
+    /// Horizontal anchor of the detached status/progress HUD.
+    #[serde(default)]
+    pub status_horizontal: StatusHorizontal,
+    /// Layout density of the detached status/progress HUD.
+    #[serde(default)]
+    pub hud_style: HudStyle,
+}
+
+/// How much detail the status/progress HUD shows.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum HudStyle {
+    /// Icon above the message, with the file names underneath.
+    Standard,
+    /// Single line: icon beside the message, no file names.
+    Compact,
+}
+
+impl Default for HudStyle {
+    fn default() -> Self {
+        HudStyle::Standard
+    }
 }
 
 impl Default for WheelUiSettings {
@@ -158,6 +183,61 @@ impl Default for WheelUiSettings {
             corner_radius: 16,
             sound_enabled: true,
             context_filter_enabled: true,
+            status_vertical: StatusVertical::default(),
+            status_horizontal: StatusHorizontal::default(),
+            hud_style: HudStyle::default(),
+        }
+    }
+}
+
+/// Vertical anchor for the status/progress HUD, as a fraction of the work area.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StatusVertical {
+    Top,
+    Middle,
+    Bottom,
+}
+
+impl Default for StatusVertical {
+    fn default() -> Self {
+        StatusVertical::Bottom
+    }
+}
+
+impl StatusVertical {
+    /// 0.0 = work area top, 0.5 = centred, 1.0 = work area bottom.
+    pub fn anchor(self) -> f32 {
+        match self {
+            StatusVertical::Top => 0.0,
+            StatusVertical::Middle => 0.5,
+            StatusVertical::Bottom => 1.0,
+        }
+    }
+}
+
+/// Horizontal anchor for the status/progress HUD, as a fraction of the work area.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum StatusHorizontal {
+    Left,
+    Center,
+    Right,
+}
+
+impl Default for StatusHorizontal {
+    fn default() -> Self {
+        StatusHorizontal::Center
+    }
+}
+
+impl StatusHorizontal {
+    /// 0.0 = work area left, 0.5 = centred, 1.0 = work area right.
+    pub fn anchor(self) -> f32 {
+        match self {
+            StatusHorizontal::Left => 0.0,
+            StatusHorizontal::Center => 0.5,
+            StatusHorizontal::Right => 1.0,
         }
     }
 }
@@ -405,5 +485,40 @@ mod tests {
         assert!(parsed.general.launch_at_login);
         assert!(parsed.trigger.paused);
         assert!(parsed.wheel_ui.reduced_motion);
+        // Fields added after this file was written must fall back, not fail the parse.
+        assert_eq!(parsed.wheel_ui.status_vertical, StatusVertical::Bottom);
+        assert_eq!(parsed.wheel_ui.status_horizontal, StatusHorizontal::Center);
+        assert_eq!(parsed.wheel_ui.hud_style, HudStyle::Standard);
+    }
+
+    #[test]
+    fn test_hud_style_roundtrips() {
+        let mut ui = WheelUiSettings::default();
+        ui.hud_style = HudStyle::Compact;
+        let json = serde_json::to_string(&ui).expect("serialize wheel ui");
+        assert!(json.contains("\"hud_style\":\"compact\""), "got: {}", json);
+        let parsed: WheelUiSettings = serde_json::from_str(&json).expect("deserialize wheel ui");
+        assert_eq!(parsed.hud_style, HudStyle::Compact);
+    }
+
+    #[test]
+    fn test_status_anchors_span_the_work_area() {
+        assert_eq!(StatusVertical::Top.anchor(), 0.0);
+        assert_eq!(StatusVertical::Middle.anchor(), 0.5);
+        assert_eq!(StatusVertical::Bottom.anchor(), 1.0);
+        assert_eq!(StatusHorizontal::Left.anchor(), 0.0);
+        assert_eq!(StatusHorizontal::Center.anchor(), 0.5);
+        assert_eq!(StatusHorizontal::Right.anchor(), 1.0);
+    }
+
+    #[test]
+    fn test_status_position_roundtrips() {
+        let mut ui = WheelUiSettings::default();
+        ui.status_vertical = StatusVertical::Top;
+        ui.status_horizontal = StatusHorizontal::Right;
+        let json = serde_json::to_string(&ui).expect("serialize wheel ui");
+        let parsed: WheelUiSettings = serde_json::from_str(&json).expect("deserialize wheel ui");
+        assert_eq!(parsed.status_vertical, StatusVertical::Top);
+        assert_eq!(parsed.status_horizontal, StatusHorizontal::Right);
     }
 }

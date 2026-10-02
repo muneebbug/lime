@@ -3,7 +3,6 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { invoke } from "@tauri-apps/api/core";
 import { motion, AnimatePresence } from "motion/react";
-import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { useWheelStore } from "../../store/wheelStore";
 import { playHoverSound } from "../../utils/sound";
 import {
@@ -46,13 +45,6 @@ interface DropFilesEvent {
   y: number;
 }
 
-interface ToastInfo {
-  id: string;
-  type: "loading" | "success" | "error";
-  message: string;
-  subtext?: string;
-}
-
 export function WheelOverlay() {
   const isDragging = useWheelStore((s) => s.isDragging);
   const dragFiles = useWheelStore((s) => s.dragFiles);
@@ -63,8 +55,7 @@ export function WheelOverlay() {
   const togglePage = useWheelStore((s) => s.togglePage);
   const setHoveredWedge = useWheelStore((s) => s.setHoveredWedge);
 
-  const overlayRef = useRef<HTMLDivElement>(null);
-  const [toast, setToast] = useState<ToastInfo | null>(null);
+const overlayRef = useRef<HTMLDivElement>(null);
   const [wheelSettings, setWheelSettings] = useState<any>(null);
 
   const lastHoveredRef = useRef<string | null>(null);
@@ -107,46 +98,22 @@ export function WheelOverlay() {
   }, [loadActions]);
 
   const triggerAction = useCallback((actionId: string, files: string[]) => {
-    const isConvert = actionId.startsWith("convert.");
-    const targetName = isConvert
-      ? actionId.replace("convert.", "").toUpperCase()
-      : actionId.replace("tool.", "");
-
-    setToast({
-      id: Date.now().toString(),
-      type: "loading",
-      message: isConvert ? `Converting to ${targetName}...` : `Trimming image...`,
-      subtext: files.map((f) => f.split(/[/\\]/).pop()).join(", "),
-    });
-
     lastHoveredRef.current = null;
     useWheelStore.getState().clearDragState();
     useWheelStore.getState().setPage("convert");
 
+    // Progress and results are surfaced by the detached status HUD, which the
+    // Rust side shows in response to the dispatch itself.
     invoke("dispatch_action", {
       request: {
         action_id: actionId,
         files,
         params: {},
       },
-    })
-      .then((jobId) => {
-        console.log("Action dispatched successfully:", jobId);
-      })
-      .catch((e) => {
-        console.error("Dispatch failed:", e);
-        setToast({
-          id: Date.now().toString(),
-          type: "error",
-          message: "Action failed",
-          subtext: String(e),
-        });
-        setTimeout(() => {
-          setToast((cur) => (cur?.type === "error" ? null : cur));
-          invoke("hide_overlay");
-        }, 5000);
-      });
-  }, [wheelSettings]);
+    }).catch((e) => {
+      console.error("Dispatch failed:", e);
+    });
+  }, []);
 
   const handlePointerMove = useCallback((x: number, y: number) => {
     lastDropPosRef.current = { x, y };
@@ -252,36 +219,6 @@ export function WheelOverlay() {
 
       triggerAction(wedgeId, dropFiles);
     };
-
-    listen<{ job_id: string; outputs: string[] }>("job-completed", ({ payload }) => {
-      const outputNames = payload.outputs
-        .map((p) => p.split(/[/\\]/).pop())
-        .filter(Boolean)
-        .join(", ");
-      setToast({
-        id: Date.now().toString(),
-        type: "success",
-        message: "Complete",
-        subtext: outputNames || "File converted successfully",
-      });
-      setTimeout(() => {
-        setToast((cur) => (cur?.type === "success" ? null : cur));
-        invoke("hide_overlay");
-      }, 2500);
-    }).then((u) => unlisteners.push(u));
-
-    listen<{ job_id: string; error: string }>("job-failed", ({ payload }) => {
-      setToast({
-        id: Date.now().toString(),
-        type: "error",
-        message: "Conversion failed",
-        subtext: payload.error,
-      });
-      setTimeout(() => {
-        setToast((cur) => (cur?.type === "error" ? null : cur));
-        invoke("hide_overlay");
-      }, 6000);
-    }).then((u) => unlisteners.push(u));
 
     // Drag armed from low-level hook — window positioned and shown, but wait for drop-enter
     listen<DragArmedEvent>("drag-armed", () => {
@@ -461,48 +398,6 @@ export function WheelOverlay() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Floating HUD toast for status, progress, and errors */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            key={toast.id}
-            initial={{ scale: 0.85, opacity: 0, y: 8 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.85, opacity: 0, y: 8 }}
-            transition={{ type: "spring", stiffness: 450, damping: 28 }}
-            className="absolute z-50 flex flex-col items-center justify-center max-w-[340px] px-5 py-4 rounded-2xl bg-neutral-950/92 border border-white/15 backdrop-blur-2xl shadow-2xl text-center cursor-default pointer-events-auto"
-            onClick={() => {
-              setToast(null);
-              invoke("hide_overlay");
-            }}
-          >
-            {toast.type === "loading" && (
-              <Loader2 className="w-6 h-6 text-[#cbe71f] animate-spin mb-2" />
-            )}
-            {toast.type === "success" && (
-              <CheckCircle2 className="w-6 h-6 text-[#cbe71f] mb-2" />
-            )}
-            {toast.type === "error" && (
-              <AlertCircle className="w-6 h-6 text-rose-400 mb-2" />
-            )}
-            <div className="text-sm font-semibold text-white tracking-wide">
-              {toast.message}
-            </div>
-            {toast.subtext && (
-              <div className="text-xs text-neutral-300 mt-1 line-clamp-4 leading-relaxed font-sans">
-                {toast.subtext}
-              </div>
-            )}
-            {toast.type === "error" && (
-              <div className="text-[10px] text-neutral-400 mt-2 font-mono uppercase tracking-wider">
-                Click to dismiss
-              </div>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
     </div>
   );
 }
