@@ -67,7 +67,6 @@ pub fn run() {
     let settings_path = app_dir.join("settings.json");
     let mut initial_settings = WheelSettings::load_or_default(&settings_path);
     initial_settings.general.launch_at_login = wheel_win::shell::is_launch_at_login_registered();
-    initial_settings.general.explorer_context_menu = wheel_win::shell::is_context_menu_registered();
     sound::set_sound_enabled(initial_settings.wheel_ui.sound_enabled);
     let settings = Arc::new(Mutex::new(initial_settings));
 
@@ -120,8 +119,6 @@ pub fn run() {
             commands::convert_media_file,
             commands::get_ffmpeg_status,
             commands::open_settings_window,
-            commands::is_explorer_context_menu_enabled,
-            commands::set_explorer_context_menu,
             commands::run_preset,
             commands::pick_folder,
             commands::open_data_folder,

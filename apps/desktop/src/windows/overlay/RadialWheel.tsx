@@ -109,6 +109,18 @@ export const TOOLS_PETALS: PetalData[] = [
   },
 ];
 
+/** Outer diameter in CSS px per wheel size preset. Mirrors `WheelSize::px` in wheel-core. */
+export const WHEEL_SIZE_PX: Record<string, number> = {
+  small: 280,
+  medium: 320,
+  large: 400,
+};
+
+/** Resolve a wheel size preset name to its pixel diameter, falling back to medium. */
+export function wheelDiameter(size: string | undefined | null): number {
+  return WHEEL_SIZE_PX[size ?? ""] ?? WHEEL_SIZE_PX.medium;
+}
+
 export function hitTestWedge(
   cursorX: number,
   cursorY: number,
@@ -295,7 +307,7 @@ function RadialWheelInner({
     [activePetals, hoveredWedge]
   );
 
-  const wheelSize = size || 272;
+  const wheelSize = size || WHEEL_SIZE_PX.medium;
   const scale = wheelSize / 272;
 
   return (

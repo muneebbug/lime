@@ -80,7 +80,6 @@ pub struct GeneralSettings {
     pub language: String,
     pub auto_update: bool,
     pub minimize_to_tray: bool,
-    pub explorer_context_menu: bool,
     #[serde(default = "default_true")]
     pub include_prereleases: bool,
 }
@@ -96,7 +95,6 @@ impl Default for GeneralSettings {
             language: "en".into(),
             auto_update: true,
             minimize_to_tray: true,
-            explorer_context_menu: true,
             include_prereleases: true,
         }
     }
@@ -143,7 +141,7 @@ pub struct WheelUiSettings {
     pub theme: Theme,
     pub animation_speed: f32,
     pub reduced_motion: bool,
-    pub size: u32,
+    pub size: WheelSize,
     pub corner_radius: u32,
     pub sound_enabled: bool,
     pub context_filter_enabled: bool,
@@ -156,10 +154,62 @@ impl Default for WheelUiSettings {
             theme: Theme::System,
             animation_speed: 1.0,
             reduced_motion: false,
-            size: 320,
+            size: WheelSize::Medium,
             corner_radius: 16,
             sound_enabled: true,
             context_filter_enabled: true,
+        }
+    }
+}
+
+/// Radial wheel diameter preset. Stored as a name so the pixel geometry behind
+/// each option stays an implementation detail.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum WheelSize {
+    Small,
+    Medium,
+    Large,
+}
+
+impl WheelSize {
+    /// Outer diameter in CSS pixels. Must stay within the fixed 400x400 overlay window.
+    pub fn px(self) -> u32 {
+        match self {
+            WheelSize::Small => 280,
+            WheelSize::Medium => 320,
+            WheelSize::Large => 400,
+        }
+    }
+}
+
+impl Default for WheelSize {
+    fn default() -> Self {
+        WheelSize::Medium
+    }
+}
+
+/// Accepts the preset name, and also the raw 280-400px diameter written by older
+/// settings files so existing installs keep their other preferences instead of
+/// silently falling back to defaults on the next load.
+impl<'de> Deserialize<'de> for WheelSize {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Repr {
+            Name(String),
+            LegacyPx(u32),
+        }
+
+        match Repr::deserialize(deserializer)? {
+            Repr::Name(name) => match name.as_str() {
+                "small" => Ok(WheelSize::Small),
+                "large" => Ok(WheelSize::Large),
+                _ => Ok(WheelSize::Medium),
+            },
+            Repr::LegacyPx(px) if px < 300 => Ok(WheelSize::Small),
+            Repr::LegacyPx(px) if px > 360 => Ok(WheelSize::Large),
+            Repr::LegacyPx(_) => Ok(WheelSize::Medium),
         }
     }
 }
@@ -297,6 +347,63 @@ mod tests {
         s2.general.launch_at_login = true;
         assert_ne!(s1, s2);
         assert_ne!(s1.general.launch_at_login, s2.general.launch_at_login);
-        assert_eq!(s1.general.explorer_context_menu, s2.general.explorer_context_menu);
+    }
+
+    #[test]
+    fn test_wheel_size_serializes_as_preset_name() {
+        let json = serde_json::to_string(&WheelUiSettings::default()).expect("serialize wheel ui");
+        assert!(json.contains("\"size\":\"medium\""), "got: {}", json);
+    }
+
+    #[test]
+    fn test_wheel_size_deserializes_preset_names() {
+        for (name, expected, px) in [
+            ("small", WheelSize::Small, 280),
+            ("medium", WheelSize::Medium, 320),
+            ("large", WheelSize::Large, 400),
+        ] {
+            let parsed: WheelSize = serde_json::from_str(&format!("\"{}\"", name))
+                .unwrap_or_else(|e| panic!("failed to parse {}: {}", name, e));
+            assert_eq!(parsed, expected);
+            assert_eq!(parsed.px(), px);
+            // Every preset must fit the fixed 400x400 overlay window.
+            assert!(parsed.px() <= 400, "{} exceeds the overlay window", name);
+        }
+    }
+
+    #[test]
+    fn test_wheel_size_deserializes_legacy_pixel_diameter() {
+        // Pre-preset settings stored a raw 280-400px diameter; snap to nearest preset.
+        assert_eq!(
+            serde_json::from_str::<WheelSize>("280").expect("parse 280"),
+            WheelSize::Small
+        );
+        assert_eq!(
+            serde_json::from_str::<WheelSize>("320").expect("parse 320"),
+            WheelSize::Medium
+        );
+        assert_eq!(
+            serde_json::from_str::<WheelSize>("400").expect("parse 400"),
+            WheelSize::Large
+        );
+    }
+
+    #[test]
+    fn test_legacy_settings_file_keeps_other_preferences() {
+        // A settings.json written before the size preset must still load, not reset to defaults.
+        let legacy = r#"{
+            "version": 1,
+            "general": { "launch_at_login": true, "language": "en", "auto_update": false, "minimize_to_tray": true, "include_prereleases": false },
+            "trigger": { "modifier": "shift", "movement_threshold_px": 12, "always_show": false, "confirm_timeout_ms": 300, "paused": true },
+            "wheel_ui": { "slot_count": 8, "theme": "system", "animation_speed": 1.0, "reduced_motion": true, "size": 280, "corner_radius": 16, "sound_enabled": false, "context_filter_enabled": true },
+            "output": { "policy": "next_to_source", "fixed_folder": null, "suffix": "", "overwrite_source": false, "recycle_source": false, "preserve_metadata": true },
+            "presets": []
+        }"#;
+        let parsed: WheelSettings =
+            serde_json::from_str(legacy).expect("legacy settings should deserialize");
+        assert_eq!(parsed.wheel_ui.size, WheelSize::Small);
+        assert!(parsed.general.launch_at_login);
+        assert!(parsed.trigger.paused);
+        assert!(parsed.wheel_ui.reduced_motion);
     }
 }

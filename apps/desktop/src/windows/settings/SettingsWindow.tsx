@@ -207,16 +207,6 @@ export function SettingsWindow() {
     }
   };
 
-  const handleToggleContextMenu = (enabled: boolean) => {
-    if (settings) {
-      const updated = {
-        ...settings,
-        general: { ...settings.general, explorer_context_menu: enabled },
-      };
-      handleSaveSettings(updated);
-    }
-  };
-
   const handleClearHistory = async () => {
     try {
       await invoke("clear_history");
@@ -454,18 +444,6 @@ export function SettingsWindow() {
                   />
                 </SettingRow>
               </SettingSection>
-
-              <SettingSection title="Windows Explorer Integration">
-                <SettingRow
-                  title="Explorer Context Menu"
-                  description="Add 'Open with Lime' to Windows Explorer right-click context menus"
-                >
-                  <ToggleSwitch
-                    checked={settings.general.explorer_context_menu}
-                    onChange={handleToggleContextMenu}
-                  />
-                </SettingRow>
-              </SettingSection>
             </div>
           )}
 
@@ -592,29 +570,24 @@ export function SettingsWindow() {
             <div className="w-full">
               <SettingSection first>
                 <SettingRow
-                  title="Wheel Diameter"
-                  description="Outer pixel diameter of the circular radial wheel"
+                  title="Wheel Size"
+                  description="Outer diameter of the circular radial wheel"
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-neutral-400 w-14 text-right">
-                      {settings.wheel_ui.size} px
-                    </span>
-                    <input
-                      type="range"
-                      min="280"
-                      max="400"
-                      step="10"
-                      value={settings.wheel_ui.size}
-                      onChange={(e) => {
-                        const updated = {
-                          ...settings,
-                          wheel_ui: { ...settings.wheel_ui, size: Number(e.target.value) },
-                        };
-                        handleSaveSettings(updated);
-                      }}
-                      className="w-28 accent-[#cbe71f] cursor-default bg-[#2a2929] rounded-full h-1"
-                    />
-                  </div>
+                  <SegmentedControl
+                    value={settings.wheel_ui.size ?? "medium"}
+                    options={[
+                      { label: "Small", value: "small" },
+                      { label: "Medium", value: "medium" },
+                      { label: "Large", value: "large" },
+                    ]}
+                    onChange={(val) => {
+                      const updated = {
+                        ...settings,
+                        wheel_ui: { ...settings.wheel_ui, size: val },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
                 </SettingRow>
 
                 <SettingRow

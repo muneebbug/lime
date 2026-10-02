@@ -24,7 +24,6 @@ pub async fn get_actions(state: State<'_, AppState>) -> Result<Vec<ActionManifes
 pub async fn get_settings(state: State<'_, AppState>) -> Result<WheelSettings, String> {
     let mut lock = state.settings.lock().await;
     lock.general.launch_at_login = wheel_win::shell::is_launch_at_login_registered();
-    lock.general.explorer_context_menu = wheel_win::shell::is_context_menu_registered();
     Ok(lock.clone())
 }
 
@@ -65,19 +64,6 @@ pub async fn save_settings(
     if migrated.general.launch_at_login != old_settings.general.launch_at_login {
         if let Err(e) = wheel_win::shell::set_launch_at_login(migrated.general.launch_at_login) {
             tracing::warn!("Failed to synchronize launch at login: {}", e);
-        }
-    }
-
-    // Synchronize Windows Explorer context menu registration ONLY IF CHANGED
-    if migrated.general.explorer_context_menu != old_settings.general.explorer_context_menu {
-        if migrated.general.explorer_context_menu {
-            if let Err(e) = wheel_win::shell::register_context_menu(None) {
-                tracing::warn!("Failed to register context menu: {}", e);
-            }
-        } else {
-            if let Err(e) = wheel_win::shell::unregister_context_menu() {
-                tracing::warn!("Failed to unregister context menu: {}", e);
-            }
         }
     }
 
@@ -796,22 +782,6 @@ pub async fn get_ffmpeg_status() -> Result<wheel_engines::media::FfmpegStatus, S
 pub async fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
     crate::tray::open_settings_window(&app);
     Ok(())
-}
-
-/// Check if Windows Explorer context menu is active
-#[tauri::command]
-pub async fn is_explorer_context_menu_enabled() -> Result<bool, String> {
-    Ok(wheel_win::shell::is_context_menu_registered())
-}
-
-/// Enable or disable Windows Explorer context menu
-#[tauri::command]
-pub async fn set_explorer_context_menu(enabled: bool) -> Result<(), String> {
-    if enabled {
-        wheel_win::shell::register_context_menu(None).map_err(|e| e.to_string())
-    } else {
-        wheel_win::shell::unregister_context_menu().map_err(|e| e.to_string())
-    }
 }
 
 /// Prompt the user to pick a folder using the native Windows dialog

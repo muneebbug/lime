@@ -1,32 +1,5 @@
-use std::path::Path;
 use anyhow::{Context, Result};
 use tracing::info;
-
-#[cfg(windows)]
-fn key_exists(sub_key: &str) -> bool {
-    use windows::Win32::System::Registry::{RegOpenKeyExW, RegCloseKey, HKEY_CURRENT_USER, KEY_READ, HKEY};
-    use windows::core::PCWSTR;
-
-    let wide: Vec<u16> = sub_key.encode_utf16().chain(std::iter::once(0)).collect();
-    let mut hkey = HKEY::default();
-    let res = unsafe {
-        RegOpenKeyExW(
-            HKEY_CURRENT_USER,
-            PCWSTR(wide.as_ptr()),
-            None,
-            KEY_READ,
-            &mut hkey,
-        )
-    };
-    if res.is_ok() {
-        unsafe {
-            let _ = RegCloseKey(hkey);
-        }
-        true
-    } else {
-        false
-    }
-}
 
 #[cfg(windows)]
 fn value_exists(sub_key: &str, value_name: &str) -> bool {
@@ -140,80 +113,6 @@ fn delete_reg_value(sub_key: &str, value_name: &str) -> Result<()> {
             let _ = RegCloseKey(hkey);
         }
     }
-    Ok(())
-}
-
-#[cfg(windows)]
-fn delete_reg_tree(sub_key: &str) -> Result<()> {
-    use windows::Win32::System::Registry::{
-        RegDeleteTreeW, HKEY_CURRENT_USER,
-    };
-    use windows::core::PCWSTR;
-
-    let sub_key_w: Vec<u16> = sub_key.encode_utf16().chain(std::iter::once(0)).collect();
-    let _ = unsafe {
-        RegDeleteTreeW(
-            HKEY_CURRENT_USER,
-            PCWSTR(sub_key_w.as_ptr()),
-        )
-    };
-    Ok(())
-}
-
-/// Check if Lime is registered in Windows Explorer context menu (HKCU)
-pub fn is_context_menu_registered() -> bool {
-    #[cfg(windows)]
-    {
-        key_exists(r"Software\Classes\*\shell\Lime")
-    }
-    #[cfg(not(windows))]
-    false
-}
-
-/// Register Lime in the Windows Explorer context menu under HKCU (no admin required)
-pub fn register_context_menu(custom_exe: Option<&Path>) -> Result<()> {
-    let exe = match custom_exe {
-        Some(p) => p.to_path_buf(),
-        None => std::env::current_exe().context("Failed to get current executable path")?,
-    };
-
-    let exe_str = exe.to_string_lossy();
-    let cmd_str = format!("\"{}\" \"%1\"", exe_str);
-
-    info!("Registering Explorer context menu for Lime: {}", exe_str);
-
-    #[cfg(windows)]
-    {
-        // 1. Files: HKCU\Software\Classes\*\shell\Lime
-        set_reg_string(r"Software\Classes\*\shell\Lime", None, "Open with Lime")?;
-        let _ = set_reg_string(r"Software\Classes\*\shell\Lime", Some("Icon"), &exe_str);
-        set_reg_string(r"Software\Classes\*\shell\Lime\command", None, &cmd_str)?;
-
-        // 2. Directories: HKCU\Software\Classes\Directory\shell\Lime
-        set_reg_string(r"Software\Classes\Directory\shell\Lime", None, "Open with Lime")?;
-        let _ = set_reg_string(r"Software\Classes\Directory\shell\Lime", Some("Icon"), &exe_str);
-        set_reg_string(r"Software\Classes\Directory\shell\Lime\command", None, &cmd_str)?;
-    }
-
-    info!("Lime Explorer context menu registered successfully");
-    Ok(())
-}
-
-/// Unregister Lime from Windows Explorer context menu
-pub fn unregister_context_menu() -> Result<()> {
-    if !is_context_menu_registered() {
-        return Ok(());
-    }
-
-    info!("Unregistering Explorer context menu for Lime");
-
-    #[cfg(windows)]
-    {
-        let _ = delete_reg_tree(r"Software\Classes\*\shell\Lime");
-        let _ = delete_reg_tree(r"Software\Classes\Directory\shell\Lime");
-    }
-
-    info!("Lime Explorer context menu unregistered");
     Ok(())
 }
 
@@ -373,15 +272,4 @@ pub fn is_potential_file_drag_source(x: i32, y: i32) -> bool {
 #[cfg(not(windows))]
 pub fn is_potential_file_drag_source(_x: i32, _y: i32) -> bool {
     true
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_context_menu_status_check() {
-        // Querying HKCU registry key should succeed or return false cleanly without crashing
-        let _ = is_context_menu_registered();
-    }
 }

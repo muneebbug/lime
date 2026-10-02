@@ -12,6 +12,7 @@ import {
   filterActions,
   RASTER_IMAGE_EXTS,
   DOCUMENT_EXTS,
+  wheelDiameter,
   MEDIA_EXTS,
 } from "./RadialWheel";
 
@@ -71,7 +72,7 @@ export function WheelOverlay() {
   const isDroppingRef = useRef(false);
   const armTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const wheelSize = wheelSettings?.wheel_ui?.size || 320;
+  const wheelSize = wheelDiameter(wheelSettings?.wheel_ui?.size);
   const contextFilterEnabled = wheelSettings?.wheel_ui?.context_filter_enabled ?? true;
   const soundEnabled = wheelSettings?.wheel_ui?.sound_enabled ?? false;
   const reducedMotion = wheelSettings?.wheel_ui?.reduced_motion ?? false;
