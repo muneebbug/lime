@@ -112,26 +112,9 @@ pub fn convert_media(input: &Path, output: &Path, target_format: &str) -> Result
         "webm" => {
             cmd.arg("-c:v").arg("libvpx-vp9").arg("-crf").arg("30").arg("-b:v").arg("0").arg("-c:a").arg("libopus");
         }
-        // Audio extraction to MP3
-        "mp3" => {
-            cmd.arg("-vn").arg("-c:a").arg("libmp3lame").arg("-q:a").arg("2");
-        }
-        // Audio extraction to WAV
-        "wav" => {
-            cmd.arg("-vn").arg("-c:a").arg("pcm_s16le");
-        }
-        // Audio extraction to FLAC
-        "flac" => {
-            cmd.arg("-vn").arg("-c:a").arg("flac");
-        }
-        // Audio extraction to M4A / AAC
-        "m4a" => {
-            cmd.arg("-vn").arg("-c:a").arg("aac").arg("-b:a").arg("192k");
-        }
-        // Raw ADTS cannot carry a video stream, so the video must be dropped
-        // explicitly or the muxer rejects the whole file.
-        "aac" => {
-            cmd.arg("-vn").arg("-c:a").arg("aac").arg("-b:a").arg("192k");
+        // Audio-only targets
+        "mp3" | "wav" | "flac" | "m4a" | "aac" | "ogg" | "opus" | "wma" => {
+            configure_audio_output(&mut cmd, input, target_format);
         }
         // AVI with MPEG-4 video and MP3 audio: the combination with the widest
         // player support. Left to FFmpeg's defaults the codec choice varies by
@@ -182,6 +165,87 @@ pub fn convert_media(input: &Path, output: &Path, target_format: &str) -> Result
         detail,
         result.status.code()
     );
+}
+
+/// Whether the input is an audio-only file, so any video stream in it is cover art.
+///
+/// Decided by extension rather than by probing: a video stream inside an audio
+/// file is an attached picture worth keeping, while the same stream inside a
+/// video file is the picture itself. Marking that as cover art makes the muxer
+/// discard the audio and emit a near-empty file, so the two cases cannot share
+/// one mapping.
+fn is_audio_only_input(input: &Path) -> bool {
+    let ext = input
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_lowercase();
+    matches!(
+        ext.as_str(),
+        "mp3" | "wav" | "flac" | "m4a" | "m4b" | "aac" | "ogg" | "oga" | "opus" | "wma" | "aif"
+            | "aiff" | "alac" | "ape" | "mka"
+    )
+}
+
+/// Whether an audio-only output container can hold an attached picture.
+///
+/// Checked against the bundled FFmpeg rather than assumed: the Ogg muxer
+/// rejects a picture stream outright ("Unsupported codec id"), and raw ADTS and
+/// RIFF/WAV have nowhere to put one.
+fn target_supports_cover_art(target_format: &str) -> bool {
+    matches!(
+        target_format.to_lowercase().as_str(),
+        "m4a" | "m4b" | "mp4" | "flac" | "wma" | "mp3"
+    )
+}
+
+/// Configure an audio-only output: keep the audio stream, carry the source's
+/// tags across, and preserve cover art when both sides can carry it.
+fn configure_audio_output(cmd: &mut std::process::Command, input: &Path, target_format: &str) {
+    let target = target_format.to_lowercase();
+    let cover = is_audio_only_input(input) && target_supports_cover_art(&target);
+
+    // `?` on the audio map too: a source with no audio must reach the muxing
+    // stage and report "does not contain any stream", not fail option parsing.
+    cmd.arg("-map").arg("0:a?");
+    if cover {
+        // `?` keeps files that have no cover working.
+        cmd.arg("-map").arg("0:v?");
+    } else {
+        cmd.arg("-vn");
+    }
+    cmd.arg("-map_metadata").arg("0");
+
+    match target.as_str() {
+        "mp3" => {
+            cmd.arg("-c:a").arg("libmp3lame").arg("-q:a").arg("2");
+        }
+        "wav" => {
+            cmd.arg("-c:a").arg("pcm_s16le");
+        }
+        "flac" => {
+            cmd.arg("-c:a").arg("flac");
+        }
+        "m4a" | "m4b" | "aac" => {
+            cmd.arg("-c:a").arg("aac").arg("-b:a").arg("192k");
+        }
+        "ogg" | "oga" => {
+            cmd.arg("-c:a").arg("libvorbis").arg("-q:a").arg("5");
+        }
+        "opus" => {
+            cmd.arg("-c:a").arg("libopus").arg("-b:a").arg("128k");
+        }
+        "wma" => {
+            cmd.arg("-c:a").arg("wmav2").arg("-b:a").arg("192k");
+        }
+        _ => {}
+    }
+
+    if cover {
+        // Copy the embedded JPEG/PNG rather than re-encoding it.
+        cmd.arg("-c:v").arg("copy");
+        cmd.arg("-disposition:v:0").arg("attached_pic");
+    }
 }
 
 /// Output targets that can only ever carry audio.
