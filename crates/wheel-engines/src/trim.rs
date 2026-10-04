@@ -217,6 +217,7 @@ fn trim_loaded_image(img: DynamicImage, output: &Path) -> Result<TrimResult> {
             output_format: fmt,
             output_path: output.to_path_buf(),
             quality: 100,
+            preserve_metadata: true,
         };
         crate::image_convert::convert_image(&tmp_png, &params)
             .with_context(|| format!("Failed to convert trimmed image to {:?}", output))?;

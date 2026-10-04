@@ -42,6 +42,9 @@ impl WheelSettings {
     pub fn migrate(mut self) -> Self {
         // Example migration: v0 -> v1
         // if self.version == 0 { ... self.version = 1; }
+        if let Some(legacy) = self.output.preserve_metadata.take() {
+            self.output.metadata.images = legacy;
+        }
         self.version = SETTINGS_VERSION;
         if self.presets.is_empty() {
             self.presets = default_presets();
@@ -302,10 +305,11 @@ pub enum Theme {
     Dark,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum OutputPolicy {
     /// Save next to the source file (default)
+    #[default]
     NextToSource,
     /// Save to a fixed folder
     FixedFolder,
@@ -315,18 +319,51 @@ pub enum OutputPolicy {
     Clipboard,
 }
 
+/// Per-media-type metadata preservation.
+///
+/// EXIF, ICC profiles, chapters and cover art all cost bytes, so they are
+/// opt-out per media type rather than one global switch.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MetadataSettings {
+    /// Keep EXIF/XMP/IPTC/ICC when converting images.
+    pub images: bool,
+    /// Keep tags, chapters and cover art when converting audio.
+    pub audio: bool,
+    /// Keep tags and chapters when converting video.
+    pub video: bool,
+}
+
+impl Default for MetadataSettings {
+    fn default() -> Self {
+        Self {
+            images: true,
+            audio: true,
+            video: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OutputSettings {
+    #[serde(default)]
     pub policy: OutputPolicy,
+    #[serde(default)]
     pub fixed_folder: Option<String>,
     /// Suffix added between stem and extension: e.g. ".converted" → file.converted.png
+    #[serde(default)]
     pub suffix: String,
     /// Whether to overwrite the source file (default: false, very dangerous)
+    #[serde(default)]
     pub overwrite_source: bool,
     /// Send source to Recycle Bin after a successful conversion
+    #[serde(default)]
     pub recycle_source: bool,
-    /// Preserve metadata in conversions
-    pub preserve_metadata: bool,
+    #[serde(default)]
+    pub metadata: MetadataSettings,
+    /// Legacy single metadata toggle. Only read to seed `metadata.images`
+    /// during migration; never written back out.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preserve_metadata: Option<bool>,
 }
 
 impl Default for OutputSettings {
@@ -337,7 +374,8 @@ impl Default for OutputSettings {
             suffix: String::new(),
             overwrite_source: false,
             recycle_source: false,
-            preserve_metadata: true,
+            metadata: MetadataSettings::default(),
+            preserve_metadata: None,
         }
     }
 }
@@ -489,6 +527,34 @@ mod tests {
         assert_eq!(parsed.wheel_ui.status_vertical, StatusVertical::Bottom);
         assert_eq!(parsed.wheel_ui.status_horizontal, StatusHorizontal::Center);
         assert_eq!(parsed.wheel_ui.hud_style, HudStyle::Standard);
+    }
+
+    #[test]
+    fn test_legacy_preserve_metadata_seeds_image_setting() {
+        let legacy = r#"{
+            "version": 1,
+            "output": { "policy": "next_to_source", "preserve_metadata": false }
+        }"#;
+        let parsed: WheelSettings = serde_json::from_str(legacy).expect("should deserialize");
+        let migrated = parsed.migrate();
+        assert!(
+            !migrated.output.metadata.images,
+            "legacy `preserve_metadata: false` must not silently become true"
+        );
+        // Audio and video did not exist as separate toggles; they keep the default.
+        assert!(migrated.output.metadata.audio);
+        assert!(migrated.output.metadata.video);
+        // The legacy field must not be written back out.
+        assert_eq!(
+            serde_json::to_string(&migrated.output).unwrap(),
+            r#"{"policy":"next_to_source","fixed_folder":null,"suffix":"","overwrite_source":false,"recycle_source":false,"metadata":{"images":false,"audio":true,"video":true}}"#
+        );
+    }
+
+    #[test]
+    fn test_metadata_settings_default_preserves_all() {
+        let out = OutputSettings::default();
+        assert!(out.metadata.images && out.metadata.audio && out.metadata.video);
     }
 
     #[test]
