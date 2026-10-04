@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{debug, info, warn};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FfmpegStatus {
@@ -128,6 +128,17 @@ pub fn convert_media(input: &Path, output: &Path, target_format: &str) -> Result
         "m4a" => {
             cmd.arg("-vn").arg("-c:a").arg("aac").arg("-b:a").arg("192k");
         }
+        // Raw ADTS cannot carry a video stream, so the video must be dropped
+        // explicitly or the muxer rejects the whole file.
+        "aac" => {
+            cmd.arg("-vn").arg("-c:a").arg("aac").arg("-b:a").arg("192k");
+        }
+        // AVI with MPEG-4 video and MP3 audio: the combination with the widest
+        // player support. Left to FFmpeg's defaults the codec choice varies by
+        // build, so pin it.
+        "avi" => {
+            cmd.arg("-c:v").arg("mpeg4").arg("-q:v").arg("4").arg("-c:a").arg("libmp3lame");
+        }
         _ => {
             // Default copy/transcode based on extension
         }
@@ -135,16 +146,92 @@ pub fn convert_media(input: &Path, output: &Path, target_format: &str) -> Result
 
     cmd.arg(output);
 
-    let status = cmd
-        .status()
+    let result = cmd
+        .output()
         .with_context(|| "Failed to execute FFmpeg command")?;
 
-    if !status.success() {
-        anyhow::bail!("FFmpeg process exited with error code: {:?}", status.code());
+    let stderr = String::from_utf8_lossy(&result.stderr);
+
+    if result.status.success() {
+        debug!("FFmpeg output:\n{stderr}");
+        info!("Media conversion completed: {:?}", output);
+        return Ok(output.to_path_buf());
     }
 
-    info!("Media conversion completed: {:?}", output);
-    Ok(output.to_path_buf())
+    warn!(
+        "FFmpeg conversion failed (exit code {:?}):\n{stderr}",
+        result.status.code()
+    );
+
+    let detail = summarize_ffmpeg_stderr(result.stderr.as_slice());
+
+    if is_audio_only_target(target_format) && indicates_no_encodable_stream(&detail) {
+        let name = input
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| input.display().to_string());
+        anyhow::bail!(
+            "\"{}\" has no audio track, so there is nothing to convert to {}.",
+            name,
+            target_format.to_uppercase()
+        );
+    }
+
+    anyhow::bail!(
+        "FFmpeg conversion failed: {} (exit code {:?})",
+        detail,
+        result.status.code()
+    );
+}
+
+/// Output targets that can only ever carry audio.
+///
+/// For these, FFmpeg having nothing to encode means the source has no audio
+/// track — a dead end the user needs to know about, not a codec problem.
+fn is_audio_only_target(target_format: &str) -> bool {
+    matches!(
+        target_format.to_lowercase().as_str(),
+        "mp3" | "wav" | "flac" | "m4a" | "aac" | "opus" | "ogg"
+    )
+}
+
+/// Whether FFmpeg's complaint was that it had no stream to write.
+fn indicates_no_encodable_stream(detail: &str) -> bool {
+    detail.contains("does not contain any stream") || detail.contains("matches no streams")
+}
+
+/// Extract the useful part of FFmpeg's stderr.
+///
+/// FFmpeg writes its version banner and full stream dump to stderr before doing
+/// any work, so the exit code alone rarely identifies the problem. This keeps
+/// only the lines that read like diagnostics; FFmpeg reports the root cause
+/// first, followed by generic "Error opening output file" lines.
+fn summarize_ffmpeg_stderr(stderr: &[u8]) -> String {
+    const DIAGNOSTIC_MARKERS: [&str; 9] = [
+        "does not contain",
+        "Error",
+        "Invalid",
+        "No such",
+        "Permission denied",
+        "Unable",
+        "Failed",
+        "not supported",
+        "Invalid data",
+    ];
+
+    let text = String::from_utf8_lossy(stderr);
+    let mut kept: Vec<&str> = Vec::new();
+
+    for line in text.lines().map(str::trim).filter(|l| !l.is_empty()) {
+        if DIAGNOSTIC_MARKERS.iter().any(|m| line.contains(m)) {
+            kept.push(line);
+        }
+    }
+
+    match kept.len() {
+        0 => "no diagnostic output".to_string(),
+        n => kept[..n.min(2)].join(" | "),
+    }
 }
 
 #[cfg(test)]
@@ -157,5 +244,108 @@ mod tests {
         let path = find_ffmpeg_path();
         // Just verify function runs safely
         let _ = path;
+    }
+
+    /// Real stderr captured from `ffmpeg -i <video with no audio> out.mp3`.
+    /// The root cause must survive; the banner and stream dump must not.
+    const NO_AUDIO_STDERR: &[u8] = b"ffmpeg version 7.0.2-essentials_build-www.gyan.dev\n  built with gcc 13.2.0\n  configuration: --enable-gpl --enable-libmp3lame\n  libavutil      59.  8.100 / 59.  8.100\nInput #0, mov,mp4,m4a,3gp,3g2,mj2, from 'video.mp4':\n  Duration: 00:00:22.50, start: 0.000000, bitrate: 286 kb/s\n  Stream #0:0[0x1](und): Video: h264 (High), yuv420p(tv, bt709), 876x718, 30 fps\nOutput #0, mp3, to 'video.mp3':\n[out#0/mp3 @ 0000020c3ad82b80] Output file does not contain any stream\nError opening output file video.mp3.\nError opening output files: Invalid argument\n";
+
+    #[test]
+    fn test_summarize_ffmpeg_stderr_keeps_root_cause() {
+        let summary = summarize_ffmpeg_stderr(NO_AUDIO_STDERR);
+        assert!(
+            summary.contains("does not contain any stream"),
+            "root cause missing from: {summary}"
+        );
+        assert!(
+            !summary.contains("ffmpeg version"),
+            "banner leaked into: {summary}"
+        );
+        assert!(
+            !summary.contains("Stream #0"),
+            "stream dump leaked into: {summary}"
+        );
+        assert!(
+            !summary.contains("libavutil"),
+            "library banner leaked into: {summary}"
+        );
+    }
+
+    #[test]
+    fn test_summarize_ffmpeg_stderr_handles_empty_and_clean() {
+        assert_eq!(summarize_ffmpeg_stderr(b""), "no diagnostic output");
+        assert_eq!(
+            summarize_ffmpeg_stderr(b"all good\nnothing to report\n"),
+            "no diagnostic output"
+        );
+    }
+
+    #[test]
+    fn test_convert_audio_target_without_audio_track_reports_reason() {
+        let Some(ffmpeg) = find_ffmpeg_path() else {
+            return;
+        };
+
+        let dir = std::env::temp_dir().join("wheel_tests");
+        let _ = std::fs::create_dir_all(&dir);
+
+        // A 1s colour clip with no audio track: exactly the shape that makes
+        // `ffmpeg -vn -c:a libmp3lame` fail with "does not contain any stream".
+        let src = dir.join("silent_fixture.mp4");
+        let out = dir.join("no_audio_track.mp3");
+        let _ = std::fs::remove_file(&src);
+        let _ = std::fs::remove_file(&out);
+
+        let made = no_window_command(&ffmpeg)
+            .arg("-y")
+            .arg("-f")
+            .arg("lavfi")
+            .arg("-i")
+            .arg("color=c=red:s=64x64:r=5:d=1")
+            .arg("-c:v")
+            .arg("libx264")
+            .arg("-pix_fmt")
+            .arg("yuv420p")
+            .arg(&src)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        if !made || !src.exists() {
+            return;
+        }
+
+        let err = convert_media(&src, &out, "mp3").expect_err("expected failure");
+        let msg = format!("{err:#}");
+
+        assert_eq!(
+            msg, "\"silent_fixture.mp4\" has no audio track, so there is nothing to convert to MP3.",
+            "expected a plain-English dead-end message, got: {msg}"
+        );
+        assert!(
+            !msg.contains("exit code"),
+            "raw FFmpeg diagnostics leaked into the user-facing message: {msg}"
+        );
+
+        let _ = std::fs::remove_file(&src);
+        let _ = std::fs::remove_file(&out);
+    }
+
+    #[test]
+    fn test_audio_target_detection_helpers() {
+        for fmt in ["mp3", "MP3", "wav", "flac", "m4a"] {
+            assert!(is_audio_only_target(fmt), "{fmt} should be audio-only");
+        }
+        for fmt in ["gif", "mp4", "webm", "png"] {
+            assert!(!is_audio_only_target(fmt), "{fmt} should not be audio-only");
+        }
+
+        assert!(indicates_no_encodable_stream(
+            "[out#0/mp3] Output file does not contain any stream"
+        ));
+        assert!(indicates_no_encodable_stream(
+            "Stream map '0:a' matches no streams."
+        ));
+        assert!(!indicates_no_encodable_stream("Permission denied"));
     }
 }
