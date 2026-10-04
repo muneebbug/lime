@@ -422,7 +422,51 @@ async fn run_instant_action(
                 output_settings.overwrite_source,
             );
 
-            if let Some(fmt) = wheel_engines::image_convert::OutputFormat::from_extension(&target_ext) {
+            let input_ext = input
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .trim_start_matches('.')
+                .to_lowercase();
+            let input_is_media = matches!(
+                input_ext.as_str(),
+                "mp4" | "webm"
+                    | "mov"
+                    | "mkv"
+                    | "avi"
+                    | "m4v"
+                    | "wmv"
+                    | "flv"
+                    | "mp3"
+                    | "wav"
+                    | "flac"
+                    | "m4a"
+                    | "aac"
+                    | "ogg"
+                    | "opus"
+                    | "wma"
+            );
+            let target_is_media = matches!(
+                target_ext.as_str(),
+                "mp4" | "webm"
+                    | "mov"
+                    | "mkv"
+                    | "avi"
+                    | "gif"
+                    | "mp3"
+                    | "wav"
+                    | "m4a"
+                    | "flac"
+                    | "aac"
+            );
+
+            let image_fmt = if input_is_media {
+                None
+            } else {
+                wheel_engines::image_convert::OutputFormat::from_extension(&target_ext)
+            };
+
+            if let Some(fmt) = image_fmt {
                 let input_clone = input.clone();
                 let output_clone = output_path.clone();
                 let params = wheel_engines::image_convert::ConvertParams {
@@ -447,7 +491,7 @@ async fn run_instant_action(
                         break;
                     }
                 }
-            } else if matches!(target_ext.as_str(), "mp4" | "webm" | "mov" | "mkv" | "gif" | "mp3" | "wav" | "flac" | "m4a") {
+            } else if target_is_media {
                 let input_clone = input.clone();
                 let output_clone = output_path.clone();
                 let fmt_clone = target_ext.clone();
