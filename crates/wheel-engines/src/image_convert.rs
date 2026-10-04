@@ -532,51 +532,67 @@ fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &Convert
                 // `ffmpeg -i input.png -frames:v 1 -c:v libaom-av1 -still-picture 1 -crf <crf> output.avif`
                 let mut ffmpeg_encoded = false;
                 if let Some(ffmpeg) = crate::media::find_ffmpeg_path() {
-                    let crf = (63 - ((params.quality as f32 / 100.0) * 50.0).round() as u32).clamp(10, 50);
-                    let mut cmd = crate::media::no_window_command(ffmpeg);
-                    cmd.arg("-y").arg("-i").arg(input);
+                    // Always hand FFmpeg a PNG of the already-decoded image rather than the
+                    // original file. FFmpeg has no SVG decoder (and may not understand other
+                    // inputs `load_image` handled via fallbacks), which previously made the
+                    // FFmpeg encode fail and fall through to the lossy-alpha fallback below.
+                    let tmp_src = temp_dir.join(format!(
+                        "avif_src_{}.png",
+                        std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap_or_default()
+                            .as_nanos()
+                    ));
+                    let wrote_src = img.save_with_format(&tmp_src, ImageFormat::Png).is_ok();
 
-                    if img.color().has_alpha() {
-                        cmd.arg("-map")
-                            .arg("0")
-                            .arg("-map")
-                            .arg("0")
-                            .arg("-filter:v:1")
-                            .arg("alphaextract");
-                    }
+                    if wrote_src {
+                        let crf = (63 - ((params.quality as f32 / 100.0) * 50.0).round() as u32).clamp(10, 50);
+                        let mut cmd = crate::media::no_window_command(ffmpeg);
+                        cmd.arg("-y").arg("-i").arg(&tmp_src);
 
-                    cmd.arg("-frames:v")
-                        .arg("1")
-                        .arg("-c:v")
-                        .arg("libaom-av1")
-                        .arg("-crf")
-                        .arg(crf.to_string())
-                        .arg("-cpu-used")
-                        .arg("8")
-                        .arg("-row-mt")
-                        .arg("1")
-                        .arg("-still-picture")
-                        .arg("1")
-                        .arg("-f")
-                        .arg("avif")
-                        .arg(&tmp);
-
-                    #[cfg(windows)]
-                    {
-                        use std::os::windows::process::CommandExt;
-                        cmd.creation_flags(0x08000000);
-                    }
-
-                    match cmd.output() {
-                        Ok(out) if out.status.success() => {
-                            ffmpeg_encoded = true;
+                        if img.color().has_alpha() {
+                            cmd.arg("-map")
+                                .arg("0")
+                                .arg("-map")
+                                .arg("0")
+                                .arg("-filter:v:1")
+                                .arg("alphaextract");
                         }
-                        Ok(out) => {
-                            tracing::warn!("FFmpeg AVIF encode returned error: {}", String::from_utf8_lossy(&out.stderr));
+
+                        cmd.arg("-frames:v")
+                            .arg("1")
+                            .arg("-c:v")
+                            .arg("libaom-av1")
+                            .arg("-crf")
+                            .arg(crf.to_string())
+                            .arg("-cpu-used")
+                            .arg("8")
+                            .arg("-row-mt")
+                            .arg("1")
+                            .arg("-still-picture")
+                            .arg("1")
+                            .arg("-f")
+                            .arg("avif")
+                            .arg(&tmp);
+
+                        #[cfg(windows)]
+                        {
+                            use std::os::windows::process::CommandExt;
+                            cmd.creation_flags(0x08000000);
                         }
-                        Err(e) => {
-                            tracing::warn!("Failed to execute FFmpeg for AVIF: {:?}", e);
+
+                        match cmd.output() {
+                            Ok(out) if out.status.success() => {
+                                ffmpeg_encoded = true;
+                            }
+                            Ok(out) => {
+                                tracing::warn!("FFmpeg AVIF encode returned error: {}", String::from_utf8_lossy(&out.stderr));
+                            }
+                            Err(e) => {
+                                tracing::warn!("Failed to execute FFmpeg for AVIF: {:?}", e);
+                            }
                         }
+                        let _ = std::fs::remove_file(&tmp_src);
                     }
                 }
 
@@ -717,6 +733,34 @@ mod tests {
         // Clean up
         let _ = std::fs::remove_file(src_path);
         let _ = std::fs::remove_file(dst_path);
+    }
+
+    #[test]
+    fn test_svg_to_avif_converts_via_decoded_image() {
+        let dir = std::env::temp_dir().join("wheel_tests");
+        let _ = std::fs::create_dir_all(&dir);
+
+        let src_path = dir.join("test_svg_to_avif.svg");
+        let dst_path = dir.join("test_svg_to_avif.avif");
+        std::fs::write(
+            &src_path,
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="24" fill="#ff4000"/><circle cx="32" cy="32" r="6" fill="#111111"/></svg>"##,
+        )
+        .unwrap();
+
+        let params = ConvertParams {
+            output_format: OutputFormat::Avif,
+            output_path: dst_path.clone(),
+            quality: 85,
+        };
+        let result = convert_image(&src_path, &params).expect("svg to avif failed");
+        assert_eq!(result, dst_path);
+        assert!(std::fs::metadata(&dst_path).unwrap().len() > 0);
+
+        if std::env::var_os("WHEEL_KEEP_TEST_OUTPUT").is_none() {
+            let _ = std::fs::remove_file(src_path);
+            let _ = std::fs::remove_file(dst_path);
+        }
     }
 
     #[test]
