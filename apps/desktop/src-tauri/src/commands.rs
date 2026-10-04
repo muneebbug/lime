@@ -485,7 +485,6 @@ async fn run_instant_action(
                 let params = wheel_engines::image_convert::ConvertParams {
                     output_format: fmt,
                     output_path: output_clone.clone(),
-                    quality: 85,
                     preserve_metadata: output_settings.metadata.images,
                 };
                 let result = tokio::task::spawn_blocking(move || -> anyhow::Result<PathBuf> {
@@ -980,7 +979,6 @@ pub async fn run_preset(
                 let p = wheel_engines::image_convert::ConvertParams {
                     output_format: fmt,
                     output_path: out_clone.clone(),
-                    quality: 90,
                     preserve_metadata,
                 };
                 wheel_engines::image_convert::convert_image(&in_clone, &p)

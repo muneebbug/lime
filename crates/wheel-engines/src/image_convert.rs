@@ -61,12 +61,14 @@ impl OutputFormat {
 pub struct ConvertParams {
     pub output_format: OutputFormat,
     pub output_path: PathBuf,
-    /// JPEG quality 1-100 (ignored for lossless formats)
-    pub quality: u8,
     /// Carry EXIF/XMP/ICC from the source into the output where the target
     /// format supports it.
     pub preserve_metadata: bool,
 }
+
+/// JPEG has no lossless mode, so 100 is the least destructive setting available.
+/// Every other target is encoded losslessly.
+const JPEG_MAX_QUALITY: u8 = 100;
 
 /// Metadata lifted off a source image, ready to be re-attached to an encoder.
 #[derive(Debug, Default, Clone)]
@@ -429,29 +431,61 @@ pub fn load_image(input: &Path) -> Result<image::DynamicImage> {
             if let Some(ffmpeg) = crate::media::find_ffmpeg_path() {
                 let temp_dir = std::env::temp_dir().join("wheel_temp");
                 let _ = std::fs::create_dir_all(&temp_dir);
-                let tmp_png = temp_dir.join(format!(
-                    "decode_{}.png",
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap_or_default()
-                        .as_nanos()
-                ));
-                let status = crate::media::no_window_command(ffmpeg)
+                let stamp = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos();
+                let merged_png = temp_dir.join(format!("decode_{stamp}_merged.png"));
+                let plain_png = temp_dir.join(format!("decode_{stamp}.png"));
+
+                // Formats like AVIF store transparency as a second, grayscale
+                // stream. FFmpeg's automatic stream selection picks only the
+                // colour stream, so the alpha is dropped and transparent
+                // padding silently becomes opaque — which makes Trim a no-op.
+                // Merging explicitly keeps it. This writes nothing when the
+                // source has no second stream, so file existence is the signal.
+                let merged = crate::media::no_window_command(&ffmpeg)
                     .arg("-y")
                     .arg("-i")
                     .arg(input)
-                    .arg(&tmp_png)
-                    .status();
-                if let Ok(st) = status {
-                    if st.success() {
-                        let decoded = image::open(&tmp_png);
-                        let _ = std::fs::remove_file(&tmp_png);
-                        if let Ok(loaded) = decoded {
-                            return Ok(loaded);
-                        }
+                    .arg("-filter_complex")
+                    .arg("[0:v:0][0:v:1]alphamerge")
+                    .arg("-frames:v")
+                    .arg("1")
+                    .arg(&merged_png)
+                    .output()
+                    .is_ok();
+
+                let chosen = if merged && std::fs::metadata(&merged_png).is_ok_and(|m| m.len() > 0)
+                {
+                    merged_png
+                } else {
+                    let _ = std::fs::remove_file(&merged_png);
+                    // `-frames:v 1` is required: without it the image2 muxer
+                    // refuses to write a multi-frame source to one filename.
+                    let ok = crate::media::no_window_command(&ffmpeg)
+                        .arg("-y")
+                        .arg("-i")
+                        .arg(input)
+                        .arg("-frames:v")
+                        .arg("1")
+                        .arg(&plain_png)
+                        .output()
+                        .is_ok();
+                    if ok && std::fs::metadata(&plain_png).is_ok_and(|m| m.len() > 0) {
+                        plain_png
+                    } else {
+                        let _ = std::fs::remove_file(&plain_png);
+                        return Err(orig_err)
+                            .with_context(|| format!("Failed to open image {:?}", input));
                     }
+                };
+
+                let decoded = image::open(&chosen);
+                let _ = std::fs::remove_file(&chosen);
+                if let Ok(loaded) = decoded {
+                    return Ok(loaded);
                 }
-                let _ = std::fs::remove_file(&tmp_png);
             }
             Err(orig_err).with_context(|| format!("Failed to open image {:?}", input))
         }
@@ -556,7 +590,7 @@ fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &Convert
                 let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
                     std::fs::File::create(&tmp)
                         .with_context(|| format!("Cannot create {:?}", tmp))?,
-                    params.quality,
+                    JPEG_MAX_QUALITY,
                 );
                 apply_metadata(&mut encoder, &meta);
                 dynamic_rgb.write_with_encoder(encoder)
@@ -624,7 +658,10 @@ fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &Convert
                     let wrote_src = img.save_with_format(&tmp_src, ImageFormat::Png).is_ok();
 
                     if wrote_src {
-                        let crf = (63 - ((params.quality as f32 / 100.0) * 50.0).round() as u32).clamp(10, 50);
+                        // `-crf 0` selects libaom's lossless mode, so the AVIF
+                        // round-trips bit-exact. A lossy CRF smears the alpha
+                        // plane at edges, which made Trim measure the wrong
+                        // bounding box on files this app had just written.
                         let mut cmd = crate::media::no_window_command(ffmpeg);
                         cmd.arg("-y").arg("-i").arg(&tmp_src);
 
@@ -642,7 +679,7 @@ fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &Convert
                             .arg("-c:v")
                             .arg("libaom-av1")
                             .arg("-crf")
-                            .arg(crf.to_string())
+                            .arg("0")
                             .arg("-cpu-used")
                             .arg("8")
                             .arg("-row-mt")
@@ -749,7 +786,6 @@ mod tests {
         let params = ConvertParams {
             output_format: OutputFormat::Webp,
             output_path: dst_path.clone(),
-            quality: 80,
             preserve_metadata: true,
         };
 
@@ -761,7 +797,6 @@ mod tests {
         let avif_params = ConvertParams {
             output_format: OutputFormat::Avif,
             output_path: avif_path.clone(),
-            quality: 80,
             preserve_metadata: true,
         };
         let avif_result = convert_image(&src_path, &avif_params).expect("convert to avif failed");
@@ -802,7 +837,6 @@ mod tests {
         let params = ConvertParams {
             output_format: OutputFormat::Avif,
             output_path: dst_path.clone(),
-            quality: 85,
         preserve_metadata: true,
         };
 
@@ -832,7 +866,6 @@ mod tests {
         let params = ConvertParams {
             output_format: OutputFormat::Avif,
             output_path: dst_path.clone(),
-            quality: 85,
         preserve_metadata: true,
         };
         let result = convert_image(&src_path, &params).expect("svg to avif failed");
@@ -869,7 +902,6 @@ mod tests {
         let params = ConvertParams {
             output_format: OutputFormat::Jpeg,
             output_path: dst_path.clone(),
-            quality: 95,
             preserve_metadata: true,
         };
 
@@ -918,7 +950,6 @@ mod tests {
         let params_png = ConvertParams {
             output_format: OutputFormat::Png,
             output_path: png_path.clone(),
-            quality: 85,
         preserve_metadata: true,
         };
         let out_png = convert_image(&svg_path, &params_png).expect("convert svg to png failed");
@@ -932,7 +963,6 @@ mod tests {
         let params_jpg = ConvertParams {
             output_format: OutputFormat::Jpeg,
             output_path: jpg_path.clone(),
-            quality: 90,
             preserve_metadata: true,
         };
         let out_jpg = convert_image(&svg_path, &params_jpg).expect("convert svg to jpg failed");
@@ -1060,7 +1090,6 @@ mod tests {
                     &ConvertParams {
                         output_format: fmt.clone(),
                         output_path: out.clone(),
-                        quality: 90,
                         preserve_metadata: preserve,
                     },
                 )
