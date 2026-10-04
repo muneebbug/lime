@@ -219,6 +219,9 @@ pub fn default_actions() -> Vec<ActionManifest> {
         ("convert.m4a",  "M4A",  "m4a"),
         ("convert.flac", "FLAC", "flac"),
         ("convert.aac",  "AAC",  "aac"),
+        ("convert.ogg",  "OGG",  "ogg"),
+        ("convert.opus", "OPUS", "opus"),
+        ("convert.wma",  "WMA",  "wma"),
     ];
 
     let mut media_for_audio = video_exts.clone();

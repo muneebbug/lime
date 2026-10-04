@@ -458,6 +458,9 @@ async fn run_instant_action(
                     | "m4a"
                     | "flac"
                     | "aac"
+                    | "ogg"
+                    | "opus"
+                    | "wma"
             );
 
             let image_fmt = if input_is_media {
