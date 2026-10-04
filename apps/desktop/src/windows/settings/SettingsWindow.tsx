@@ -34,16 +34,26 @@ type SettingsNavId =
   | "trigger"
   | "wheel_ui"
   | "status"
-  | "output"
+  | "output_general"
+  | "output_images"
+  | "output_audio"
+  | "output_video"
   | "engines"
   | "history"
   | "about";
+
+interface NavChild {
+  id: SettingsNavId;
+  label: string;
+}
 
 interface NavItem {
   id: SettingsNavId;
   label: string;
   icon: React.ReactNode;
   group: "core" | "features";
+  /** Nested pages, revealed while this item or one of them is active. */
+  children?: NavChild[];
 }
 
 export function SettingsWindow() {
@@ -275,10 +285,16 @@ export function SettingsWindow() {
       group: "core",
     },
     {
-      id: "output",
+      id: "output_general",
       label: "Output & Files",
       icon: <PhFolderOpen size={18} weight="bold" />,
       group: "core",
+      children: [
+        { id: "output_general", label: "General" },
+        { id: "output_images", label: "Images" },
+        { id: "output_audio", label: "Audio" },
+        { id: "output_video", label: "Video" },
+      ],
     },
     {
       id: "engines",
@@ -370,9 +386,12 @@ export function SettingsWindow() {
           {/* Navigation Items */}
           <nav className="flex flex-col gap-[2px]">
             {navItems.map((item, idx) => {
-              const isActive = activeTab === item.id;
               const prevItem = navItems[idx - 1];
               const showDivider = prevItem && prevItem.group === "core" && item.group === "features";
+
+              const childActive = item.children?.some((c) => c.id === activeTab) ?? false;
+              // A parent reads as active while it or any of its pages is open.
+              const isActive = activeTab === item.id || childActive;
 
               return (
                 <div key={item.id}>
@@ -380,7 +399,9 @@ export function SettingsWindow() {
                     <div className="my-[6px] border-t border-white/[0.06]" />
                   )}
                   <button
-                    onClick={() => handleSelectTab(item.id)}
+                    onClick={() =>
+                      handleSelectTab(item.children?.[0]?.id ?? item.id)
+                    }
                     className={`w-full flex items-center gap-[10px] px-2.5 py-[6px] rounded-[6px] text-[13px] transition-all cursor-default text-left select-none ${
                       isActive
                         ? "bg-[#cbe71f]/10 text-white font-medium"
@@ -392,6 +413,27 @@ export function SettingsWindow() {
                     </span>
                     <span className={isActive ? "text-white font-medium" : "text-[#d1d1d6]"}>{item.label}</span>
                   </button>
+
+                  {item.children && childActive && (
+                    <div className="mt-[2px] mb-[2px] ml-[26px] pl-[10px] border-l border-white/[0.08] flex flex-col gap-[1px]">
+                      {item.children.map((child) => {
+                        const childIsActive = activeTab === child.id;
+                        return (
+                          <button
+                            key={child.id}
+                            onClick={() => handleSelectTab(child.id)}
+                            className={`w-full text-left px-2 py-[5px] rounded-[6px] text-[12px] transition-all cursor-default select-none ${
+                              childIsActive
+                                ? "bg-[#cbe71f]/10 text-white font-medium"
+                                : "text-[#8e8e93] hover:text-white hover:bg-white/[0.05]"
+                            }`}
+                          >
+                            {child.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -714,8 +756,8 @@ export function SettingsWindow() {
             </div>
           )}
 
-          {/* TAB 5: OUTPUT & FILES */}
-          {activeTab === "output" && (
+          {/* TAB 5a: OUTPUT & FILES > GENERAL */}
+          {activeTab === "output_general" && (
             <div className="w-full">
               <SettingSection first>
                 <SettingRow
@@ -808,23 +850,7 @@ export function SettingsWindow() {
                 </SettingRow>
               </SettingSection>
 
-              <SettingSection title="File Safety & Preservation">
-                <SettingRow
-                  title="Preserve EXIF Metadata"
-                  description="Retain camera, timestamp, and device metadata during conversions"
-                >
-                  <ToggleSwitch
-                    checked={settings.output.preserve_metadata}
-                    onChange={(checked) => {
-                      const updated = {
-                        ...settings,
-                        output: { ...settings.output, preserve_metadata: checked },
-                      };
-                      handleSaveSettings(updated);
-                    }}
-                  />
-                </SettingRow>
-
+              <SettingSection title="File Safety">
                 <SettingRow
                   title="Send Source to Recycle Bin"
                   description="Safely move original files to the Windows Recycle Bin after successful conversion"
@@ -851,6 +877,94 @@ export function SettingsWindow() {
                       const updated = {
                         ...settings,
                         output: { ...settings.output, overwrite_source: checked },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </SettingRow>
+              </SettingSection>
+            </div>
+          )}
+
+          {/* TAB 5b: OUTPUT & FILES > IMAGES */}
+          {activeTab === "output_images" && (
+            <div className="w-full">
+              <SettingSection first title="Image Metadata">
+                <SettingRow
+                  title="Preserve Image Metadata"
+                  description="Keep EXIF, XMP, IPTC and the ICC colour profile when converting images"
+                >
+                  <ToggleSwitch
+                    checked={settings.output.metadata.images}
+                    onChange={(checked) => {
+                      const updated = {
+                        ...settings,
+                        output: {
+                          ...settings.output,
+                          metadata: { ...settings.output.metadata, images: checked },
+                        },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </SettingRow>
+              </SettingSection>
+
+              <p className="text-[11px] text-[#8e8e93] leading-relaxed mt-3">
+                Applies to JPEG, PNG and WebP outputs. BMP, GIF, ICO, TIFF and AVIF
+                have nowhere to store this data, so those formats always drop it.
+              </p>
+            </div>
+          )}
+
+          {/* TAB 5c: OUTPUT & FILES > AUDIO */}
+          {activeTab === "output_audio" && (
+            <div className="w-full">
+              <SettingSection first title="Audio Metadata">
+                <SettingRow
+                  title="Preserve Audio Metadata"
+                  description="Keep tags, chapter markers and embedded cover art when converting audio"
+                >
+                  <ToggleSwitch
+                    checked={settings.output.metadata.audio}
+                    onChange={(checked) => {
+                      const updated = {
+                        ...settings,
+                        output: {
+                          ...settings.output,
+                          metadata: { ...settings.output.metadata, audio: checked },
+                        },
+                      };
+                      handleSaveSettings(updated);
+                    }}
+                  />
+                </SettingRow>
+              </SettingSection>
+
+              <p className="text-[11px] text-[#8e8e93] leading-relaxed mt-3">
+                Cover art carries over to M4A, MP4, FLAC and WMA. Ogg, Opus and WAV
+                containers cannot carry an embedded picture, so it is left out.
+              </p>
+            </div>
+          )}
+
+          {/* TAB 5d: OUTPUT & FILES > VIDEO */}
+          {activeTab === "output_video" && (
+            <div className="w-full">
+              <SettingSection first title="Video Metadata">
+                <SettingRow
+                  title="Preserve Video Metadata"
+                  description="Keep tags and chapter markers when converting video"
+                >
+                  <ToggleSwitch
+                    checked={settings.output.metadata.video}
+                    onChange={(checked) => {
+                      const updated = {
+                        ...settings,
+                        output: {
+                          ...settings.output,
+                          metadata: { ...settings.output.metadata, video: checked },
+                        },
                       };
                       handleSaveSettings(updated);
                     }}
