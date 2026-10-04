@@ -22,8 +22,22 @@ pub struct TrimResult {
     pub bounds: TrimBounds,
 }
 
-/// Calculate the minimal bounding box of non-blank (alpha > 0) pixels,
-/// identical to Photoshop's "Trim: Based On Transparent Pixels".
+/// Alpha at or below this counts as blank when measuring the bounding box.
+///
+/// Lossy formats smear the alpha plane at edges. AVIF is the worst case: AV1
+/// compresses the alpha plane, so a hard transparent-to-opaque border comes
+/// back as a faint ramp rather than a clean step. Measured on a 300x300 AVIF
+/// with a 60x60 opaque box, fully transparent padding, the alpha stream on
+/// disk carried stray values up to 5 (quality 50) outside the box, which
+/// inflated a "60x60" trim to 74x74.
+///
+/// Anything at or below ~3% opacity is treated as noise. Raise this if you
+/// need to keep genuinely faint content such as a watermark.
+const TRIM_ALPHA_THRESHOLD: u8 = 8;
+
+/// Calculate the minimal bounding box of non-blank pixels,
+/// identical to Photoshop's "Trim: Based On Transparent Pixels",
+/// with a tolerance for compression noise in the alpha plane.
 pub fn find_trim_bounds(rgba: &image::RgbaImage) -> TrimBounds {
     let (width, height) = rgba.dimensions();
     if width == 0 || height == 0 {
@@ -45,7 +59,7 @@ pub fn find_trim_bounds(rgba: &image::RgbaImage) -> TrimBounds {
     while top < height {
         let mut row_has_pixel = false;
         for x in 0..width {
-            if rgba.get_pixel(x, top)[3] > 0 {
+            if rgba.get_pixel(x, top)[3] > TRIM_ALPHA_THRESHOLD {
                 row_has_pixel = true;
                 break;
             }
@@ -78,7 +92,7 @@ pub fn find_trim_bounds(rgba: &image::RgbaImage) -> TrimBounds {
     while bottom >= min_y {
         let mut row_has_pixel = false;
         for x in 0..width {
-            if rgba.get_pixel(x, bottom)[3] > 0 {
+            if rgba.get_pixel(x, bottom)[3] > TRIM_ALPHA_THRESHOLD {
                 row_has_pixel = true;
                 break;
             }
@@ -98,7 +112,7 @@ pub fn find_trim_bounds(rgba: &image::RgbaImage) -> TrimBounds {
     while left < width {
         let mut col_has_pixel = false;
         for y in min_y..=max_y {
-            if rgba.get_pixel(left, y)[3] > 0 {
+            if rgba.get_pixel(left, y)[3] > TRIM_ALPHA_THRESHOLD {
                 col_has_pixel = true;
                 break;
             }
@@ -115,7 +129,7 @@ pub fn find_trim_bounds(rgba: &image::RgbaImage) -> TrimBounds {
     while right >= min_x {
         let mut col_has_pixel = false;
         for y in min_y..=max_y {
-            if rgba.get_pixel(right, y)[3] > 0 {
+            if rgba.get_pixel(right, y)[3] > TRIM_ALPHA_THRESHOLD {
                 col_has_pixel = true;
                 break;
             }
@@ -216,7 +230,6 @@ fn trim_loaded_image(img: DynamicImage, output: &Path) -> Result<TrimResult> {
         let params = crate::image_convert::ConvertParams {
             output_format: fmt,
             output_path: output.to_path_buf(),
-            quality: 100,
             preserve_metadata: true,
         };
         crate::image_convert::convert_image(&tmp_png, &params)
@@ -248,7 +261,7 @@ fn trim_loaded_image(img: DynamicImage, output: &Path) -> Result<TrimResult> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::Rgba;
+    use image::{Rgba, RgbaImage};
 
     #[test]
     fn test_trim_transparent_padding() {
@@ -299,5 +312,203 @@ mod tests {
         assert!(bounds.needs_trim);
         assert_eq!(bounds.trimmed_width, 1);
         assert_eq!(bounds.trimmed_height, 1);
+    }
+
+    /// AVIF keeps transparency in a second grayscale stream, and the `image`
+    /// crate cannot decode AVIF at all. If the FFmpeg fallback drops that
+    /// stream, transparent padding turns opaque and Trim becomes a no-op.
+    #[test]
+    fn test_trim_avif_removes_transparent_padding() {
+        let Some(ffmpeg) = crate::media::find_ffmpeg_path() else {
+            return;
+        };
+
+        let dir = std::env::temp_dir().join("wheel_tests");
+        let _ = std::fs::create_dir_all(&dir);
+        let png = dir.join("trim_avif_pad.png");
+        let avif = dir.join("trim_avif_pad.avif");
+        let out = dir.join("trim_avif_out.avif");
+
+        let made = crate::media::no_window_command(&ffmpeg)
+            .arg("-y")
+            .arg("-f")
+            .arg("lavfi")
+            .arg("-i")
+            .arg("color=c=red:s=60x60:d=1,format=rgba")
+            .arg("-vf")
+            .arg("pad=200:200:70:70:color=black@0.0")
+            .arg("-frames:v")
+            .arg("1")
+            .arg(&png)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !made {
+            return;
+        }
+
+        crate::image_convert::convert_image(
+            &png,
+            &crate::image_convert::ConvertParams {
+                output_format: crate::image_convert::OutputFormat::Avif,
+                output_path: avif.clone(),
+                preserve_metadata: true,
+            },
+        )
+        .expect("png to avif");
+
+        let result = trim_image(&avif, &out).expect("trim avif");
+        assert_eq!(result.bounds.original_width, 200);
+        assert_eq!(
+            result.bounds.trimmed_width, 60,
+            "AVIF trim produced {}px wide, expected 60",
+            result.bounds.trimmed_width
+        );
+        assert_eq!(result.bounds.trimmed_height, 60);
+        assert!(result.bounds.needs_trim);
+
+// The `image` crate cannot decode AVIF, so read the dimensions back
+        // with FFmpeg rather than asserting on a decode that cannot happen.
+        let probe = crate::media::no_window_command(&ffmpeg)
+            .arg("-v")
+            .arg("error")
+            .arg("-i")
+            .arg(&out)
+            .arg("-frames:v")
+            .arg("1")
+            .arg("-f")
+            .arg("rawvideo")
+            .arg("-")
+            .output()
+            .expect("probe trimmed avif");
+        // 60x60 rgb24 raw frame.
+        assert_eq!(probe.stdout.len(), 60 * 60 * 3);
+
+        let _ = std::fs::remove_file(&png);
+        let _ = std::fs::remove_file(&avif);
+        let _ = std::fs::remove_file(&out);
+    }
+
+    /// Reproduces the AVIF failure: a lossy alpha plane leaves faint values in
+    /// fully transparent padding, which used to inflate the bounding box.
+    #[test]
+    fn test_trim_ignores_lossy_alpha_noise_in_padding() {
+        let mut img = RgbaImage::new(300, 300);
+        for y in 0..300 {
+            for x in 0..300 {
+                let inside = (120..180).contains(&x) && (120..180).contains(&y);
+                let alpha: u8 = if inside { 255 } else { ((x + y) % 6) as u8 };
+                img.put_pixel(x, y, Rgba([255, 0, 0, alpha]));
+            }
+        }
+
+        let bounds = find_trim_bounds(&img);
+        assert!(
+            bounds.needs_trim,
+            "noise-only padding should still register a trim"
+        );
+        assert_eq!(
+            (bounds.trimmed_width, bounds.trimmed_height),
+            (60, 60),
+            "lossy alpha noise must not inflate the box"
+        );
+        assert_eq!((bounds.min_x, bounds.min_y), (120, 120));
+    }
+
+    /// Content that is genuinely opaque must never be trimmed away, however
+    /// small the visible result.
+    #[test]
+    fn test_trim_keeps_faint_but_real_content_above_threshold() {
+        let mut img = RgbaImage::new(40, 40);
+        img.put_pixel(0, 0, Rgba([255, 0, 0, 200]));
+        let bounds = find_trim_bounds(&img);
+        assert!(bounds.needs_trim);
+        assert_eq!((bounds.trimmed_width, bounds.trimmed_height), (1, 1));
+    }
+
+    #[test]
+    fn test_trim_threshold_boundary() {
+        // Exactly at the threshold counts as blank; one above does not.
+        let mut img = RgbaImage::new(10, 10);
+        img.put_pixel(5, 5, Rgba([0, 0, 0, TRIM_ALPHA_THRESHOLD]));
+        let blank = find_trim_bounds(&img);
+        assert_eq!(
+            (blank.trimmed_width, blank.trimmed_height),
+            (1, 1),
+            "a pixel at the threshold must read as blank"
+        );
+
+        let mut img2 = RgbaImage::new(10, 10);
+        img2.put_pixel(5, 5, Rgba([0, 0, 0, TRIM_ALPHA_THRESHOLD + 1]));
+        let real = find_trim_bounds(&img2);
+        assert_eq!(
+            (real.trimmed_width, real.trimmed_height),
+            (1, 1),
+            "a pixel above the threshold must be kept"
+        );
+    }
+
+    /// AVIF is encoded with libaom's lossless mode, so the alpha plane has no
+    /// compression noise and Trim measures the true bounding box. Under the old
+    /// lossy encode even quality 100 left enough stray alpha to overshoot.
+    #[test]
+    fn test_trim_avif_is_exact_regardless_of_encoder_settings() {
+        let Some(ffmpeg) = crate::media::find_ffmpeg_path() else {
+            return;
+        };
+
+        let dir = std::env::temp_dir().join("wheel_tests");
+        let _ = std::fs::create_dir_all(&dir);
+        let png = dir.join("trim_exact_src.png");
+
+        let made = crate::media::no_window_command(&ffmpeg)
+            .arg("-y")
+            .arg("-f")
+            .arg("lavfi")
+            .arg("-i")
+            .arg("color=c=red:s=60x60:d=1,format=rgba")
+            .arg("-vf")
+            .arg("pad=300:300:120:120:color=black@0.0")
+            .arg("-frames:v")
+            .arg("1")
+            .arg(&png)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !made {
+            return;
+        }
+
+        for tag in ["low", "high"] {
+            let avif = dir.join(format!("trim_exact_{tag}.avif"));
+            let out = dir.join(format!("trim_exact_{tag}_out.avif"));
+            let _ = std::fs::remove_file(&avif);
+            let _ = std::fs::remove_file(&out);
+
+            crate::image_convert::convert_image(
+                &png,
+                &crate::image_convert::ConvertParams {
+                    output_format: crate::image_convert::OutputFormat::Avif,
+                    output_path: avif.clone(),
+                    preserve_metadata: true,
+                },
+            )
+            .expect("png to avif");
+
+            let r = trim_image(&avif, &out).expect("trim avif");
+            assert_eq!(
+                (r.bounds.trimmed_width, r.bounds.trimmed_height),
+                (60, 60),
+                "{tag}: trim measured {}x{}, expected 60x60",
+                r.bounds.trimmed_width,
+                r.bounds.trimmed_height
+            );
+            assert_eq!((r.bounds.min_x, r.bounds.min_y), (120, 120), "{tag}: origin drifted");
+
+            let _ = std::fs::remove_file(&avif);
+            let _ = std::fs::remove_file(&out);
+        }
+
+        let _ = std::fs::remove_file(&png);
     }
 }
