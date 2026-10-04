@@ -494,7 +494,6 @@ async fn run_instant_action(
             "job-failed",
             serde_json::json!({ "job_id": job_id, "error": err }),
         );
-        crate::status::hide(&app);
 
         let _ = app
             .notification()
