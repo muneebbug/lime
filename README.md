@@ -8,6 +8,7 @@ When you drag image files and hold the **Shift** key, a wheel appears at your cu
 
 ---
 
+
 ## Features
 
 - **Drag-and-Drop Wheel**: Hold Shift while dragging files to bring up the wheel right under your cursor.
@@ -18,6 +19,11 @@ When you drag image files and hold the **Shift** key, a wheel appears at your cu
 - **Private and Offline**: All processing happens locally on your computer. No files or data ever leave your machine.
 
 ---
+
+## TODO
+
+- Add Hardware Acceleration support for media conversions for NVIDIA, AMD and Intel GPUs.
+- Add support for converting PDF to images
 
 ## How to Use
 
