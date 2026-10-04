@@ -64,8 +64,6 @@ export const RASTER_IMAGE_EXTS = new Set([
   ...OPAQUE_IMAGE_EXTS,
 ]);
 
-export const DOCUMENT_EXTS = new Set(["pdf"]);
-
 // 5 most common video extensions
 export const VIDEO_EXTS = new Set([
   "mp4", "mov", "mkv", "webm", "avi"
@@ -150,15 +148,6 @@ export const AUDIO_CONVERT_CATALOG: PetalDef[] = [
   { id: "convert.ogg", action: "ogg", title: "OGG", subtitle: "Convert to OGG", supportedExtensions: AUDIO_EXTS },
   { id: "convert.opus", action: "opus", title: "OPUS", subtitle: "Convert to OPUS", supportedExtensions: AUDIO_EXTS },
   { id: "convert.wma", action: "wma", title: "WMA", subtitle: "Convert to WMA", supportedExtensions: AUDIO_EXTS },
-];
-
-export const DOCUMENT_CONVERT_CATALOG: PetalDef[] = [
-  { id: "convert.png", action: "png", title: "PNG", subtitle: "Extract to PNG", supportedExtensions: DOCUMENT_EXTS },
-  { id: "convert.jpg", action: "jpg", title: "JPG", subtitle: "Extract to JPG", supportedExtensions: DOCUMENT_EXTS },
-  { id: "convert.webp", action: "webp", title: "WEBP", subtitle: "Extract to WEBP", supportedExtensions: DOCUMENT_EXTS },
-  { id: "convert.tiff", action: "tiff", title: "TIFF", subtitle: "Extract to TIFF", supportedExtensions: DOCUMENT_EXTS },
-  { id: "convert.bmp", action: "bmp", title: "BMP", subtitle: "Extract to BMP", supportedExtensions: DOCUMENT_EXTS },
-  { id: "convert.pdf", action: "pdf", title: "PDF", subtitle: "Combine/Save PDF", supportedExtensions: RASTER_IMAGE_EXTS },
 ];
 
 // Only TRIM tool kept — strictly accepts transparent background compatible image files
@@ -415,14 +404,11 @@ export function getCatalogForExtensions(extensions: string[] = []): PetalDef[] {
   const exts = (extensions || []).map((e) => e.toLowerCase().trim()).filter(Boolean);
   const isAudio = exts.some((e) => AUDIO_EXTS.has(e));
   const isVideo = exts.some((e) => VIDEO_EXTS.has(e));
-  const isDoc = exts.some((e) => DOCUMENT_EXTS.has(e));
 
   if (isAudio && !isVideo) {
     return AUDIO_CONVERT_CATALOG;
   } else if (isVideo) {
     return VIDEO_CONVERT_CATALOG;
-  } else if (isDoc) {
-    return DOCUMENT_CONVERT_CATALOG;
   } else {
     return IMAGE_CONVERT_CATALOG;
   }

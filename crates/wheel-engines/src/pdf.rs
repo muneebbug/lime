@@ -163,149 +163,13 @@ pub fn images_to_pdf(inputs: &[PathBuf], output_path: &Path) -> Result<PathBuf> 
     Ok(output_path.to_path_buf())
 }
 
-/// Extract raster images embedded in a PDF document to separate image files.
-/// Output format can be "png" or "jpg".
-pub fn pdf_to_images(
-    input: &Path,
-    output_prefix: &Path,
-    format: &str,
-) -> Result<Vec<PathBuf>> {
-    let doc = Document::load(input)
-        .with_context(|| format!("Failed to open PDF {:?}", input))?;
-
-    let mut outputs = Vec::new();
-    let mut image_count = 0;
-
-    // Track IDs used as SMask so they are not extracted as standalone gray images
-    let mut smask_ids = std::collections::HashSet::new();
-    for (_obj_id, object) in doc.objects.iter() {
-        if let Object::Stream(ref stream) = *object {
-            if let Ok(Object::Reference(ref_id)) = stream.dict.get(b"SMask") {
-                smask_ids.insert(*ref_id);
-            }
-        }
-    }
-
-    for (obj_id, object) in doc.objects.iter() {
-        if smask_ids.contains(obj_id) {
-            continue;
-        }
-
-        if let Object::Stream(ref stream) = *object {
-            let is_image = stream
-                .dict
-                .get(b"Subtype")
-                .map(|s| s == &Object::Name(b"Image".to_vec()))
-                .unwrap_or(false);
-
-            if is_image {
-                image_count += 1;
-                let filter = stream.dict.get(b"Filter").ok();
-                let width = stream.dict.get(b"Width").and_then(|w| w.as_i64()).unwrap_or(0) as u32;
-                let height = stream.dict.get(b"Height").and_then(|h| h.as_i64()).unwrap_or(0) as u32;
-
-                let ext = match format.to_lowercase().as_str() {
-                    "jpg" | "jpeg" => "jpg",
-                    "webp" => "webp",
-                    "tiff" | "tif" => "tiff",
-                    "bmp" => "bmp",
-                    _ => "png",
-                };
-
-                let out_path = if image_count == 1 {
-                    output_prefix.with_extension(ext)
-                } else {
-                    let stem = output_prefix.file_stem().and_then(|s| s.to_str()).unwrap_or("page");
-                    output_prefix.with_file_name(format!("{}_{}.{}", stem, image_count, ext))
-                };
-
-                let is_dct = match filter {
-                    Some(Object::Name(ref name)) => name == b"DCTDecode",
-                    _ => false,
-                };
-
-                if is_dct && (ext == "jpg" || ext == "jpeg") {
-                    std::fs::write(&out_path, &stream.content)
-                        .with_context(|| format!("Failed to write JPEG stream to {:?}", out_path))?;
-                    outputs.push(out_path);
-                } else if is_dct {
-                    let img = image::load_from_memory(&stream.content)
-                        .with_context(|| "Failed to load JPEG stream into image")?;
-                    img.save(&out_path)
-                        .with_context(|| format!("Failed to save PNG from JPEG stream to {:?}", out_path))?;
-                    outputs.push(out_path);
-                } else if let Ok(decompressed) = stream.decompressed_content() {
-                    // Check if there is an associated SMask for alpha reconstruction
-                    let smask_alpha = if let Ok(Object::Reference(smask_id)) = stream.dict.get(b"SMask") {
-                        if let Ok(Object::Stream(smask_stream)) = doc.get_object(*smask_id) {
-                            smask_stream.decompressed_content().ok()
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-
-                    let color_space = stream.dict.get(b"ColorSpace").ok();
-                    let is_gray = match color_space {
-                        Some(Object::Name(ref name)) => name == b"DeviceGray",
-                        _ => false,
-                    };
-
-                    if is_gray && (decompressed.len() >= (width * height) as usize) {
-                        if let Some(gray_buf) = image::GrayImage::from_raw(width, height, decompressed[..(width * height) as usize].to_vec()) {
-                            gray_buf.save(&out_path)
-                                .with_context(|| format!("Failed to save gray image to {:?}", out_path))?;
-                            outputs.push(out_path);
-                        }
-                    } else if let Some(alpha) = smask_alpha {
-                        if decompressed.len() >= (width * height * 3) as usize && alpha.len() >= (width * height) as usize {
-                            let mut rgba_raw = Vec::with_capacity((width * height * 4) as usize);
-                            for idx in 0..(width * height) as usize {
-                                rgba_raw.push(decompressed[idx * 3]);
-                                rgba_raw.push(decompressed[idx * 3 + 1]);
-                                rgba_raw.push(decompressed[idx * 3 + 2]);
-                                rgba_raw.push(alpha[idx]);
-                            }
-                            if let Some(rgba_buf) = image::RgbaImage::from_raw(width, height, rgba_raw) {
-                                rgba_buf.save(&out_path)
-                                    .with_context(|| format!("Failed to save RGBA image to {:?}", out_path))?;
-                                outputs.push(out_path);
-                            }
-                        }
-                    } else if decompressed.len() >= (width * height * 3) as usize {
-                        if let Some(rgb_buf) = image::RgbImage::from_raw(width, height, decompressed[..(width * height * 3) as usize].to_vec()) {
-                            rgb_buf.save(&out_path)
-                                .with_context(|| format!("Failed to save RGB image to {:?}", out_path))?;
-                            outputs.push(out_path);
-                        }
-                    } else if decompressed.len() >= (width * height * 4) as usize {
-                        if let Some(rgba_buf) = image::RgbaImage::from_raw(width, height, decompressed[..(width * height * 4) as usize].to_vec()) {
-                            rgba_buf.save(&out_path)
-                                .with_context(|| format!("Failed to save RGBA image to {:?}", out_path))?;
-                            outputs.push(out_path);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if outputs.is_empty() {
-        anyhow::bail!("No extractable raster images found in PDF");
-    }
-
-    info!("Extracted {} images from PDF: {:?}", outputs.len(), input);
-    Ok(outputs)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use image::{Rgb, RgbImage, Rgba, RgbaImage};
 
     #[test]
-    fn test_images_to_pdf_creation_and_extraction() {
+    fn test_images_to_pdf_creation() {
         let dir = std::env::temp_dir().join("wheel_pdf_tests");
         let _ = std::fs::create_dir_all(&dir);
 
@@ -336,18 +200,10 @@ mod tests {
         let pages = loaded.get_pages();
         assert_eq!(pages.len(), 2);
 
-        // Test extracting back to images
-        let extract_prefix = dir.join("extracted");
-        let extracted = pdf_to_images(&pdf_path, &extract_prefix, "png").unwrap();
-        assert!(!extracted.is_empty(), "Should extract at least 1 image");
-
         // Clean up
         let _ = std::fs::remove_file(img1_path);
         let _ = std::fs::remove_file(img2_path);
         let _ = std::fs::remove_file(pdf_path);
-        for f in extracted {
-            let _ = std::fs::remove_file(f);
-        }
     }
 
     #[test]

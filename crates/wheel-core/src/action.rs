@@ -166,26 +166,14 @@ pub fn default_actions() -> Vec<ActionManifest> {
         ("convert.ico",  "ICO",  "ico"),
     ];
 
-    let image_or_pdf_exts = {
-        let mut exts = image_exts.clone();
-        exts.push("pdf".into());
-        exts
-    };
-
     for (i, (id, title, _fmt)) in convert_targets.iter().enumerate() {
-        let accepted = if *id == "convert.pdf" {
-            image_exts.clone()
-        } else {
-            image_or_pdf_exts.clone()
-        };
-
         actions.push(ActionManifest {
             id: id.to_string(),
             title: title.to_string(),
             icon: format!("format-{}", id.split('.').nth(1).unwrap_or("file")),
             category: ActionCategory::Convert,
             accepts: AcceptedInput {
-                extensions: accepted,
+                extensions: image_exts.clone(),
                 multi: true,
             },
             kind: ActionKind::Instant,
@@ -320,6 +308,14 @@ mod tests {
         let trim_action = registry.get("tool.trim").unwrap();
         assert!(trim_action.accepts.accepts_extension("png"));
         assert!(!trim_action.accepts.accepts_extension("jpg"));
+
+        let pdf_actions: Vec<_> = registry.compatible(&["pdf"]).collect();
+        assert_eq!(pdf_actions.len(), 0);
+
+        let convert_pdf = registry.get("convert.pdf").unwrap();
+        assert!(convert_pdf.accepts.accepts_extension("png"));
+        assert!(convert_pdf.accepts.accepts_extension("jpg"));
+        assert!(!convert_pdf.accepts.accepts_extension("pdf"));
     }
 
     #[test]

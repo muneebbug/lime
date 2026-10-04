@@ -413,13 +413,6 @@ async fn run_instant_action(
         }
     } else {
         for input in &job.inputs {
-            let input_ext = input
-                .extension()
-                .and_then(|e| e.to_str())
-                .unwrap_or("")
-                .trim_start_matches('.')
-                .to_lowercase();
-
             let output_path = wheel_core::output::resolve_output_path(
                 input,
                 &target_ext,
@@ -429,29 +422,7 @@ async fn run_instant_action(
                 output_settings.overwrite_source,
             );
 
-            // PDF extraction to images (PNG, JPG, WEBP, TIFF, BMP)
-            if input_ext == "pdf" && matches!(target_ext.as_str(), "png" | "jpg" | "jpeg" | "webp" | "tiff" | "bmp") {
-                let input_clone = input.clone();
-                let output_clone = output_path.clone();
-                let fmt_clone = target_ext.clone();
-
-                let result = tokio::task::spawn_blocking(move || {
-                    wheel_engines::pdf::pdf_to_images(&input_clone, &output_clone, &fmt_clone)
-                })
-                .await;
-
-                match result {
-                    Ok(Ok(paths)) => outputs.extend(paths),
-                    Ok(Err(e)) => {
-                        error = Some(e.to_string());
-                        break;
-                    }
-                    Err(e) => {
-                        error = Some(e.to_string());
-                        break;
-                    }
-                }
-            } else if let Some(fmt) = wheel_engines::image_convert::OutputFormat::from_extension(&target_ext) {
+            if let Some(fmt) = wheel_engines::image_convert::OutputFormat::from_extension(&target_ext) {
                 let input_clone = input.clone();
                 let output_clone = output_path.clone();
                 let params = wheel_engines::image_convert::ConvertParams {

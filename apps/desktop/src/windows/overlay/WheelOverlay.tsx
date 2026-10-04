@@ -11,7 +11,6 @@ import {
   filterActions,
   hasToolsForExtensions,
   RASTER_IMAGE_EXTS,
-  DOCUMENT_EXTS,
   wheelDiameter,
   MEDIA_EXTS,
 } from "./RadialWheel";
@@ -22,7 +21,6 @@ export function isSupportedFileType(extensions: string[]): boolean {
     const clean = ext.toLowerCase().trim();
     return (
       RASTER_IMAGE_EXTS.has(clean) ||
-      DOCUMENT_EXTS.has(clean) ||
       MEDIA_EXTS.has(clean)
     );
   });
