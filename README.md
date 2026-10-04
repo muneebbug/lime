@@ -25,6 +25,7 @@ When you drag image files and hold the **Shift** key, a wheel appears at your cu
 - Add Hardware Acceleration support for media conversions for NVIDIA, AMD and Intel GPUs.
 - Add support for converting PDF to images
 - Optimize Video to GIF conversion file sizes (Current GIF files sizes are huge).
+- Implement Jpeg/Png to Tiff Exif preservation and vice versa.
 
 ## How to Use
 
