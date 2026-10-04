@@ -82,9 +82,33 @@ pub fn find_ffmpeg_path() -> Option<PathBuf> {
 
 /// Convert video or audio file using FFmpeg with safe argument arrays.
 pub fn convert_media(input: &Path, output: &Path, target_format: &str) -> Result<PathBuf> {
+    convert_media_with(input, output, target_format, MediaOptions::default())
+}
+
+/// Knobs that are not derivable from the input or target extension.
+#[derive(Debug, Clone, Copy)]
+pub struct MediaOptions {
+    /// Carry tags, chapters and cover art into the output.
+    pub preserve_metadata: bool,
+}
+
+impl Default for MediaOptions {
+    fn default() -> Self {
+        Self {
+            preserve_metadata: true,
+        }
+    }
+}
+
+pub fn convert_media_with(
+    input: &Path,
+    output: &Path,
+    target_format: &str,
+    opts: MediaOptions,
+) -> Result<PathBuf> {
     info!(
-        "Converting media {:?} -> {:?} (target_format: {})",
-        input, output, target_format
+        "Converting media {:?} -> {:?} (target_format: {}, preserve_metadata: {})",
+        input, output, target_format, opts.preserve_metadata
     );
 
     let ffmpeg = find_ffmpeg_path().ok_or_else(|| {
@@ -97,6 +121,14 @@ pub fn convert_media(input: &Path, output: &Path, target_format: &str) -> Result
 
     let mut cmd = no_window_command(ffmpeg);
     cmd.arg("-y").arg("-i").arg(input);
+
+    // Applied up front so every target, image-adjacent or not, honours the
+    // setting. -1 tells FFmpeg to discard what the input carried.
+    if opts.preserve_metadata {
+        cmd.arg("-map_metadata").arg("0").arg("-map_chapters").arg("0");
+    } else {
+        cmd.arg("-map_metadata").arg("-1").arg("-map_chapters").arg("-1");
+    }
 
     match target_format.to_lowercase().as_str() {
         // High quality animated GIF with optimized palette
@@ -114,7 +146,7 @@ pub fn convert_media(input: &Path, output: &Path, target_format: &str) -> Result
         }
         // Audio-only targets
         "mp3" | "wav" | "flac" | "m4a" | "aac" | "ogg" | "opus" | "wma" => {
-            configure_audio_output(&mut cmd, input, target_format);
+            configure_audio_output(&mut cmd, input, target_format, opts.preserve_metadata);
         }
         // AVI with MPEG-4 video and MP3 audio: the combination with the widest
         // player support. Left to FFmpeg's defaults the codec choice varies by
@@ -201,9 +233,14 @@ fn target_supports_cover_art(target_format: &str) -> bool {
 
 /// Configure an audio-only output: keep the audio stream, carry the source's
 /// tags across, and preserve cover art when both sides can carry it.
-fn configure_audio_output(cmd: &mut std::process::Command, input: &Path, target_format: &str) {
+fn configure_audio_output(
+    cmd: &mut std::process::Command,
+    input: &Path,
+    target_format: &str,
+    preserve_metadata: bool,
+) {
     let target = target_format.to_lowercase();
-    let cover = is_audio_only_input(input) && target_supports_cover_art(&target);
+    let cover = preserve_metadata && is_audio_only_input(input) && target_supports_cover_art(&target);
 
     // `?` on the audio map too: a source with no audio must reach the muxing
     // stage and report "does not contain any stream", not fail option parsing.
@@ -214,7 +251,6 @@ fn configure_audio_output(cmd: &mut std::process::Command, input: &Path, target_
     } else {
         cmd.arg("-vn");
     }
-    cmd.arg("-map_metadata").arg("0");
 
     match target.as_str() {
         "mp3" => {
@@ -393,6 +429,60 @@ mod tests {
 
         let _ = std::fs::remove_file(&src);
         let _ = std::fs::remove_file(&out);
+    }
+
+    #[test]
+    fn test_preserve_metadata_controls_tags() {
+        let Some(ffmpeg) = find_ffmpeg_path() else {
+            return;
+        };
+
+        let dir = std::env::temp_dir().join("wheel_tests");
+        let _ = std::fs::create_dir_all(&dir);
+        let src = dir.join("meta_src.mp3");
+
+        let made = no_window_command(&ffmpeg)
+            .arg("-y")
+            .arg("-f")
+            .arg("lavfi")
+            .arg("-i")
+            .arg("sine=frequency=440:duration=2")
+            .arg("-c:a")
+            .arg("libmp3lame")
+            .arg("-metadata")
+            .arg("title=WHEELER_TITLE")
+            .arg("-id3v2_version")
+            .arg("3")
+            .arg(&src)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !made {
+            return;
+        }
+
+        let tags_of = |p: &Path| {
+            std::fs::read(p)
+                .ok()
+                .map(|b| String::from_utf8_lossy(&b).contains("WHEELER_TITLE"))
+                .unwrap_or(false)
+        };
+
+        for (preserve, expect) in [(true, true), (false, false)] {
+            let out = dir.join(format!("meta_out_{preserve}.m4a"));
+            let _ = std::fs::remove_file(&out);
+            convert_media_with(&src, &out, "m4a", MediaOptions { preserve_metadata: preserve })
+                .expect("convert failed");
+
+            assert_eq!(
+                tags_of(&out),
+                expect,
+                "preserve_metadata={preserve} produced the wrong tags"
+            );
+            let _ = std::fs::remove_file(&out);
+        }
+
+        let _ = std::fs::remove_file(&src);
     }
 
     #[test]

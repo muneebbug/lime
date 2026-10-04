@@ -215,6 +215,16 @@ fn emit_job_started(app: &tauri::AppHandle, action_id: &str, files: &[PathBuf]) 
     );
 }
 
+/// Whether an output extension carries audio only.
+///
+/// Selects which of the per-media-type metadata settings applies to a job.
+fn is_audio_target(ext: &str) -> bool {
+    matches!(
+        ext,
+        "mp3" | "wav" | "flac" | "m4a" | "aac" | "ogg" | "opus" | "wma"
+    )
+}
+
 fn get_in_flight_tools() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
     static IN_FLIGHT: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> =
         std::sync::OnceLock::new();
@@ -476,6 +486,7 @@ async fn run_instant_action(
                     output_format: fmt,
                     output_path: output_clone.clone(),
                     quality: 85,
+                    preserve_metadata: output_settings.metadata.images,
                 };
                 let result = tokio::task::spawn_blocking(move || -> anyhow::Result<PathBuf> {
                     let out = wheel_engines::image_convert::convert_image(&input_clone, &params)?;
@@ -498,9 +509,21 @@ async fn run_instant_action(
                 let input_clone = input.clone();
                 let output_clone = output_path.clone();
                 let fmt_clone = target_ext.clone();
+                let preserve_metadata = if is_audio_target(&target_ext) {
+                    output_settings.metadata.audio
+                } else {
+                    output_settings.metadata.video
+                };
 
                 let result = tokio::task::spawn_blocking(move || {
-                    wheel_engines::media::convert_media(&input_clone, &output_clone, &fmt_clone)
+                    wheel_engines::media::convert_media_with(
+                        &input_clone,
+                        &output_clone,
+                        &fmt_clone,
+                        wheel_engines::media::MediaOptions {
+                            preserve_metadata,
+                        },
+                    )
                 })
                 .await;
 
@@ -786,9 +809,21 @@ pub async fn convert_media_file(
     let input_clone = input.clone();
     let out_clone = target_out.clone();
     let fmt_clone = target_format.clone();
+    let preserve_metadata = if is_audio_target(&target_format) {
+        output_settings.metadata.audio
+    } else {
+        output_settings.metadata.video
+    };
 
     let res = tokio::task::spawn_blocking(move || {
-        wheel_engines::media::convert_media(&input_clone, &out_clone, &fmt_clone)
+        wheel_engines::media::convert_media_with(
+            &input_clone,
+            &out_clone,
+            &fmt_clone,
+            wheel_engines::media::MediaOptions {
+                preserve_metadata,
+            },
+        )
     })
     .await
     .map_err(|e| e.to_string())?
@@ -935,6 +970,7 @@ pub async fn run_preset(
         let action_id = step.action_id.clone();
         let _params = step.params.clone();
         let ext_clone = ext.clone();
+        let preserve_metadata = output_settings.metadata.images;
 
         let step_res = tokio::task::spawn_blocking(move || -> anyhow::Result<PathBuf> {
             if action_id == "tool.trim" {
@@ -945,6 +981,7 @@ pub async fn run_preset(
                     output_format: fmt,
                     output_path: out_clone.clone(),
                     quality: 90,
+                    preserve_metadata,
                 };
                 wheel_engines::image_convert::convert_image(&in_clone, &p)
             } else {

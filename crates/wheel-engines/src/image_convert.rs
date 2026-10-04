@@ -63,6 +63,46 @@ pub struct ConvertParams {
     pub output_path: PathBuf,
     /// JPEG quality 1-100 (ignored for lossless formats)
     pub quality: u8,
+    /// Carry EXIF/XMP/ICC from the source into the output where the target
+    /// format supports it.
+    pub preserve_metadata: bool,
+}
+
+/// Metadata lifted off a source image, ready to be re-attached to an encoder.
+#[derive(Debug, Default, Clone)]
+pub struct SourceMetadata {
+    pub exif: Option<Vec<u8>>,
+    pub icc: Option<Vec<u8>>,
+}
+
+impl SourceMetadata {
+    /// Read whatever metadata the source format exposes.
+    ///
+    /// Best-effort: a format that stores none, or a decoder that refuses to
+    /// hand it over, simply yields empty fields rather than failing the
+    /// conversion.
+    pub fn read(path: &Path) -> Self {
+        use image::{ImageDecoder, ImageReader};
+
+        let Ok(reader) = ImageReader::open(path) else {
+            return Self::default();
+        };
+        let Ok(reader) = reader.with_guessed_format() else {
+            return Self::default();
+        };
+        let Ok(mut decoder) = reader.into_decoder() else {
+            return Self::default();
+        };
+
+        Self {
+            exif: decoder.exif_metadata().ok().flatten(),
+            icc: decoder.icc_profile().ok().flatten(),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.exif.is_none() && self.icc.is_none()
+    }
 }
 
 /// Checks if a CSS property value uses an unsupported CSS Color 4 function
@@ -464,6 +504,19 @@ pub fn flatten_to_rgb(img: &image::DynamicImage, bg_color: [u8; 3]) -> image::Rg
     rgb
 }
 
+/// Hand collected metadata to an encoder.
+///
+/// Formats that cannot store a given item reject it, which is not an error —
+/// the pixels still encode correctly.
+fn apply_metadata(encoder: &mut impl image::ImageEncoder, meta: &SourceMetadata) {
+    if let Some(exif) = &meta.exif {
+        let _ = encoder.set_exif_metadata(exif.clone());
+    }
+    if let Some(icc) = &meta.icc {
+        let _ = encoder.set_icc_profile(icc.clone());
+    }
+}
+
 fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &ConvertParams) -> Result<PathBuf> {
     info!(
         "Converting {:?} -> {:?} ({:?})",
@@ -485,6 +538,12 @@ fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &Convert
         params.output_format.extension()
     ));
 
+    let meta = if params.preserve_metadata {
+        SourceMetadata::read(input)
+    } else {
+        SourceMetadata::default()
+    };
+
     let encode_result: Result<()> = (|| {
         match &params.output_format {
             OutputFormat::Jpeg => {
@@ -494,13 +553,32 @@ fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &Convert
                 } else {
                     img
                 };
-                let encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
+                let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(
                     std::fs::File::create(&tmp)
                         .with_context(|| format!("Cannot create {:?}", tmp))?,
                     params.quality,
                 );
+                apply_metadata(&mut encoder, &meta);
                 dynamic_rgb.write_with_encoder(encoder)
                     .with_context(|| "JPEG encode failed")?;
+            }
+            OutputFormat::Png => {
+                let mut encoder = image::codecs::png::PngEncoder::new(
+                    std::fs::File::create(&tmp)
+                        .with_context(|| format!("Cannot create {:?}", tmp))?,
+                );
+                apply_metadata(&mut encoder, &meta);
+                img.write_with_encoder(encoder)
+                    .with_context(|| "PNG encode failed")?;
+            }
+            OutputFormat::Webp => {
+                let mut encoder = image::codecs::webp::WebPEncoder::new_lossless(
+                    std::fs::File::create(&tmp)
+                        .with_context(|| format!("Cannot create {:?}", tmp))?,
+                );
+                apply_metadata(&mut encoder, &meta);
+                img.write_with_encoder(encoder)
+                    .with_context(|| "WebP encode failed")?;
             }
             OutputFormat::Bmp => {
                 // BMP typically does not support transparency. Flatten onto white if alpha present.
@@ -672,6 +750,7 @@ mod tests {
             output_format: OutputFormat::Webp,
             output_path: dst_path.clone(),
             quality: 80,
+            preserve_metadata: true,
         };
 
         let result = convert_image(&src_path, &params).expect("convert_image failed");
@@ -683,6 +762,7 @@ mod tests {
             output_format: OutputFormat::Avif,
             output_path: avif_path.clone(),
             quality: 80,
+            preserve_metadata: true,
         };
         let avif_result = convert_image(&src_path, &avif_params).expect("convert to avif failed");
         assert_eq!(avif_result, avif_path);
@@ -723,6 +803,7 @@ mod tests {
             output_format: OutputFormat::Avif,
             output_path: dst_path.clone(),
             quality: 85,
+        preserve_metadata: true,
         };
 
         let result = convert_image(&src_path, &params).expect("convert to avif failed");
@@ -752,6 +833,7 @@ mod tests {
             output_format: OutputFormat::Avif,
             output_path: dst_path.clone(),
             quality: 85,
+        preserve_metadata: true,
         };
         let result = convert_image(&src_path, &params).expect("svg to avif failed");
         assert_eq!(result, dst_path);
@@ -788,6 +870,7 @@ mod tests {
             output_format: OutputFormat::Jpeg,
             output_path: dst_path.clone(),
             quality: 95,
+            preserve_metadata: true,
         };
 
         let result = convert_image(&src_path, &params).expect("convert_image failed");
@@ -836,6 +919,7 @@ mod tests {
             output_format: OutputFormat::Png,
             output_path: png_path.clone(),
             quality: 85,
+        preserve_metadata: true,
         };
         let out_png = convert_image(&svg_path, &params_png).expect("convert svg to png failed");
         assert_eq!(out_png, png_path);
@@ -849,6 +933,7 @@ mod tests {
             output_format: OutputFormat::Jpeg,
             output_path: jpg_path.clone(),
             quality: 90,
+            preserve_metadata: true,
         };
         let out_jpg = convert_image(&svg_path, &params_jpg).expect("convert svg to jpg failed");
         assert_eq!(out_jpg, jpg_path);
@@ -888,5 +973,120 @@ mod tests {
         assert_eq!(p2[0], 255, "Red channel must be 255");
         assert_eq!(p2[1], 82, "Green channel must be 82");
         assert_eq!(p2[2], 0, "Blue channel must be 0");
+    }
+
+    /// Build a real EXIF APP1 segment: little-endian TIFF, one Artist tag.
+    fn exif_app1(artist: &str) -> Vec<u8> {
+        let mut tiff: Vec<u8> = Vec::new();
+        tiff.extend_from_slice(b"Exif\0\0");
+        tiff.extend_from_slice(b"II");
+        tiff.extend_from_slice(&0x002Au16.to_le_bytes());
+        tiff.extend_from_slice(&8u32.to_le_bytes());
+        let mut value = artist.as_bytes().to_vec();
+        value.push(0);
+        tiff.extend_from_slice(&1u16.to_le_bytes());
+        tiff.extend_from_slice(&0x010Fu16.to_le_bytes());
+        tiff.extend_from_slice(&2u16.to_le_bytes());
+        tiff.extend_from_slice(&(value.len() as u32).to_le_bytes());
+        tiff.extend_from_slice(&32u32.to_le_bytes());
+        tiff.extend_from_slice(&0u32.to_le_bytes());
+        assert_eq!(tiff.len(), 32);
+        tiff.extend_from_slice(&value);
+
+        let mut seg = vec![0xFF, 0xE1];
+        seg.extend_from_slice(&((tiff.len() + 2) as u16).to_be_bytes());
+        seg.extend_from_slice(&tiff);
+        seg
+    }
+
+    /// Inject an APP1 EXIF segment straight after a JPEG's SOI marker.
+    fn jpeg_with_exif(src: &[u8], artist: &str) -> Vec<u8> {
+        assert_eq!(&src[0..2], &[0xFF, 0xD8], "not a JPEG");
+        let mut out = Vec::new();
+        out.extend_from_slice(&src[0..2]);
+        out.extend_from_slice(&exif_app1(artist));
+        out.extend_from_slice(&src[2..]);
+        out
+    }
+
+    fn has_exif(path: &Path) -> bool {
+        SourceMetadata::read(path).exif.is_some()
+    }
+
+    #[test]
+    fn test_preserve_metadata_controls_exif_for_images() {
+        let Some(ffmpeg) = crate::media::find_ffmpeg_path() else {
+            return;
+        };
+
+        let dir = std::env::temp_dir().join("wheel_tests");
+        let _ = std::fs::create_dir_all(&dir);
+        let base = dir.join("exif_base.jpg");
+        let tagged = dir.join("exif_tagged.jpg");
+
+        let made = crate::media::no_window_command(&ffmpeg)
+            .arg("-y")
+            .arg("-f")
+            .arg("lavfi")
+            .arg("-i")
+            .arg("testsrc=size=64x48:rate=1:duration=1")
+            .arg("-frames:v")
+            .arg("1")
+            .arg(&base)
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+        if !made {
+            return;
+        }
+
+        let raw = std::fs::read(&base).expect("base jpeg");
+        std::fs::write(&tagged, jpeg_with_exif(&raw, "WHEELER")).unwrap();
+
+        // Without a real EXIF segment on the input, every assertion below would pass
+        // for the wrong reason.
+        assert!(has_exif(&tagged), "fixture carries no EXIF");
+
+        for (fmt, ext) in [
+            (OutputFormat::Png, "png"),
+            (OutputFormat::Jpeg, "jpg"),
+            (OutputFormat::Webp, "webp"),
+        ] {
+            for (preserve, expect) in [(true, true), (false, false)] {
+                let out = dir.join(format!("exif_{}_{}.{ext}", preserve, ext));
+                let _ = std::fs::remove_file(&out);
+                convert_image(
+                    &tagged,
+                    &ConvertParams {
+                        output_format: fmt.clone(),
+                        output_path: out.clone(),
+                        quality: 90,
+                        preserve_metadata: preserve,
+                    },
+                )
+                .expect("convert failed");
+
+                assert_eq!(
+                    has_exif(&out),
+                    expect,
+                    "{ext}: preserve_metadata={preserve} produced the wrong result"
+                );
+                let _ = std::fs::remove_file(&out);
+            }
+        }
+
+        let _ = std::fs::remove_file(&base);
+        let _ = std::fs::remove_file(&tagged);
+    }
+
+    #[test]
+    fn test_source_metadata_reads_nothing_from_svg() {
+        let dir = std::env::temp_dir().join("wheel_tests");
+        let _ = std::fs::create_dir_all(&dir);
+        let svg = dir.join("meta_none.svg");
+        std::fs::write(&svg, r##"<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"/>"##).unwrap();
+        let meta = SourceMetadata::read(&svg);
+        assert!(meta.is_empty(), "SVG should not yield metadata");
+        let _ = std::fs::remove_file(&svg);
     }
 }
