@@ -167,90 +167,139 @@ export const TOOLS_CATALOG: PetalDef[] = [
 // -------------------------------------------------------------------------
 
 /**
- * Computes an annular sector path with smooth tangent continuous fillets at all 4 corners.
- * Matches the reference SVG generator algorithm adapted to (cx, cy) = (0, 0).
+ * Where the straight side edges live, as a fraction of the rIn..rOut band.
+ * Fitted against the reference wheel: the side edge runs from just inside the
+ * hub out to roughly three quarters of the way to the rim.
  */
-export function computeFilletedPetalPath(
+const SIDE_START_FRAC = 0.0928;
+const SIDE_END_FRAC = 0.7157;
+
+/**
+ * How far each corner sweeps, as a fraction of one petal's angular step.
+ * The outer corners are the softer of the two, as in the reference.
+ */
+const CORNER_OUT_FRAC = 0.186;
+const CORNER_IN_FRAC = 0.168;
+
+/**
+ * Builds one petal.
+ *
+ * Two details separate this from a plain annular sector and are what make the
+ * ring read correctly:
+ *
+ * 1. The side edges are *bowed*, not radial. A straight ray pair is necessarily
+ *    `r * sin(theta)` apart, so the gap between petals always grows towards the
+ *    rim. Choosing the side angle per radius as `(step - gap / r) / 2` holds the
+ *    *linear* gap constant instead, which is what the reference does — measured
+ *    flat at ~3.9 units from r=56 to r=100.
+ * 2. The corners are quadratic Béziers whose control point sits on the
+ *    neighbouring circle. A tangent circular fillet would instead curl the edge
+ *    inwards near the rim and balloon the gap there.
+ */
+export function computePetalPath(
   cx: number,
   cy: number,
   rIn: number,
   rOut: number,
-  a1: number,
-  a2: number,
-  rf: number
+  centerAngle: number,
+  angleStep: number,
+  gap: number,
+  cornerScale = 1
 ): string {
-  while (a2 < a1) a2 += Math.PI * 2;
-  const angleSpan = a2 - a1;
-  const radialThickness = rOut - rIn;
-
-  // Outer fillet radius bound
-  const rfOutMax = Math.min(radialThickness * 0.48, rOut * angleSpan * 0.45);
-  const rfOut = Math.max(0.5, Math.min(rf, rfOutMax));
-
-  // Inner fillet radius proportionally scaled to prevent pinch
-  const rfInMax = Math.min(radialThickness * 0.48, rIn * angleSpan * 0.45);
-  const rfIn = Math.max(0.5, Math.min(rf * (rIn / rOut) * 1.15, rfInMax));
-
-  // 1. Outer Fillet Math:
-  const sinDeltaOut = Math.min(0.999, rfOut / (rOut - rfOut));
-  const deltaOut = Math.asin(sinDeltaOut);
-  const dRayOut = Math.sqrt(Math.max(0, (rOut - rfOut) * (rOut - rfOut) - rfOut * rfOut));
-
-  const phiOut1 = a1 + deltaOut;
-  const phiOut2 = a2 - deltaOut;
-
-  const pRay1Out = { x: cx + dRayOut * Math.cos(a1), y: cy + dRayOut * Math.sin(a1) };
-  const pArcOut1 = { x: cx + rOut * Math.cos(phiOut1), y: cy + rOut * Math.sin(phiOut1) };
-  const pArcOut2 = { x: cx + rOut * Math.cos(phiOut2), y: cy + rOut * Math.sin(phiOut2) };
-  const pRay2Out = { x: cx + dRayOut * Math.cos(a2), y: cy + dRayOut * Math.sin(a2) };
-
-  // 2. Inner Fillet Math:
-  const sinDeltaIn = Math.min(0.999, rfIn / (rIn + rfIn));
-  const deltaIn = Math.asin(sinDeltaIn);
-  const dRayIn = Math.sqrt(Math.max(0, (rIn + rfIn) * (rIn + rfIn) - rfIn * rfIn));
-
-  const phiIn1 = a1 + deltaIn;
-  const phiIn2 = a2 - deltaIn;
-
-  const pRay2In = { x: cx + dRayIn * Math.cos(a2), y: cy + dRayIn * Math.sin(a2) };
-  const pArcIn2 = { x: cx + rIn * Math.cos(phiIn2), y: cy + rIn * Math.sin(phiIn2) };
-  const pArcIn1 = { x: cx + rIn * Math.cos(phiIn1), y: cy + rIn * Math.sin(phiIn1) };
-  const pRay1In = { x: cx + dRayIn * Math.cos(a1), y: cy + dRayIn * Math.sin(a1) };
-
+  const polar = (r: number, a: number): [number, number] => [
+    cx + r * Math.cos(a),
+    cy + r * Math.sin(a),
+  ];
   const f = (n: number) => Number(n.toFixed(2));
 
-  const outerArcLarge = phiOut2 - phiOut1 > Math.PI ? 1 : 0;
-  const innerArcLarge = phiIn2 - phiIn1 > Math.PI ? 1 : 0;
+  // Side angle that yields `gap` at radius r.
+  const halfAt = (r: number) => (angleStep - gap / r) / 2;
+
+  const band = rOut - rIn;
+  const rSideIn = rIn + band * SIDE_START_FRAC;
+  const rSideOut = rIn + band * SIDE_END_FRAC;
+
+  const sIn = halfAt(rSideIn);
+  const sOut = halfAt(rSideOut);
+  const arcOut = Math.max(0.01, sOut - angleStep * CORNER_OUT_FRAC * cornerScale);
+  const arcIn = Math.max(0.01, sIn - angleStep * CORNER_IN_FRAC * cornerScale);
+
+  const p1 = polar(rSideIn, centerAngle + sIn);
+  const p2 = polar(rSideOut, centerAngle + sOut);
+  const c2 = polar(rOut, centerAngle + sOut);
+  const p3 = polar(rOut, centerAngle + arcOut);
+  const p4 = polar(rOut, centerAngle - arcOut);
+  const c4 = polar(rOut, centerAngle - sOut);
+  const p5 = polar(rSideOut, centerAngle - sOut);
+  const p6 = polar(rSideIn, centerAngle - sIn);
+  const c6 = polar(rIn, centerAngle - sIn);
+  const p7 = polar(rIn, centerAngle - arcIn);
+  const p8 = polar(rIn, centerAngle + arcIn);
+  const c8 = polar(rIn, centerAngle + sIn);
+
+  const largeOut = 2 * arcOut > Math.PI ? 1 : 0;
+  const largeIn = 2 * arcIn > Math.PI ? 1 : 0;
 
   return [
-    `M ${f(pRay1In.x)} ${f(pRay1In.y)}`,
-    `L ${f(pRay1Out.x)} ${f(pRay1Out.y)}`,
-    `A ${f(rfOut)} ${f(rfOut)} 0 0 1 ${f(pArcOut1.x)} ${f(pArcOut1.y)}`,
-    `A ${f(rOut)} ${f(rOut)} 0 ${outerArcLarge} 1 ${f(pArcOut2.x)} ${f(pArcOut2.y)}`,
-    `A ${f(rfOut)} ${f(rfOut)} 0 0 1 ${f(pRay2Out.x)} ${f(pRay2Out.y)}`,
-    `L ${f(pRay2In.x)} ${f(pRay2In.y)}`,
-    `A ${f(rfIn)} ${f(rfIn)} 0 0 1 ${f(pArcIn2.x)} ${f(pArcIn2.y)}`,
-    `A ${f(rIn)} ${f(rIn)} 0 ${innerArcLarge} 0 ${f(pArcIn1.x)} ${f(pArcIn1.y)}`,
-    `A ${f(rfIn)} ${f(rfIn)} 0 0 1 ${f(pRay1In.x)} ${f(pRay1In.y)}`,
+    `M ${f(p1[0])} ${f(p1[1])}`,
+    `L ${f(p2[0])} ${f(p2[1])}`,
+    `Q ${f(c2[0])} ${f(c2[1])} ${f(p3[0])} ${f(p3[1])}`,
+    `A ${f(rOut)} ${f(rOut)} 0 ${largeOut} 0 ${f(p4[0])} ${f(p4[1])}`,
+    `Q ${f(c4[0])} ${f(c4[1])} ${f(p5[0])} ${f(p5[1])}`,
+    `L ${f(p6[0])} ${f(p6[1])}`,
+    `Q ${f(c6[0])} ${f(c6[1])} ${f(p7[0])} ${f(p7[1])}`,
+    `A ${f(rIn)} ${f(rIn)} 0 ${largeIn} 1 ${f(p8[0])} ${f(p8[1])}`,
+    `Q ${f(c8[0])} ${f(c8[1])} ${f(p1[0])} ${f(p1[1])}`,
     "Z",
   ].join(" ");
 }
 
 /**
+ * Petal radii, matching the reference wheel exactly. These are the fixed
+ * geometry everything else is derived from: rIn/rOut = 0.40695 and
+ * band/rOut = 0.59305.
+ */
+export const PETAL_R_IN = 48.64;
+export const PETAL_R_OUT = 119.52;
+
+/** Stroke widths, which eat into the margins the eye measures. */
+const DISC_STROKE = 1.5;
+const CENTER_STROKE = 1;
+const PETAL_STROKE = 1.2;
+
+/**
+ * Gap between two petals, and between a petal and each disc. One value keeps
+ * all three margins identical.
+ */
+export const PETAL_GAP = 4.97;
+
+/**
+ * Disc radii follow from the petals and the gap, rather than the other way
+ * round. Fixing the discs and solving for the petals would change the petal
+ * band, which is the part that has to match the reference.
+ *
+ * Each margin is eaten into by stroke, but not equally: a petal is bounded by
+ * its own stroke on one side and the disc's on the other, whereas two petals are
+ * each bounded by half their own. Equal centre-line distances still read
+ * uneven, hence the half-stroke corrections.
+ */
+export const OUTER_DISC_R = PETAL_R_OUT + PETAL_GAP + DISC_STROKE / 2 - PETAL_STROKE / 2;
+export const CENTER_DISC_R = PETAL_R_IN - PETAL_GAP - CENTER_STROKE / 2 + PETAL_STROKE / 2;
+
+/**
  * Calculates exact petal geometry for radial sectors.
- * Preserves the exact radii and spacing of Lime's wheel:
- * cx = 0, cy = 0 within viewBox="-136 -136 272 272"
- * rIn = 48.64, rOut = 119.52
+ *
+ * cx = 0, cy = 0 within viewBox="-136 -136 272 272".
  */
 export function calculatePetalGeometry(
   index: number,
   count: number,
   cx = 0,
   cy = 0,
-  rIn = 48.64,
-  rOut = 119.52,
-  petalGap = 4.2,
-  cornerRoundness = 7.5
+  petalGap = PETAL_GAP,
+  rIn = PETAL_R_IN,
+  rOut = PETAL_R_OUT,
+  cornerRoundness = 1
 ): PetalGeometry {
   const midRadius = (rIn + rOut) / 2;
 
@@ -272,16 +321,21 @@ export function calculatePetalGeometry(
     };
   }
 
-  const angularGap = petalGap / midRadius;
   const angleStep = (2 * Math.PI) / count;
-  const halfSpan = (angleStep - angularGap) / 2;
 
   // Center angle: Index 0 starts strictly at 12 o'clock (-PI/2) and goes clockwise
   const centerAngle = -Math.PI / 2 + index * angleStep;
-  const a1 = centerAngle - halfSpan;
-  const a2 = centerAngle + halfSpan;
 
-  const d = computeFilletedPetalPath(cx, cy, rIn, rOut, a1, a2, cornerRoundness);
+  const d = computePetalPath(
+    cx,
+    cy,
+    rIn,
+    rOut,
+    centerAngle,
+    angleStep,
+    petalGap,
+    cornerRoundness
+  );
   return {
     d,
     labelX: Number((cx + midRadius * Math.cos(centerAngle)).toFixed(2)),
@@ -699,7 +753,7 @@ function RadialWheelInner({
         <circle
           cx="0"
           cy="0"
-          r="126"
+          r={OUTER_DISC_R}
           fill="rgba(244, 247, 249, 0.45)"
           stroke="rgba(255, 255, 255, 0.8)"
           strokeWidth="1.5"
@@ -866,7 +920,7 @@ function RadialWheelInner({
           <circle
             cx="0"
             cy="0"
-            r="41"
+            r={CENTER_DISC_R}
             fill="#ffffff"
             stroke="rgba(0,0,0,0.05)"
             strokeWidth="1"
