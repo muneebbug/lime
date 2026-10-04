@@ -9,6 +9,7 @@ import {
   RadialWheel,
   hitTestWedge,
   filterActions,
+  hasToolsForExtensions,
   RASTER_IMAGE_EXTS,
   DOCUMENT_EXTS,
   wheelDiameter,
@@ -68,6 +69,14 @@ const overlayRef = useRef<HTMLDivElement>(null);
   const soundEnabled = wheelSettings?.wheel_ui?.sound_enabled ?? false;
   const reducedMotion = wheelSettings?.wheel_ui?.reduced_motion ?? false;
 
+  const hasTools = hasToolsForExtensions(dragExtensions, contextFilterEnabled);
+
+  useEffect(() => {
+    if (!hasTools && currentPage === "tools") {
+      useWheelStore.getState().setPage("convert");
+    }
+  }, [hasTools, currentPage]);
+
   const soundEnabledRef = useRef(soundEnabled);
   useEffect(() => {
     soundEnabledRef.current = soundEnabled;
@@ -115,23 +124,27 @@ const overlayRef = useRef<HTMLDivElement>(null);
     });
   }, []);
 
+  const slotCount = wheelSettings?.wheel_ui?.slot_count ?? 8;
+
   const handlePointerMove = useCallback((x: number, y: number) => {
     lastDropPosRef.current = { x, y };
     const state = useWheelStore.getState();
-    const visible = filterActions(state.actions, state.currentPage, state.dragExtensions, contextFilterEnabled);
+    const currentSlotCount = wheelSettings?.wheel_ui?.slot_count ?? 8;
+    const visible = filterActions(state.actions, state.currentPage, state.dragExtensions, contextFilterEnabled, currentSlotCount);
     const scale = wheelSize / 272;
-    const idx = hitTestWedge(x, y, state.currentPage, 200, 200, scale);
+    const idx = hitTestWedge(x, y, visible.length, 200, 200, scale);
     const candidate = idx !== null ? visible[idx] : null;
-    const newHovered = candidate && candidate.enabled !== false ? candidate.id : null;
+    const newHovered = candidate ? candidate.id : null;
 
     if (newHovered !== lastHoveredRef.current) {
+      const prev = lastHoveredRef.current;
       lastHoveredRef.current = newHovered;
       state.setHoveredWedge(newHovered);
-      if (soundEnabledRef.current && newHovered !== null) {
+      if (soundEnabledRef.current && newHovered !== null && newHovered !== prev) {
         playHoverSound();
       }
     }
-  }, [contextFilterEnabled, wheelSize]);
+  }, [contextFilterEnabled, wheelSize, wheelSettings]);
 
   const handlePointerLeave = useCallback(() => {
     if (lastHoveredRef.current !== null) {
@@ -160,10 +173,15 @@ const overlayRef = useRef<HTMLDivElement>(null);
       return;
     }
 
+    const hasToolsForFiles = hasToolsForExtensions(extensions, contextFilterEnabled);
+    if (!hasToolsForFiles && useWheelStore.getState().currentPage === "tools") {
+      useWheelStore.getState().setPage("convert");
+    }
+
     lastHoveredRef.current = null;
     lastDropPosRef.current = { x, y };
     useWheelStore.getState().setDragState(files, extensions, x, y);
-  }, []);
+  }, [contextFilterEnabled]);
 
   useEffect(() => {
     const unlisteners: Array<() => void> = [];
@@ -189,25 +207,17 @@ const overlayRef = useRef<HTMLDivElement>(null);
         state.dragExtensions.length > 0
           ? state.dragExtensions
           : dropFiles.map((f) => f.split(".").pop()?.toLowerCase() ?? "").filter(Boolean);
-      const visible = filterActions(state.actions, state.currentPage, exts, contextFilterEnabled);
+      const currentSlotCount = wheelSettings?.wheel_ui?.slot_count ?? 8;
+      const visible = filterActions(state.actions, state.currentPage, exts, contextFilterEnabled, currentSlotCount);
 
       const dropX = x && x > 0 ? x : lastDropPosRef.current.x;
       const dropY = y && y > 0 ? y : lastDropPosRef.current.y;
 
       const scale = wheelSize / 272;
-      const idx = hitTestWedge(dropX, dropY, state.currentPage, 200, 200, scale);
+      const idx = hitTestWedge(dropX, dropY, visible.length, 200, 200, scale);
       const candidate = idx !== null ? visible[idx] : null;
 
-      if (candidate && candidate.enabled === false) {
-        console.warn("Cannot drop on disabled petal:", candidate.id);
-        state.clearDragState();
-        invoke("hide_overlay");
-        return;
-      }
-
-      const wedgeId = candidate && candidate.enabled !== false
-        ? candidate.id
-        : (state.hoveredWedge ?? lastHoveredRef.current);
+      const wedgeId = candidate ? candidate.id : (state.hoveredWedge ?? lastHoveredRef.current);
 
       lastHoveredRef.current = null;
 
@@ -248,12 +258,14 @@ const overlayRef = useRef<HTMLDivElement>(null);
 
           if (payload.type === "enter") {
             const files = payload.paths ?? [];
-            const extensions = files
-              .map((f) => f.split(".").pop()?.toLowerCase() ?? "")
-              .filter(Boolean);
-            const px = payload.position.x / dpr;
-            const py = payload.position.y / dpr;
-            handleFilesEntered(files, extensions, px, py);
+            if (files.length > 0) {
+              const extensions = files
+                .map((f) => f.split(".").pop()?.toLowerCase() ?? "")
+                .filter(Boolean);
+              const px = payload.position.x / dpr;
+              const py = payload.position.y / dpr;
+              handleFilesEntered(files, extensions, px, py);
+            }
           } else if (payload.type === "over") {
             handlePointerMove(payload.position.x / dpr, payload.position.y / dpr);
           } else if (payload.type === "drop") {
@@ -305,8 +317,11 @@ const overlayRef = useRef<HTMLDivElement>(null);
 
     // Toggle page event from low-level hook (scroll wheel, right-click, Tab, or Space)
     const onToggle = () => {
+      const state = useWheelStore.getState();
+      const canToggle = hasToolsForExtensions(state.dragExtensions, contextFilterEnabled);
+      if (!canToggle) return;
       lastHoveredRef.current = null;
-      useWheelStore.getState().togglePage();
+      state.togglePage();
     };
 
     listen("toggle-page", onToggle).then((u) => unlisteners.push(u));
@@ -350,7 +365,7 @@ const overlayRef = useRef<HTMLDivElement>(null);
       }
       unlisteners.forEach((u) => u());
     };
-  }, [triggerAction, handlePointerMove, handlePointerLeave]);
+  }, [triggerAction, handlePointerMove, handlePointerLeave, contextFilterEnabled]);
 
   const handleWedgeDrop = useCallback(
     (actionId: string, files: string[]) => {
@@ -387,13 +402,17 @@ const overlayRef = useRef<HTMLDivElement>(null);
               files={dragFiles}
               extensions={dragExtensions}
               currentPage={currentPage}
-              onTogglePage={togglePage}
+              onTogglePage={() => {
+                if (hasTools) togglePage();
+              }}
               onWedgeHover={setHoveredWedge}
               onWedgeDrop={handleWedgeDrop}
               hoveredWedge={hoveredWedge}
               size={wheelSize}
               contextFilterEnabled={contextFilterEnabled}
               soundEnabled={soundEnabled}
+              slotCount={slotCount}
+              hasTools={hasTools}
             />
           </motion.div>
         )}

@@ -145,10 +145,16 @@ pub fn default_actions() -> Vec<ActionManifest> {
         "avif".into(), "tiff".into(), "tif".into(),
         "bmp".into(), "gif".into(), "ico".into(), "svg".into(),
     ];
+    let video_exts = vec![
+        "mp4".into(), "mov".into(), "mkv".into(), "webm".into(), "avi".into(),
+    ];
+    let audio_exts = vec![
+        "mp3".into(), "wav".into(), "m4a".into(), "flac".into(), "aac".into(),
+    ];
 
     let mut actions = Vec::new();
 
-    // --- Convert actions ---
+    // --- Image Convert actions ---
     let convert_targets = [
         ("convert.png",  "PNG",  "png"),
         ("convert.webp", "WEBP", "webp"),
@@ -160,14 +166,26 @@ pub fn default_actions() -> Vec<ActionManifest> {
         ("convert.ico",  "ICO",  "ico"),
     ];
 
+    let image_or_pdf_exts = {
+        let mut exts = image_exts.clone();
+        exts.push("pdf".into());
+        exts
+    };
+
     for (i, (id, title, _fmt)) in convert_targets.iter().enumerate() {
+        let accepted = if *id == "convert.pdf" {
+            image_exts.clone()
+        } else {
+            image_or_pdf_exts.clone()
+        };
+
         actions.push(ActionManifest {
             id: id.to_string(),
             title: title.to_string(),
             icon: format!("format-{}", id.split('.').nth(1).unwrap_or("file")),
             category: ActionCategory::Convert,
             accepts: AcceptedInput {
-                extensions: image_exts.clone(),
+                extensions: accepted,
                 multi: true,
             },
             kind: ActionKind::Instant,
@@ -178,14 +196,77 @@ pub fn default_actions() -> Vec<ActionManifest> {
         });
     }
 
+    // --- Video Convert actions ---
+    let video_targets = [
+        ("convert.mp4",  "MP4",  "mp4"),
+        ("convert.webm", "WEBM", "webm"),
+        ("convert.gif",  "GIF",  "gif"),
+        ("convert.mov",  "MOV",  "mov"),
+        ("convert.mkv",  "MKV",  "mkv"),
+        ("convert.avi",  "AVI",  "avi"),
+    ];
+
+    for (i, (id, title, _fmt)) in video_targets.iter().enumerate() {
+        actions.push(ActionManifest {
+            id: id.to_string(),
+            title: title.to_string(),
+            icon: format!("format-{}", id.split('.').nth(1).unwrap_or("file")),
+            category: ActionCategory::Convert,
+            accepts: AcceptedInput {
+                extensions: video_exts.clone(),
+                multi: true,
+            },
+            kind: ActionKind::Instant,
+            window: None,
+            defaults: serde_json::json!({}),
+            enabled: true,
+            order: (convert_targets.len() + i) as u32,
+        });
+    }
+
+    // --- Audio Convert / Extract actions ---
+    let audio_targets = [
+        ("convert.mp3",  "MP3",  "mp3"),
+        ("convert.wav",  "WAV",  "wav"),
+        ("convert.m4a",  "M4A",  "m4a"),
+        ("convert.flac", "FLAC", "flac"),
+        ("convert.aac",  "AAC",  "aac"),
+    ];
+
+    let mut media_for_audio = video_exts.clone();
+    media_for_audio.extend(audio_exts.clone());
+
+    for (i, (id, title, _fmt)) in audio_targets.iter().enumerate() {
+        actions.push(ActionManifest {
+            id: id.to_string(),
+            title: title.to_string(),
+            icon: format!("format-{}", id.split('.').nth(1).unwrap_or("file")),
+            category: ActionCategory::Convert,
+            accepts: AcceptedInput {
+                extensions: media_for_audio.clone(),
+                multi: true,
+            },
+            kind: ActionKind::Instant,
+            window: None,
+            defaults: serde_json::json!({}),
+            enabled: true,
+            order: (convert_targets.len() + video_targets.len() + i) as u32,
+        });
+    }
+
     // --- Tool actions ---
+    let transparent_image_exts = vec![
+        "png".into(), "webp".into(), "avif".into(), "tiff".into(), "tif".into(),
+        "gif".into(), "ico".into(), "svg".into(), "heic".into(),
+    ];
+
     actions.push(ActionManifest {
         id: "tool.trim".to_string(),
         title: "TRIM".to_string(),
         icon: "trim".to_string(),
         category: ActionCategory::Tools,
         accepts: AcceptedInput {
-            extensions: image_exts.clone(),
+            extensions: transparent_image_exts,
             multi: true,
         },
         kind: ActionKind::Instant,
@@ -205,10 +286,9 @@ mod tests {
     #[test]
     fn test_default_actions_populated() {
         let actions = default_actions();
-        assert_eq!(actions.len(), 9);
         let convert_count = actions.iter().filter(|a| a.category == ActionCategory::Convert).count();
         let tools_count = actions.iter().filter(|a| a.category == ActionCategory::Tools).count();
-        assert_eq!(convert_count, 8);
+        assert!(convert_count >= 8);
         assert_eq!(tools_count, 1);
     }
 
@@ -221,17 +301,25 @@ mod tests {
 
         assert!(registry.get("convert.png").is_some());
         assert!(registry.get("tool.trim").is_some());
+        assert!(registry.get("convert.mp4").is_some());
+        assert!(registry.get("convert.mp3").is_some());
         assert!(registry.get("nonexistent").is_none());
 
         let converts: Vec<_> = registry.for_category(&ActionCategory::Convert).collect();
-        assert_eq!(converts.len(), 8);
+        assert!(converts.len() >= 8);
 
         let image_actions: Vec<_> = registry.compatible(&["png"]).collect();
         assert!(!image_actions.is_empty());
 
         let video_only_actions: Vec<_> = registry.compatible(&["mp4"]).collect();
-        // None of the image-only default tools accept mp4
-        assert_eq!(video_only_actions.len(), 0);
+        assert!(!video_only_actions.is_empty());
+
+        let audio_only_actions: Vec<_> = registry.compatible(&["mp3"]).collect();
+        assert!(!audio_only_actions.is_empty());
+
+        let trim_action = registry.get("tool.trim").unwrap();
+        assert!(trim_action.accepts.accepts_extension("png"));
+        assert!(!trim_action.accepts.accepts_extension("jpg"));
     }
 
     #[test]

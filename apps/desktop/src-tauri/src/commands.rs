@@ -429,8 +429,8 @@ async fn run_instant_action(
                 output_settings.overwrite_source,
             );
 
-            // PDF extraction to images (PNG or JPG)
-            if input_ext == "pdf" && (target_ext == "png" || target_ext == "jpg" || target_ext == "jpeg") {
+            // PDF extraction to images (PNG, JPG, WEBP, TIFF, BMP)
+            if input_ext == "pdf" && matches!(target_ext.as_str(), "png" | "jpg" | "jpeg" | "webp" | "tiff" | "bmp") {
                 let input_clone = input.clone();
                 let output_clone = output_path.clone();
                 let fmt_clone = target_ext.clone();

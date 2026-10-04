@@ -206,6 +206,9 @@ pub fn pdf_to_images(
 
                 let ext = match format.to_lowercase().as_str() {
                     "jpg" | "jpeg" => "jpg",
+                    "webp" => "webp",
+                    "tiff" | "tif" => "tiff",
+                    "bmp" => "bmp",
                     _ => "png",
                 };
 
