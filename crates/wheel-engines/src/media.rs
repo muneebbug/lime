@@ -3,13 +3,10 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, info, warn};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FfmpegStatus {
-    pub installed: bool,
-    pub path: Option<String>,
-    pub version: Option<String>,
-}
-
+/// Spawn a process without flashing a console window on Windows.
+///
+/// FFmpeg is a console application; without this a console flashes up on every
+/// conversion.
 pub fn no_window_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
     let mut cmd = std::process::Command::new(program);
     #[cfg(windows)]
@@ -20,65 +17,179 @@ pub fn no_window_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::
     cmd
 }
 
-pub fn get_ffmpeg_status() -> FfmpegStatus {
-    match find_ffmpeg_path() {
-        Some(path) => {
-            let version = no_window_command(&path)
-                .arg("-version")
-                .output()
-                .ok()
-                .and_then(|out| {
-                    let text = String::from_utf8_lossy(&out.stdout).to_string();
-                    text.lines().next().map(|l| l.to_string())
-                });
-            FfmpegStatus {
-                installed: true,
-                path: Some(path.to_string_lossy().to_string()),
-                version,
-            }
-        }
+/// Where a resolved `ffmpeg.exe` came from.
+///
+/// Shown in Settings so a user can tell a copy Lime downloaded apart from one
+/// they already had installed.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FfmpegSource {
+    /// Path the user pointed Lime at in Settings.
+    Custom,
+    /// `%LOCALAPPDATA%\Lime\bin\ffmpeg.exe`, downloaded by Lime.
+    Managed,
+    /// Alongside `Lime.exe`, i.e. a future bundled sidecar.
+    Bundled,
+    /// Found on the system `PATH`.
+    SystemPath,
+    /// Legacy `%LOCALAPPDATA%\Wheel\bin`, kept so upgrades from the old name work.
+    Legacy,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FfmpegStatus {
+    pub installed: bool,
+    pub path: Option<String>,
+    pub version: Option<String>,
+    /// Absent when `installed` is false.
+    pub source: Option<FfmpegSource>,
+    /// Directory Lime downloads its own copy into, whether or not it exists yet.
+    pub managed_dir: String,
+    /// True when `custom_path` is set but no longer usable.
+    pub custom_path_stale: bool,
+}
+
+/// Where the managed copy lives. Public so the UI can show it before downloading.
+pub fn managed_ffmpeg_dir() -> PathBuf {
+    let base = std::env::var("LOCALAPPDATA")
+        .or_else(|_| std::env::var("APPDATA"))
+        .unwrap_or_else(|_| ".".to_string());
+    PathBuf::from(base).join("Lime").join("bin")
+}
+
+pub fn managed_ffmpeg_path() -> PathBuf {
+    managed_ffmpeg_dir().join("ffmpeg.exe")
+}
+
+/// A user-chosen path from settings, injected once at startup.
+///
+/// `wheel-engines` has no access to the settings schema, so the resolved
+/// preference is published here instead of threaded through every conversion
+/// call. A stale or broken path is skipped rather than allowed to break
+/// conversions that would otherwise work.
+static CUSTOM_FFMPEG_PATH: std::sync::OnceLock<std::sync::RwLock<Option<PathBuf>>> =
+    std::sync::OnceLock::new();
+
+fn custom_slot() -> &'static std::sync::RwLock<Option<PathBuf>> {
+    CUSTOM_FFMPEG_PATH.get_or_init(|| std::sync::RwLock::new(None))
+}
+
+/// Publish the user's chosen FFmpeg path for the rest of the process.
+pub fn set_custom_ffmpeg_path(path: Option<PathBuf>) {
+    if let Ok(mut slot) = custom_slot().write() {
+        *slot = path;
+    }
+}
+
+/// True when a custom path is configured but does not yield a working binary.
+pub fn custom_path_is_stale(custom: Option<&str>) -> bool {
+    match custom {
+        None => false,
+        Some(p) => probe_ffmpeg(Path::new(p)).is_none(),
+    }
+}
+
+/// Run `ffmpeg -version` to confirm a path is a working binary.
+///
+/// Existence is not enough: a wrong file, an incompatible build or a quarantined
+/// executable all pass `Path::exists` but fail here.
+pub fn probe_ffmpeg(path: &Path) -> Option<String> {
+    let out = no_window_command(path).arg("-version").output().ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let first = text.lines().next()?.trim();
+    if first.is_empty() {
+        None
+    } else {
+        Some(first.to_string())
+    }
+}
+
+pub fn get_ffmpeg_status(custom: Option<&str>) -> FfmpegStatus {
+    let managed_dir = managed_ffmpeg_dir();
+    match resolve_ffmpeg(custom) {
+        Some((path, source, version)) => FfmpegStatus {
+            installed: true,
+            path: Some(path.to_string_lossy().to_string()),
+            version: Some(version),
+            source: Some(source),
+            managed_dir: managed_dir.to_string_lossy().to_string(),
+            custom_path_stale: false,
+        },
         None => FfmpegStatus {
             installed: false,
             path: None,
             version: None,
+            source: None,
+            managed_dir: managed_dir.to_string_lossy().to_string(),
+            custom_path_stale: custom_path_is_stale(custom),
         },
     }
 }
 
-pub fn find_ffmpeg_path() -> Option<PathBuf> {
-    // 1. App-specific sidecar directory: %LOCALAPPDATA%\Lime\bin\ffmpeg.exe (fallback to legacy Wheel)
-    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        let sidecar = PathBuf::from(&local_app_data).join("Lime").join("bin").join("ffmpeg.exe");
-        if sidecar.exists() {
-            return Some(sidecar);
-        }
-        let legacy_sidecar = PathBuf::from(&local_app_data).join("Wheel").join("bin").join("ffmpeg.exe");
-        if legacy_sidecar.exists() {
-            return Some(legacy_sidecar);
+/// Resolve `ffmpeg.exe` and report which rule matched.
+///
+/// Order: user choice, Lime's own download, a bundled sidecar, the legacy
+/// directory, then `PATH`.
+pub fn resolve_ffmpeg(custom: Option<&str>) -> Option<(PathBuf, FfmpegSource, String)> {
+    if let Some(p) = custom {
+        let path = PathBuf::from(p);
+        if let Some(version) = probe_ffmpeg(&path) {
+            return Some((path, FfmpegSource::Custom, version));
         }
     }
 
-    // 2. Next to the current running binary
+    // Reflect any path published by the running app even if the caller passed none.
+    let published = custom_slot().read().ok().and_then(|s| s.clone());
+    if let Some(path) = published {
+        if let Some(version) = probe_ffmpeg(&path) {
+            return Some((path, FfmpegSource::Custom, version));
+        }
+    }
+
+    let managed = managed_ffmpeg_path();
+    if let Some(version) = probe_ffmpeg(&managed) {
+        return Some((managed, FfmpegSource::Managed, version));
+    }
+
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(dir) = current_exe.parent() {
             let next_to = dir.join("ffmpeg.exe");
-            if next_to.exists() {
-                return Some(next_to);
+            if let Some(version) = probe_ffmpeg(&next_to) {
+                return Some((next_to, FfmpegSource::Bundled, version));
             }
         }
     }
 
-    // 3. System PATH (check if ffmpeg runs successfully)
-    if no_window_command("ffmpeg")
-        .arg("-version")
-        .output()
-        .is_ok()
-    {
-        return Some(PathBuf::from("ffmpeg"));
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        let legacy = PathBuf::from(&local_app_data)
+            .join("Wheel")
+            .join("bin")
+            .join("ffmpeg.exe");
+        if let Some(version) = probe_ffmpeg(&legacy) {
+            return Some((legacy, FfmpegSource::Legacy, version));
+        }
+    }
+
+    if let Some(version) = probe_ffmpeg(Path::new("ffmpeg")) {
+        return Some((PathBuf::from("ffmpeg"), FfmpegSource::SystemPath, version));
     }
 
     None
 }
+
+/// Resolve to just a path, for callers that do not care where it came from.
+pub fn find_ffmpeg_path() -> Option<PathBuf> {
+    resolve_ffmpeg(None).map(|(p, _, _)| p)
+}
+
+/// Marker string on the error raised when FFmpeg cannot be found.
+///
+/// Commands turns this into a distinct Tauri error code so the UI can offer
+/// "Open Settings" rather than showing a dead-end message.
+pub const FFMPEG_MISSING_MARKER: &str = "FFMPEG_MISSING";
 
 /// Convert video or audio file using FFmpeg with safe argument arrays.
 pub fn convert_media(input: &Path, output: &Path, target_format: &str) -> Result<PathBuf> {
@@ -112,7 +223,10 @@ pub fn convert_media_with(
     );
 
     let ffmpeg = find_ffmpeg_path().ok_or_else(|| {
-        anyhow::anyhow!("FFmpeg is not installed or not found in PATH or Lime sidecar directory")
+        anyhow::anyhow!(
+            "{FFMPEG_MISSING_MARKER}: FFmpeg is required to convert video and audio. \
+             Install it from Settings, or point Lime at an existing ffmpeg.exe."
+        )
     })?;
 
     if let Some(parent) = output.parent() {
@@ -501,5 +615,73 @@ mod tests {
             "Stream map '0:a' matches no streams."
         ));
         assert!(!indicates_no_encodable_stream("Permission denied"));
+    }
+
+    /// A stand-in for `ffmpeg.exe` that must be rejected by the probe.
+    ///
+    /// The resolver only runs `-version` and reads stdout, so a file that is not
+    /// a real executable is exactly the "user pointed Lime at the wrong thing"
+    /// case worth covering. Lets the fallback rules be tested without a real
+    /// 90 MB binary.
+    fn fake_ffmpeg(dir: &Path, name: &str) -> PathBuf {
+        std::fs::create_dir_all(dir).unwrap();
+        let path = dir.join(name);
+        std::fs::write(&path, b"not a real binary").unwrap();
+        path
+    }
+
+    #[test]
+    fn test_probe_rejects_non_ffmpeg_files() {
+        let dir = std::env::temp_dir().join("wheel_ffmpeg_probe");
+        let _ = std::fs::create_dir_all(&dir);
+        let bogus = fake_ffmpeg(&dir, "ffmpeg.exe");
+        assert!(
+            probe_ffmpeg(&bogus).is_none(),
+            "a file that is not FFmpeg must not pass the probe"
+        );
+        assert!(
+            probe_ffmpeg(&dir.join("does-not-exist.exe")).is_none(),
+            "a missing file must not pass the probe"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_custom_path_that_fails_probe_is_skipped_not_fatal() {
+        // A stale custom path must fall through the chain rather than break
+        // conversions that would otherwise work.
+        let dir = std::env::temp_dir().join("wheel_ffmpeg_stale");
+        let _ = std::fs::create_dir_all(&dir);
+        let bogus = fake_ffmpeg(&dir, "ffmpeg.exe");
+
+        assert!(custom_path_is_stale(Some(&bogus.to_string_lossy())));
+        assert!(!custom_path_is_stale(None));
+
+        let resolved = resolve_ffmpeg(Some(&bogus.to_string_lossy()));
+        if let Some((_, source, _)) = resolved {
+            assert_ne!(
+                source,
+                FfmpegSource::Custom,
+                "a path that fails the probe must not be reported as Custom"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_status_reports_managed_dir_even_when_missing() {
+        let status = get_ffmpeg_status(None);
+        assert!(!status.managed_dir.is_empty());
+        assert!(status.managed_dir.contains("Lime"));
+        if !status.installed {
+            assert!(status.path.is_none());
+            assert!(status.source.is_none());
+        }
+    }
+
+    #[test]
+    fn test_missing_ffmpeg_error_carries_the_marker() {
+        // The UI keys off this marker to offer "Open Settings".
+        assert!(FFMPEG_MISSING_MARKER.contains("FFMPEG_MISSING"));
     }
 }

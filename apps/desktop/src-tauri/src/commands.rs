@@ -70,19 +70,16 @@ pub async fn save_settings(
     // Synchronize live audio effects toggle
     crate::sound::set_sound_enabled(migrated.wheel_ui.sound_enabled);
 
+    // Republish the FFmpeg override so conversions in flight pick up a path the
+    // user just chose or cleared, without needing a relaunch.
+    wheel_engines::media::set_custom_ffmpeg_path(
+        migrated.ffmpeg.custom_path.as_ref().map(std::path::PathBuf::from),
+    );
+
     // Broadcast settings update to frontend windows
     let _ = app.emit("settings-updated", &migrated);
 
-    let local_app_data = std::env::var("LOCALAPPDATA")
-        .or_else(|_| std::env::var("APPDATA"))
-        .unwrap_or_else(|_| ".".to_string());
-    let local_path = std::path::PathBuf::from(local_app_data);
-    let lime_dir = local_path.join("Lime");
-    let settings_path = if lime_dir.exists() {
-        lime_dir.join("settings.json")
-    } else {
-        local_path.join("Wheel").join("settings.json")
-    };
+    let settings_path = crate::settings_file_path();
     if let Err(e) = migrated.save_to_path(&settings_path) {
         tracing::warn!("Failed to persist settings to disk at {:?}: {}", settings_path, e);
     } else {
@@ -848,16 +845,103 @@ pub async fn convert_media_file(
     Ok(res.to_string_lossy().to_string())
 }
 
-/// Retrieve FFmpeg detection status
+/// Everything the UI needs to describe FFmpeg: where it is, whether media
+/// conversion works, and where Lime would install its own copy.
 #[tauri::command]
-pub async fn get_ffmpeg_status() -> Result<wheel_engines::media::FfmpegStatus, String> {
-    Ok(wheel_engines::media::get_ffmpeg_status())
+pub async fn get_ffmpeg_report(state: State<'_, AppState>) -> Result<crate::ffmpeg::FfmpegReport, String> {
+    let lock = state.settings.lock().await;
+    Ok(crate::ffmpeg::report(
+        lock.ffmpeg.custom_path.as_deref(),
+        lock.ffmpeg.managed_version.as_deref(),
+    ))
+}
+
+/// Download and install FFmpeg into `%LOCALAPPDATA%\Lime\bin`.
+///
+/// Runs in the background and reports through `ffmpeg-download-progress` and
+/// `ffmpeg-download-finished`, so a slow link never blocks the UI thread.
+#[tauri::command]
+pub async fn download_ffmpeg(app: tauri::AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = crate::ffmpeg::download_and_install(&app).await {
+            tracing::warn!("FFmpeg download failed: {e}");
+            let _ = app.emit(
+                crate::ffmpeg::EVENT_FINISHED,
+                serde_json::json!({ "ok": false, "error": e }),
+            );
+        }
+    });
+    Ok(())
+}
+
+/// Confirm a user-chosen path really is a working `ffmpeg.exe` before saving it.
+///
+/// Saves the user from pointing Lime at a folder or a build that will not run.
+#[tauri::command]
+pub async fn validate_ffmpeg_path(path: String) -> Result<serde_json::Value, String> {
+    let p = std::path::PathBuf::from(&path);
+    if !p.is_file() {
+        return Ok(serde_json::json!({ "ok": false, "reason": "That file does not exist." }));
+    }
+    match wheel_engines::media::probe_ffmpeg(&p) {
+        Some(version) => Ok(serde_json::json!({ "ok": true, "version": version })),
+        None => Ok(serde_json::json!({
+            "ok": false,
+            "reason": "That file did not run as FFmpeg."
+        })),
+    }
+}
+
+/// Delete Lime's downloaded copy of FFmpeg, e.g. to reclaim disk space.
+#[tauri::command]
+pub async fn remove_managed_ffmpeg() -> Result<(), String> {
+    crate::ffmpeg::reset(None, true);
+    Ok(())
+}
+
+/// Replay onboarding on demand, from Settings.
+///
+/// Does not reset the flag first; the window closing normally marks it complete,
+/// so reopening and closing is harmless.
+#[tauri::command]
+pub async fn open_onboarding(app: tauri::AppHandle) -> Result<(), String> {
+    crate::onboarding::show(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn hide_onboarding(app: tauri::AppHandle) -> Result<(), String> {
+    // Closing counts as finishing: record it so a dismissed window does not
+    // reappear on the next launch.
+    crate::onboarding::complete(&app);
+    Ok(())
 }
 
 /// Open the Settings window
 #[tauri::command]
 pub async fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
     crate::tray::open_settings_window(&app);
+    Ok(())
+}
+
+/// Open Settings directly on a specific page.
+///
+/// Used by the "FFmpeg required" HUD prompt so the user lands on the fix rather
+/// than having to hunt for it.
+#[tauri::command]
+pub async fn open_settings_page(app: tauri::AppHandle, page: String) -> Result<(), String> {
+    use tauri::Manager;
+
+    crate::tray::open_settings_window(&app);
+
+    // Give the window a moment to load its frontend before asking it to
+    // navigate; emitting into a page that has not mounted yet is dropped.
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+        if let Some(win) = app.get_webview_window("settings") {
+            let _ = win.emit("settings-navigate", page);
+        }
+    });
     Ok(())
 }
 
