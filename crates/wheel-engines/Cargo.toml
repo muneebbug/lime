@@ -2,6 +2,7 @@
 name = "wheel-engines"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "Lime: image, PDF, video conversion and trim engines"
 
 [dependencies]

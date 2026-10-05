@@ -2,6 +2,7 @@
 name = "wheel-core"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "Lime: action registry, job queue, settings schema"
 
 [dependencies]

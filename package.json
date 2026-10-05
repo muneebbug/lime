@@ -8,5 +8,6 @@
     "lint": "pnpm --filter desktop run lint",
     "typecheck": "pnpm --filter desktop run typecheck",
     "deps:check": "pnpm --filter desktop outdated"
-  }
+  },
+  "license": "MIT"
 }
