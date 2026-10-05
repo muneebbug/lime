@@ -5,6 +5,7 @@ use tracing::{error, info};
 use wheel_core::{ActionRegistry, JobQueue, WheelSettings, action::default_actions};
 
 mod commands;
+mod download;
 pub mod ffmpeg;
 mod onboarding;
 mod overlay;
