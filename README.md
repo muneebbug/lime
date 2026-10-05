@@ -1,84 +1,126 @@
-# Lime
+<div align="center">
+  <img src="apps/desktop/src/assets/logo.svg" alt="Lime" width="180" />
+  <h1>Lime</h1>
+  <p>A Windows desktop app for converting images, video and audio, driven by a wheel that appears under your cursor while you drag files.</p>
+</div>
 
-Lime is a desktop app for Windows that helps you quickly convert, process, and optimize images using a radial drag-and-drop menu.
+<div align="center">
 
-When you drag image files and hold the **Shift** key, a wheel appears at your cursor. Drop your files onto any section of the wheel to convert formats or run image processing tools.
+[![CI](https://github.com/muneebbug/lime/actions/workflows/ci.yml/badge.svg)](https://github.com/muneebbug/lime/actions/workflows/ci.yml)
+[![Release](https://github.com/muneebbug/lime/actions/workflows/release.yml/badge.svg)](https://github.com/muneebbug/lime/actions/workflows/release.yml)
+[![Version](https://img.shields.io/github/package-json/v/muneebbug/lime)](https://github.com/muneebbug/lime/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2B%2064--bit-0078d4)](https://github.com/muneebbug/lime/releases)
+[![License: MIT](https://img.shields.io/badge/License-MIT-cbe71f.svg)](LICENSE)
 
-[**Download Latest Release (Windows)**](https://github.com/muneebbug/lime/releases)
+[Download](https://github.com/muneebbug/lime/releases) · [Report an issue](https://github.com/muneebbug/lime/issues)
 
----
-
-
-## Features
-
-- **Drag-and-Drop Wheel**: Hold Shift while dragging files to bring up the wheel right under your cursor.
-- **Image Conversions**: Convert images to PNG, JPG, WebP, AVIF, TIFF, BMP, ICO, and PDF. Works with common image formats including SVG, PNG, JPG, WebP, AVIF, TIFF, BMP, and GIF.
-- **Built-in Tools**: Handy image utilities right in the wheel (such as automatically trimming blank or transparent borders, with more tools being added).
-- **Sound Effects**: Audio clicks when hovering over wheel options, which can be turned on or off in settings.
-- **Settings & System Tray**: Customize trigger keys, wheel size, audio effects, and update channels, or pause the app from the taskbar tray.
-- **Private and Offline**: All processing happens locally on your computer. No files or data ever leave your machine.
+</div>
 
 ---
 
-## TODO
+> [!WARNING]
+> **Lime is a pre-alpha build.** Expect bugs, missing features and an interface that changes without warning. If something behaves wrongly, check the [open issues](https://github.com/muneebbug/lime/issues) first in case it is already known, and otherwise [open a report](https://github.com/muneebbug/lime/issues/new) — reports with the file that triggered it are the most useful.
 
-- Add Hardware Acceleration support for media conversions for NVIDIA, AMD and Intel GPUs.
-- Add support for converting PDF to images
-- Optimize Video to GIF conversion file sizes (Current GIF files sizes are huge).
-- Implement Jpeg/Png to Tiff Exif preservation and vice versa.
+## How it works
 
-## How to Use
+1. Select one or more files in File Explorer.
+2. Start dragging them and hold **Shift**.
+3. A wheel appears around your cursor, showing only the actions that make sense for what you picked.
+4. Move onto the action you want and release. The result is written next to the original file.
 
-1. Select one or more image files in File Explorer.
-2. Begin dragging the files, then press and hold the **Shift** key.
-3. The wheel will appear around your mouse cursor.
-4. Move your mouse over your desired action (such as a conversion format or a tool like **Trim**).
-5. Release the mouse button. The processed files are saved in the same folder next to the originals.
+Nothing is uploaded. Every conversion happens on your machine.
 
----
+## What it converts
+
+**Images** — PNG, JPG, WebP, TIFF, AVIF, BMP, GIF, ICO, PDF. SVG and most raster formats are accepted as input.
+
+**Video** — MP4, WebM, MOV, MKV, AVI, and animated GIF.
+
+**Audio from video** — MP3, WAV, M4A, FLAC.
+
+**Audio** — MP3, WAV, M4A, FLAC, AAC, OGG, Opus, WMA.
+
+### Detail worth knowing
+
+- **PNG, TIFF, WebP and AVIF are written losslessly**, so a round trip through them does not change a single pixel. JPEG has no lossless mode, so it is written at maximum quality instead.
+- **Metadata is kept, per media type.** Images carry EXIF and colour profiles into JPEG, PNG and WebP; audio carries tags and cover art; video carries tags. Each can be switched off in Settings.
+- **Transparent pixels survive.** AVIF in particular round-trips exactly, so trimming a transparent PNG to AVIF and back does not damage the edges.
+
+## Trim
+
+The one built-in tool. Drop an image on the **TRIM** petal and it crops away fully transparent borders, keeping the smallest rectangle that contains every visible pixel.
+
 
 ## Requirements
 
-- Windows 10 or 11 (64-bit)
-- [Node.js](https://nodejs.org/) (v20+) and [pnpm](https://pnpm.io/)
-- [Rust](https://www.rust-lang.org/) (1.77+)
+- Windows 10 or 11, 64-bit
+- [FFmpeg](https://ffmpeg.org/) on your `PATH`
+
+FFmpeg is not bundled. Lime looks for `ffmpeg.exe` in `%LOCALAPPDATA%\Lime\bin\`, then next to `Lime.exe`, then on your system `PATH`. Image conversions work without it; video, audio and PDF output need it.
 
 ---
 
 ## Development
 
-Install dependencies:
+Built with [Tauri 2](https://tauri.app/) — a Rust core with a React and TypeScript frontend.
 
 ```powershell
 pnpm install
 ```
 
-Start the app in development mode:
+Run it in development mode:
 
 ```powershell
 pnpm dev
 ```
 
-Run test suites:
+Run the Rust test suite:
 
 ```powershell
 cargo test --workspace
 ```
 
-Build the production installer:
+Build the Windows installer:
 
 ```powershell
 pnpm build
 ```
 
-The installer executable will be generated in `apps/desktop/src-tauri/target/release/bundle/nsis/`.
+The installer lands in `apps/desktop/src-tauri/target/release/bundle/nsis/`. It installs per-user, so no administrator rights are needed.
+
+### Layout
+
+```
+apps/desktop/          Tauri app — React frontend and Rust commands
+  src/                 React UI, including the wheel and settings window
+  src-tauri/src/       Rust: window management, tray, settings persistence
+crates/wheel-core/     Settings, action registry, job queue, history database
+crates/wheel-engines/  Conversion engines: image, media, PDF, trim
+crates/wheel-win/      Windows shell integration
+```
+
+The two crates under `crates/` have no Tauri dependency, so the conversion logic can be tested and reasoned about on its own. `cargo test --workspace` runs the whole suite.
+
+### Where your data lives
+
+Everything is written under `%LOCALAPPDATA%\Lime\`:
+
+- `settings.json` — preferences
+- `history.db` — SQLite database of past conversions
 
 ---
 
-## Settings & Storage
+## Not done yet
 
-Lime stores your preferences and past conversion history locally at `%LOCALAPPDATA%\Lime\`:
-- `settings.json`: Configuration for hotkeys, thresholds, and appearance.
-- `history.db`: Local database of your recent conversions.
+- Hardware-accelerated conversion for NVIDIA, AMD and Intel GPUs
+- Converting PDF pages back into images
+- Smaller video-to-GIF output
+- Carrying EXIF through TIFF conversions
 
-You can open the settings window at any time by right-clicking the Lime tray icon and clicking **Open Settings**.
+## Contributing
+
+Open an issue or a pull request. Bug reports with the file that caused it are the most useful kind.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
