@@ -5,6 +5,8 @@ use tracing::{error, info};
 use wheel_core::{ActionRegistry, JobQueue, WheelSettings, action::default_actions};
 
 mod commands;
+pub mod ffmpeg;
+mod onboarding;
 mod overlay;
 mod status;
 mod tray;
@@ -12,6 +14,24 @@ pub mod sound;
 
 /// The name of the app — single source of truth.
 pub const APP_NAME: &str = wheel_core::action::APP_NAME;
+
+/// Resolve the on-disk settings file.
+///
+/// Prefers the current `Lime` directory but still points at the legacy `Wheel`
+/// one, so an upgrade keeps reading the configuration it already wrote.
+pub fn settings_file_path() -> std::path::PathBuf {
+    let local = std::env::var("LOCALAPPDATA")
+        .or_else(|_| std::env::var("APPDATA"))
+        .unwrap_or_else(|_| ".".to_string());
+    let local = std::path::PathBuf::from(local);
+
+    let lime_dir = local.join("Lime");
+    if lime_dir.exists() {
+        lime_dir.join("settings.json")
+    } else {
+        local.join("Wheel").join("settings.json")
+    }
+}
 
 /// Global application state accessible from Tauri commands.
 pub struct AppState {
@@ -65,9 +85,17 @@ pub fn run() {
     });
     let history = Arc::new(history);
 
-    let settings_path = app_dir.join("settings.json");
-    let mut initial_settings = WheelSettings::load_or_default(&settings_path);
+    let settings_path = crate::settings_file_path();
+
+    // Distinguish a genuinely fresh install from someone upgrading. Onboarding
+    // is a first-run experience, not something to ambush returning users with,
+    // so a config written before onboarding existed counts as already handled.
+    let (mut initial_settings, is_first_run) =
+        WheelSettings::load_reporting_first_run(&settings_path);
     initial_settings.general.launch_at_login = wheel_win::shell::is_launch_at_login_registered();
+    if !is_first_run {
+        initial_settings.general.onboarding_completed = true;
+    }
     sound::set_sound_enabled(initial_settings.wheel_ui.sound_enabled);
     let status_vertical = initial_settings.wheel_ui.status_vertical;
     let status_horizontal = initial_settings.wheel_ui.status_horizontal;
@@ -104,6 +132,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+            .plugin(tauri_plugin_dialog::init())
         .manage(state)
         .invoke_handler(tauri::generate_handler![
             commands::get_actions,
@@ -120,9 +149,15 @@ pub fn run() {
             commands::open_file,
             commands::trim_image_file,
             commands::convert_media_file,
-            commands::get_ffmpeg_status,
             commands::open_settings_window,
+    commands::open_settings_page,
             commands::show_status,
+    commands::get_ffmpeg_report,
+    commands::download_ffmpeg,
+    commands::validate_ffmpeg_path,
+    commands::remove_managed_ffmpeg,
+    commands::open_onboarding,
+    commands::hide_onboarding,
             commands::hide_status,
             commands::apply_status_position,
             commands::run_preset,
@@ -145,6 +180,23 @@ pub fn run() {
             if let Err(e) = status::apply_position(&handle, status_vertical, status_horizontal) {
                 tracing::warn!("Failed to position status window: {}", e);
             }
+
+            // Create the first-run onboarding window (pre-created, hidden).
+            onboarding::create_window(&handle)?;
+
+            // Show onboarding on first launch only. Deliberately after the
+            // windows exist so the app never presents a blank frame.
+            let settings_for_onboarding = Arc::clone(&settings);
+            let handle_for_onboarding = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+                let onboarding_done = settings_for_onboarding
+                    .lock()
+                    .await
+                    .general
+                    .onboarding_completed;
+                onboarding::show_if_needed(&handle_for_onboarding, onboarding_done);
+            });
 
             // Set up the system tray
             tray::setup_tray(&handle)?;
@@ -227,8 +279,18 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { .. } = event {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 let app = window.app_handle();
+
+                // Onboarding is created once at startup and reused for "Replay
+                // setup", so it must never actually be destroyed. Let the close
+                // through for Settings and tool windows as normal.
+                if window.label() == onboarding::WINDOW_LABEL {
+                    api.prevent_close();
+                    onboarding::complete(&app);
+                    return;
+                }
+
                 let state = app.state::<AppState>();
                 let minimize_to_tray = {
                     if let Ok(guard) = state.settings.try_lock() {

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   Check,
@@ -21,7 +22,7 @@ import {
   Pulse as PhPulse,
 } from "@phosphor-icons/react";
 import {
-  CaptionButtons,
+  WindowFrame,
   ToggleSwitch,
   SegmentedControl,
   WheelButton,
@@ -65,6 +66,24 @@ export function SettingsWindow() {
   const [historyList, setHistoryList] = useState<any[]>([]);
   const [ffmpegStatus, setFfmpegStatus] = useState<any>(null);
   const [isSaved, setIsSaved] = useState<boolean>(false);
+  const [ffmpegError, setFfmpegError] = useState<string | null>(null);
+  const [ffmpegDownload, setFfmpegDownload] = useState<{
+    state: "idle" | "downloading" | "done" | "error";
+    percent: number;
+  }>({ state: "idle", percent: 0 });
+
+  // Lets the FFmpeg HUD prompt drop the user straight on the fix.
+  useEffect(() => {
+    const unlisten = listen<string>("settings-navigate", ({ payload }) => {
+      const page = payload as SettingsNavId;
+      setNavHistory([page]);
+      setNavHistoryIndex(0);
+      setActiveTab(page);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
 
   // Auto-updater state
   const [appVersion, setAppVersion] = useState<string>("v0.1.0-pre-alpha.1");
@@ -74,13 +93,97 @@ export function SettingsWindow() {
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
   const [updateError, setUpdateError] = useState<string | null>(null);
 
-  const appWindow = getCurrentWebviewWindow();
+  // `getCurrentWebviewWindow()` returns a fresh object on every call, so using it
+  // directly as an effect dependency re-ran this effect on every render. Resolve
+  // it once so mounting is genuinely mount-only.
+  const appWindow = useMemo(() => getCurrentWebviewWindow(), []);
 
   useEffect(() => {
     appWindow.unminimize().catch(() => {});
     appWindow.show().catch(() => {});
     appWindow.setFocus().catch(() => {});
   }, [appWindow]);
+
+  async function refreshFfmpegStatus() {
+    try {
+      setFfmpegStatus(await invoke<any>("get_ffmpeg_report"));
+    } catch (e) {
+      console.error("Failed to read ffmpeg status", e);
+    }
+  }
+
+  async function handleDownloadFfmpeg() {
+    setFfmpegError(null);
+    setFfmpegDownload({ state: "downloading", percent: 0 });
+    try {
+      await invoke("download_ffmpeg");
+    } catch (e) {
+      setFfmpegError(String(e));
+      setFfmpegDownload({ state: "error", percent: 0 });
+    }
+  }
+
+  async function handleLocateFfmpeg() {
+    setFfmpegError(null);
+    try {
+      const picked = await open({ multiple: false, directory: false });
+      if (typeof picked !== "string") return;
+
+      const result = await invoke<any>("validate_ffmpeg_path", { path: picked });
+      if (!result?.ok) {
+        setFfmpegError(result?.reason ?? "That file is not a working FFmpeg.");
+        return;
+      }
+
+      // Persist through save_settings so the backend republishes the override.
+      const current = await invoke<any>("get_settings");
+      await invoke("save_settings", {
+        settings: {
+          ...current,
+          ffmpeg: { ...current.ffmpeg, custom_path: picked },
+        },
+      });
+      await refreshFfmpegStatus();
+    } catch (e) {
+      setFfmpegError(String(e));
+    }
+  }
+
+  async function handleClearFfmpegPath() {
+    setFfmpegError(null);
+    const current = await invoke<any>("get_settings");
+    await invoke("save_settings", {
+      settings: {
+        ...current,
+        ffmpeg: { ...current.ffmpeg, custom_path: null },
+      },
+    });
+    await refreshFfmpegStatus();
+  }
+
+  // FFmpeg download runs in Rust and reports back over events.
+  useEffect(() => {
+    const unlistenProgress = listen<any>("ffmpeg-download-progress", (e) => {
+      const pct = Math.round(e.payload?.percent ?? 0);
+      setFfmpegDownload({ state: "downloading", percent: pct });
+    });
+
+    const unlistenDone = listen<any>("ffmpeg-download-finished", async (e) => {
+      if (e.payload?.ok) {
+        setFfmpegDownload({ state: "done", percent: 100 });
+        setFfmpegError(null);
+      } else {
+        setFfmpegDownload({ state: "error", percent: 0 });
+        setFfmpegError(e.payload?.error ?? "The FFmpeg download failed.");
+      }
+      await refreshFfmpegStatus();
+    });
+
+    return () => {
+      unlistenProgress.then((fn) => fn());
+      unlistenDone.then((fn) => fn());
+    };
+  }, []);
 
   // Load initial settings and backend statuses
   useEffect(() => {
@@ -101,7 +204,7 @@ export function SettingsWindow() {
       }
 
       try {
-        const ff = await invoke<any>("get_ffmpeg_status");
+        const ff = await invoke<any>("get_ffmpeg_report");
         setFfmpegStatus(ff);
       } catch (e) {
         console.error("Failed to check ffmpeg status", e);
@@ -268,25 +371,25 @@ export function SettingsWindow() {
     },
     {
       id: "trigger",
-      label: "Trigger & Drag",
+      label: "Trigger",
       icon: <HandGrabbing size={18} weight="bold" />,
       group: "core",
     },
     {
       id: "wheel_ui",
-      label: "Radial Wheel",
+      label: "The Wheel",
       icon: <CircleDashed size={18} weight="bold" />,
       group: "core",
     },
     {
       id: "status",
-      label: "Status & Progress",
+      label: "Progress Window",
       icon: <PhPulse size={18} weight="bold" />,
       group: "core",
     },
     {
       id: "output_general",
-      label: "Output & Files",
+      label: "Output",
       icon: <PhFolderOpen size={18} weight="bold" />,
       group: "core",
       children: [
@@ -298,91 +401,74 @@ export function SettingsWindow() {
     },
     {
       id: "engines",
-      label: "Engines",
+      label: "FFmpeg",
       icon: <Cpu size={18} weight="bold" />,
       group: "features",
     },
     {
       id: "history",
-      label: "History",
+      label: "Recent Files",
       icon: <ClockCounterClockwise size={18} weight="bold" />,
       group: "features",
     },
     {
       id: "about",
-      label: "About Lime",
+      label: "About",
       icon: <PhInfo size={18} weight="bold" />,
       group: "features",
     },
   ];
 
-  if (!settings) {
+if (!settings) {
     return (
-      <div className="flex h-screen w-screen items-center justify-center bg-[#1f1e1e] text-[#8e8e93] select-none">
-        <span className="text-[13px]">Loading settings…</span>
-      </div>
+      <WindowFrame title="Settings" bodyClassName="items-center justify-center text-text-muted">
+        Loading…
+      </WindowFrame>
     );
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-[#1f1e1e] text-white font-sans select-none overflow-hidden rounded-[12px] border border-white/[0.08] shadow-2xl">
-      {/* Top Titlebar styled exactly like Raycast Windows */}
-      <header
-        data-tauri-drag-region
-        onMouseDown={(e) => {
-          if (
-            e.button === 0 &&
-            !(e.target as HTMLElement).closest("button, input, select, textarea, [data-no-drag], [data-tauri-drag-region='false']")
-          ) {
-            getCurrentWebviewWindow().startDragging().catch(() => {});
-          }
-        }}
-        className="h-[38px] flex items-center justify-between pl-4 pr-0 border-b border-white/[0.07] bg-[#1f1e1e] select-none shrink-0 z-20"
-      >
-        <div data-tauri-drag-region className="flex items-center gap-2">
-          <img src="/logo.svg" alt="Lime" className="w-4 h-4 object-contain pointer-events-none" />
-          <span className="text-[13px] font-medium text-neutral-200 pointer-events-none">
-            Settings
-          </span>
-
-          <div className="flex items-center gap-0.5 ml-2">
-            <button
-              type="button"
-              disabled={navHistoryIndex <= 0}
-              onClick={handleNavBack}
-              className="w-5 h-5 flex items-center justify-center rounded text-neutral-400 hover:text-white disabled:opacity-20 transition-colors cursor-default"
-              title="Back"
-            >
-              <ChevronLeft size={13} strokeWidth={2.5} />
-            </button>
-            <button
-              type="button"
-              disabled={navHistoryIndex >= navHistory.length - 1}
-              onClick={handleNavForward}
-              className="w-5 h-5 flex items-center justify-center rounded text-neutral-400 hover:text-white disabled:opacity-20 transition-colors cursor-default"
-              title="Forward"
-            >
-              <ChevronRight size={13} strokeWidth={2.5} />
-            </button>
-          </div>
+    <WindowFrame
+      title="Settings"
+      bodyClassName="flex"
+      titleBarExtras={
+        <>
+          {/* Page history arrows live in the title bar, so they only ever occupy
+              the one slot every window reserves for header controls. */}
+          <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            disabled={navHistoryIndex <= 0}
+            onClick={handleNavBack}
+            className="w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-text disabled:opacity-20 transition-colors cursor-default"
+            title="Back"
+          >
+            <ChevronLeft size={13} strokeWidth={2.5} />
+          </button>
+          <button
+            type="button"
+            disabled={navHistoryIndex >= navHistory.length - 1}
+            onClick={handleNavForward}
+            className="w-5 h-5 flex items-center justify-center rounded text-text-muted hover:text-text disabled:opacity-20 transition-colors cursor-default"
+            title="Forward"
+          >
+            <ChevronRight size={13} strokeWidth={2.5} />
+          </button>
         </div>
 
-        <div className="flex items-center gap-3 h-full">
-          {isSaved && (
-            <span className="flex items-center gap-1.5 text-xs text-[#cbe71f] font-medium">
+        {isSaved && (
+            <span className="flex items-center gap-1.5 text-xs text-accent font-medium">
               <Check size={12} strokeWidth={2.5} />
               Saved
             </span>
           )}
-
-          <CaptionButtons />
-        </div>
-      </header>
-
+        </>
+      }
+    >
       {/* Main Body: Left Sidebar + Right Settings Panel */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Navigation Sidebar */}
-        <aside className="w-[224px] border-r border-white/[0.07] bg-[#1f1e1e] flex flex-col p-2 shrink-0 overflow-y-auto">
+        <aside className="w-[224px] border-r border-line-subtle bg-surface-window flex flex-col p-2 shrink-0 overflow-y-auto">
           {/* Navigation Items */}
           <nav className="flex flex-col gap-[2px]">
             {navItems.map((item, idx) => {
@@ -396,7 +482,7 @@ export function SettingsWindow() {
               return (
                 <div key={item.id}>
                   {showDivider && (
-                    <div className="my-[6px] border-t border-white/[0.06]" />
+                    <div className="my-[6px] border-t border-line-subtle" />
                   )}
                   <button
                     onClick={() =>
@@ -404,18 +490,18 @@ export function SettingsWindow() {
                     }
                     className={`w-full flex items-center gap-[10px] px-2.5 py-[6px] rounded-[6px] text-[13px] transition-all cursor-default text-left select-none ${
                       isActive
-                        ? "bg-[#cbe71f]/10 text-white font-medium"
-                        : "text-[#8e8e93] hover:text-white hover:bg-white/[0.05]"
+                        ? "bg-accent/10 text-text font-medium"
+                        : "text-text-muted hover:text-text hover:bg-overlay"
                     }`}
                   >
-                    <span className={`flex-shrink-0 w-5 h-5 flex items-center justify-center ${isActive ? "text-[#cbe71f]" : "text-neutral-400"}`}>
+                    <span className={`flex-shrink-0 w-5 h-5 flex items-center justify-center ${isActive ? "text-accent" : "text-text-muted"}`}>
                       {item.icon}
                     </span>
-                    <span className={isActive ? "text-white font-medium" : "text-[#d1d1d6]"}>{item.label}</span>
+                    <span className={isActive ? "text-text font-medium" : "text-text-secondary"}>{item.label}</span>
                   </button>
 
                   {item.children && childActive && (
-                    <div className="mt-[2px] mb-[2px] ml-[26px] pl-[10px] border-l border-white/[0.08] flex flex-col gap-[1px]">
+                    <div className="mt-[2px] mb-[2px] ml-[26px] pl-[10px] border-l border-line-subtle flex flex-col gap-[1px]">
                       {item.children.map((child) => {
                         const childIsActive = activeTab === child.id;
                         return (
@@ -424,8 +510,8 @@ export function SettingsWindow() {
                             onClick={() => handleSelectTab(child.id)}
                             className={`w-full text-left px-2 py-[5px] rounded-[6px] text-[12px] transition-all cursor-default select-none ${
                               childIsActive
-                                ? "bg-[#cbe71f]/10 text-white font-medium"
-                                : "text-[#8e8e93] hover:text-white hover:bg-white/[0.05]"
+                                ? "bg-accent/10 text-text font-medium"
+                                : "text-text-muted hover:text-text hover:bg-overlay"
                             }`}
                           >
                             {child.label}
@@ -441,14 +527,14 @@ export function SettingsWindow() {
         </aside>
 
         {/* Right content panel — same dark shade as sidebar */}
-        <main className="flex-1 bg-[#1f1e1e] px-4 py-5 overflow-y-auto">
+        <main className="flex-1 bg-surface-window px-4 py-5 overflow-y-auto">
           {/* TAB 1: GENERAL */}
           {activeTab === "general" && (
             <div className="w-full">
               <SettingSection first>
                 <SettingRow
-                  title="Launch at Windows Login"
-                  description="Start Lime automatically in the background when signing into Windows"
+                  title="Start Lime at Login"
+                  description="Open Lime when Windows starts"
                 >
                   <ToggleSwitch
                     checked={settings.general.launch_at_login}
@@ -463,8 +549,8 @@ export function SettingsWindow() {
                 </SettingRow>
 
                 <SettingRow
-                  title="Close to System Tray"
-                  description="Keep Lime running in the background tray when tool windows are closed"
+                  title="Minimize to Tray"
+                  description="Closing a window leaves Lime running in the background"
                 >
                   <ToggleSwitch
                     checked={settings.general.minimize_to_tray}
@@ -479,10 +565,10 @@ export function SettingsWindow() {
                 </SettingRow>
               </SettingSection>
 
-              <SettingSection title="Updates & Release Channel">
+              <SettingSection title="Updates">
                 <SettingRow
-                  title="Automatically Check for Updates"
-                  description="Check for new versions in the background on startup"
+                  title="Install updates automatically"
+                  description="Check for new versions and install them"
                 >
                   <ToggleSwitch
                     checked={settings.general.auto_update ?? true}
@@ -504,8 +590,8 @@ export function SettingsWindow() {
             <div className="w-full">
               <SettingSection first>
                 <SettingRow
-                  title="Activation Modifier Key"
-                  description="Key held while dragging files to summon the radial menu"
+                  title="Key to hold"
+                  description="Hold this while dragging files to open the wheel"
                 >
                   <SegmentedControl
                     value={settings.trigger.modifier}
@@ -526,11 +612,11 @@ export function SettingsWindow() {
                 </SettingRow>
 
                 <SettingRow
-                  title="Movement Threshold"
-                  description="Minimum drag distance in pixels before the radial wheel appears"
+                  title="Drag distance"
+                  description="How far you must drag before the wheel opens. Higher values stop it opening by accident."
                 >
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-neutral-400 w-12 text-right">
+                    <span className="font-mono text-xs text-text-muted w-12 text-right">
                       {settings.trigger.movement_threshold_px} px
                     </span>
                     <input
@@ -548,17 +634,17 @@ export function SettingsWindow() {
                         };
                         handleSaveSettings(updated);
                       }}
-                      className="w-28 accent-[#cbe71f] cursor-default bg-[#2a2929] rounded-full h-1"
+                      className="w-28 accent-accent cursor-default bg-surface-field rounded-full h-1"
                     />
                   </div>
                 </SettingRow>
 
                 <SettingRow
-                  title="Drop Confirmation Timeout"
-                  description="Milliseconds to wait for Windows OLE drop confirmation before cancelling"
+                  title="Wait before giving up"
+                  description="How long to keep trying to hand a file to another app, in milliseconds"
                 >
                   <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-neutral-400 w-16 text-right">
+                    <span className="font-mono text-xs text-text-muted w-16 text-right">
                       {settings.trigger.confirm_timeout_ms} ms
                     </span>
                     <input
@@ -577,14 +663,14 @@ export function SettingsWindow() {
                         };
                         handleSaveSettings(updated);
                       }}
-                      className="w-28 accent-[#cbe71f] cursor-default bg-[#2a2929] rounded-full h-1"
+                      className="w-28 accent-accent cursor-default bg-surface-field rounded-full h-1"
                     />
                   </div>
                 </SettingRow>
 
                 <SettingRow
-                  title="Always Show on Drag"
-                  description="Display the wheel on any file drag, even without holding a modifier key"
+                  title="Open on any drag"
+                  description="Open the wheel even when you are not holding the key"
                 >
                   <ToggleSwitch
                     checked={settings.trigger.always_show}
@@ -599,8 +685,8 @@ export function SettingsWindow() {
                 </SettingRow>
 
                 <SettingRow
-                  title="Pause Lime Trigger"
-                  description="Temporarily silence the radial gesture without quitting the app"
+                  title="Pause"
+                  description="Stop the wheel opening. Handy when it gets in the way."
                 >
                   <ToggleSwitch
                     checked={settings.trigger.paused}
@@ -622,8 +708,8 @@ export function SettingsWindow() {
             <div className="w-full">
               <SettingSection first>
                 <SettingRow
-                  title="Wheel Size"
-                  description="Outer diameter of the circular radial wheel"
+                  title="Wheel size"
+                  description="How large the wheel appears on screen"
                 >
                   <SegmentedControl
                     value={settings.wheel_ui.size ?? "medium"}
@@ -643,8 +729,8 @@ export function SettingsWindow() {
                 </SettingRow>
 
                 <SettingRow
-                  title="Context Filtering"
-                  description="Automatically dim or filter actions incompatible with dragged files"
+                  title="Hide actions that do not apply"
+                  description="Grey out tools that cannot handle the file you dragged"
                 >
                   <ToggleSwitch
                     checked={settings.wheel_ui.context_filter_enabled}
@@ -659,8 +745,8 @@ export function SettingsWindow() {
                 </SettingRow>
 
                 <SettingRow
-                  title="Hover Audio Effects"
-                  description="Play subtle audio feedback when hovering over tools and extensions"
+                  title="Play a sound when hovering"
+                  description="A click as you move across the wheel"
                 >
                   <ToggleSwitch
                     checked={settings.wheel_ui.sound_enabled}
@@ -675,8 +761,8 @@ export function SettingsWindow() {
                 </SettingRow>
 
                 <SettingRow
-                  title="Reduced Motion"
-                  description="Disable spring animations for instant radial appearance"
+                  title="Reduce motion"
+                  description="Show the wheel without animations"
                 >
                   <ToggleSwitch
                     checked={settings.wheel_ui.reduced_motion}
@@ -696,10 +782,10 @@ export function SettingsWindow() {
           {/* TAB 4: STATUS & PROGRESS */}
           {activeTab === "status" && (
             <div className="w-full">
-              <SettingSection first title="Appearance">
+              <SettingSection first title="Progress Window">
                 <SettingRow
-                  title="HUD Style"
-                  description="Compact shows a single line with no file names"
+                  title="Detail"
+                  description="Full shows the file names. Short shows one line."
                 >
                   <SegmentedControl
                     value={settings.wheel_ui.hud_style ?? "standard"}
@@ -720,8 +806,8 @@ export function SettingsWindow() {
 
               <SettingSection title="Position">
                 <SettingRow
-                  title="Vertical Position"
-                  description="Where the status and progress display appears on screen"
+                  title="Vertical"
+                  description="Vertical positioning of the progress window"
                 >
                   <SegmentedControl
                     value={settings.wheel_ui.status_vertical ?? "bottom"}
@@ -737,8 +823,8 @@ export function SettingsWindow() {
                 </SettingRow>
 
                 <SettingRow
-                  title="Horizontal Position"
-                  description="Horizontal anchor on screen"
+                  title="Horizontal"
+                  description="Horizontal positioning of the progress window"
                 >
                   <SegmentedControl
                     value={settings.wheel_ui.status_horizontal ?? "center"}
@@ -761,8 +847,8 @@ export function SettingsWindow() {
             <div className="w-full">
               <SettingSection first>
                 <SettingRow
-                  title="Save Location Policy"
-                  description="Where converted and processed files are saved"
+                  title="Where to save"
+                  description="Where finished files go"
                 >
                   <SegmentedControl
                     value={settings.output.policy}
@@ -784,8 +870,8 @@ export function SettingsWindow() {
 
                 {settings.output.policy === "fixed_folder" && (
                   <SettingRow
-                    title="Fixed Folder Path"
-                    description="Absolute directory path where output files will be written"
+                    title="Folder"
+                    description="The folder finished files go in"
                   >
                     <div className="flex items-center gap-2">
                       <input
@@ -802,7 +888,7 @@ export function SettingsWindow() {
                           handleSaveSettings(updated);
                         }}
                         placeholder="C:\Users\...\Pictures\Lime"
-                        className="w-48 px-2.5 py-1 text-xs bg-[#2a2929] border border-white/[0.08] focus:border-white/30 rounded-md text-white font-mono outline-none cursor-text"
+                        className="w-48 px-2.5 py-1 text-xs bg-surface-field border border-line-subtle focus:border-line-strong rounded-md text-text font-mono outline-none cursor-text"
                       />
                       <WheelButton
                         variant="secondary"
@@ -831,8 +917,8 @@ export function SettingsWindow() {
                 )}
 
                 <SettingRow
-                  title="Filename Suffix"
-                  description="Appended between file stem and extension (leave blank for clean filename)"
+                  title="Add to file names"
+                  description="Text added before the extension, such as _converted. Leave blank for no change."
                 >
                   <input
                     type="text"
@@ -845,15 +931,15 @@ export function SettingsWindow() {
                       handleSaveSettings(updated);
                     }}
                     placeholder="_converted"
-                    className="w-32 px-2.5 py-1 text-xs bg-[#2a2929] border border-white/[0.08] focus:border-white/30 rounded-md text-white font-mono outline-none text-right cursor-text"
+                    className="w-32 px-2.5 py-1 text-xs bg-surface-field border border-line-subtle focus:border-line-strong rounded-md text-text font-mono outline-none text-right cursor-text"
                   />
                 </SettingRow>
               </SettingSection>
 
-              <SettingSection title="File Safety">
+              <SettingSection title="Original Files">
                 <SettingRow
-                  title="Send Source to Recycle Bin"
-                  description="Safely move original files to the Windows Recycle Bin after successful conversion"
+                  title="Move originals to the Recycle Bin"
+                  description="After a file is converted, send the original to the Recycle Bin instead of leaving it"
                 >
                   <ToggleSwitch
                     checked={settings.output.recycle_source}
@@ -868,8 +954,8 @@ export function SettingsWindow() {
                 </SettingRow>
 
                 <SettingRow
-                  title="Overwrite Existing Files"
-                  description="Replace existing files if an output file with the same name already exists"
+                  title="Replace files that already exist"
+                  description="Overwrite a finished file if one is already there. Off means the same number is added instead."
                 >
                   <ToggleSwitch
                     checked={settings.output.overwrite_source}
@@ -889,10 +975,10 @@ export function SettingsWindow() {
           {/* TAB 5b: OUTPUT & FILES > IMAGES */}
           {activeTab === "output_images" && (
             <div className="w-full">
-              <SettingSection first title="Image Metadata">
+              <SettingSection first title="Photo Details">
                 <SettingRow
-                  title="Preserve Image Metadata"
-                  description="Keep EXIF, XMP, IPTC and the ICC colour profile when converting images"
+                  title="Keep photo details"
+                  description="Carry over the camera, date and colour profile from the original image"
                 >
                   <ToggleSwitch
                     checked={settings.output.metadata.images}
@@ -910,9 +996,9 @@ export function SettingsWindow() {
                 </SettingRow>
               </SettingSection>
 
-              <p className="text-[11px] text-[#8e8e93] leading-relaxed mt-3">
-                Applies to JPEG, PNG and WebP outputs. BMP, GIF, ICO, TIFF and AVIF
-                have nowhere to store this data, so those formats always drop it.
+              <p className="text-[11px] text-text-muted leading-relaxed mt-3">
+                Works for JPEG, PNG and WebP. BMP, GIF, ICO, TIFF and AVIF cannot
+                store this, so those always lose it.
               </p>
             </div>
           )}
@@ -920,10 +1006,10 @@ export function SettingsWindow() {
           {/* TAB 5c: OUTPUT & FILES > AUDIO */}
           {activeTab === "output_audio" && (
             <div className="w-full">
-              <SettingSection first title="Audio Metadata">
+              <SettingSection first title="Track Details">
                 <SettingRow
-                  title="Preserve Audio Metadata"
-                  description="Keep tags, chapter markers and embedded cover art when converting audio"
+                  title="Keep track details"
+                  description="Carry over the title, artist, album and cover art from the original track"
                 >
                   <ToggleSwitch
                     checked={settings.output.metadata.audio}
@@ -941,9 +1027,9 @@ export function SettingsWindow() {
                 </SettingRow>
               </SettingSection>
 
-              <p className="text-[11px] text-[#8e8e93] leading-relaxed mt-3">
+              <p className="text-[11px] text-text-muted leading-relaxed mt-3">
                 Cover art carries over to M4A, MP4, FLAC and WMA. Ogg, Opus and WAV
-                containers cannot carry an embedded picture, so it is left out.
+                cannot hold a picture, so it is left out.
               </p>
             </div>
           )}
@@ -951,10 +1037,10 @@ export function SettingsWindow() {
           {/* TAB 5d: OUTPUT & FILES > VIDEO */}
           {activeTab === "output_video" && (
             <div className="w-full">
-              <SettingSection first title="Video Metadata">
+              <SettingSection first title="Video Details">
                 <SettingRow
-                  title="Preserve Video Metadata"
-                  description="Keep tags and chapter markers when converting video"
+                  title="Keep video details"
+                  description="Carry over the title and chapter markers from the original video"
                 >
                   <ToggleSwitch
                     checked={settings.output.metadata.video}
@@ -978,25 +1064,95 @@ export function SettingsWindow() {
           {/* TAB 6: ENGINES */}
           {activeTab === "engines" && (
             <div className="w-full">
-              <SettingSection first title="Multimedia Conversion Engine">
+              <SettingSection
+                first
+                title="FFmpeg"
+                description="Needed to turn video and audio into other formats, and to make high quality GIFs. Converting images does not need it."
+              >
                 <SettingRow
-                  title="FFmpeg Sidecar Status"
+                  title="Status"
                   description={
                     ffmpegStatus?.installed
-                      ? ffmpegStatus.version || "Installed and operational"
-                      : "Optional sidecar engine for video, audio, and high-quality GIF creation"
+                      ? ffmpegStatus.version || "Ready"
+                      : "Not found on this computer"
                   }
                 >
                   <span
                     className={`text-xs font-medium px-2.5 py-1 rounded-md ${
                       ffmpegStatus?.installed
-                        ? "text-emerald-400 bg-emerald-500/10"
-                        : "text-amber-400 bg-amber-500/10"
+                        ? "text-positive bg-positive-soft"
+                        : "text-caution bg-caution-soft"
                     }`}
                   >
-                    {ffmpegStatus?.installed ? "Installed" : "Not Found"}
+                    {ffmpegStatus?.installed ? "Ready" : "Missing"}
                   </span>
                 </SettingRow>
+
+                <div className="flex items-center gap-2 pl-1">
+                  <button
+                    onClick={() => void handleDownloadFfmpeg()}
+                    disabled={ffmpegDownload.state === "downloading"}
+                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-40 transition-colors"
+                  >
+                    {ffmpegDownload.state === "downloading"
+                      ? `Downloading ${ffmpegDownload.percent}%`
+                      : "Download"}
+                  </button>
+
+                  <button
+                    onClick={() => void handleLocateFfmpeg()}
+                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-overlay-faint hover:bg-overlay transition-colors"
+                  >
+                    Choose a file
+                  </button>
+
+                  <button
+                    onClick={() => void handleClearFfmpegPath()}
+                    disabled={!ffmpegStatus?.custom_path}
+                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-overlay-faint hover:bg-overlay disabled:opacity-30 transition-colors"
+                  >
+                    Forget that file
+                  </button>
+
+                  <button
+                    onClick={() => void invoke("open_onboarding")}
+                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-overlay-faint hover:bg-overlay transition-colors"
+                  >
+                    Run setup again
+                  </button>
+                </div>
+
+                {ffmpegDownload.state === "downloading" && (
+                  <div className="h-1 w-full rounded-full bg-overlay overflow-hidden">
+                    <div
+                      className="h-full bg-accent transition-[width] duration-200"
+                      style={{ width: `${ffmpegDownload.percent}%` }}
+                    />
+                  </div>
+                )}
+
+                {ffmpegError && (
+                  <p className="text-xs text-negative leading-relaxed">{ffmpegError}</p>
+                )}
+
+                {ffmpegStatus?.custom_path_stale && (
+                  <p className="text-xs text-caution leading-relaxed">
+                    The file you chose is no longer there, so Lime is looking
+                    somewhere else.
+                  </p>
+                )}
+
+                {ffmpegStatus?.installed && ffmpegStatus?.path && (
+                  <p className="text-[11px] text-text/35 font-mono truncate">
+                    Using: {ffmpegStatus.path}
+                  </p>
+                )}
+
+                {ffmpegStatus?.managed_dir && (
+                  <p className="text-[11px] text-text/35 font-mono truncate">
+                    Downloads go to: {ffmpegStatus.managed_dir}
+                  </p>
+                )}
               </SettingSection>
             </div>
           )}
@@ -1006,21 +1162,21 @@ export function SettingsWindow() {
             <div className="w-full">
               <SettingSection first>
                 <SettingRow
-                  title="SQLite Database History"
-                  description={`${historyCount} completed file operation records stored in local database`}
+                  title="Saved history"
+                  description={`${historyCount} finished ${historyCount === 1 ? "job" : "jobs"} recorded on this computer`}
                 >
                   <WheelButton
                     variant="danger"
                     disabled={historyCount === 0}
                     onClick={handleClearHistory}
                   >
-                    Clear History
+                    Clear
                   </WheelButton>
                 </SettingRow>
               </SettingSection>
 
               {historyList.length > 0 && (
-                <SettingSection title="Recent Activity">
+                <SettingSection title="Last Jobs">
                   <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
                     {historyList.map((item) => {
                       const outPath = item.outputs?.[0] || item.inputs?.[0] || "";
@@ -1031,21 +1187,21 @@ export function SettingsWindow() {
                       return (
                         <div
                           key={item.id}
-                          className="p-2.5 bg-[#2a2929] border border-white/[0.06] rounded-lg flex items-center justify-between gap-3 text-xs"
+                          className="p-2.5 bg-surface-field border border-line-subtle rounded-lg flex items-center justify-between gap-3 text-xs"
                         >
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
                               <span
-                                className="font-medium text-neutral-200 truncate"
+                                className="font-medium text-text truncate"
                                 title={outPath}
                               >
                                 {fileName}
                               </span>
-                              <span className="text-[10px] text-neutral-400 bg-white/[0.06] px-1.5 py-0.5 rounded font-mono shrink-0">
+                              <span className="text-[10px] text-text-muted bg-overlay px-1.5 py-0.5 rounded font-mono shrink-0">
                                 {item.action_id}
                               </span>
                             </div>
-                            <div className="text-[11px] text-neutral-400 mt-0.5 truncate">
+                            <div className="text-[11px] text-text-muted mt-0.5 truncate">
                               {timeStr} • {outPath}
                             </div>
                           </div>
@@ -1056,16 +1212,16 @@ export function SettingsWindow() {
                                 onClick={() =>
                                   invoke("open_in_folder", { path: outPath })
                                 }
-                                className="p-1.5 text-neutral-400 hover:text-white bg-white/[0.04] hover:bg-white/[0.08] rounded-md transition-colors cursor-default"
-                                title="Reveal in File Explorer"
+                                className="p-1.5 text-text-muted hover:text-text bg-overlay-faint hover:bg-overlay rounded-md transition-colors cursor-default"
+                                title="Show in File Explorer"
                               >
                                 <FolderOpen size={13} />
                               </button>
                             )}
                             <button
                               onClick={() => handleDeleteHistoryItem(item.id)}
-                              className="p-1.5 text-neutral-400 hover:text-red-400 bg-white/[0.04] hover:bg-red-500/10 rounded-md transition-colors cursor-default"
-                              title="Delete record"
+                              className="p-1.5 text-text-muted hover:text-negative bg-overlay-faint hover:bg-negative-soft rounded-md transition-colors cursor-default"
+                              title="Remove from history"
                             >
                               <Trash2 size={13} />
                             </button>
@@ -1083,34 +1239,36 @@ export function SettingsWindow() {
           {activeTab === "about" && (
             <div className="w-full">
               <SettingSection first>
-                <div className="flex flex-col items-center justify-center p-6 bg-[#2a2929] border border-white/[0.06] rounded-lg mb-4 text-center">
+                <div className="flex flex-col items-center justify-center p-6 bg-surface-field border border-line-subtle rounded-lg mb-4 text-center">
                   <img
                     src="/logo.svg"
                     alt="Lime"
-                    className="w-20 h-20 object-contain mb-3 drop-shadow-md select-none pointer-events-none"
+                    className="w-[100px] object-cover select-none pointer-events-none"
                   />
-                  <h2 className="text-base font-semibold text-white tracking-wide">Lime</h2>
-                  <p className="text-xs text-neutral-400 mt-1">High-performance file toolkit for Windows</p>
+                  <h2 className="text-base font-semibold text-text tracking-wide">Lime</h2>
+                  <p className="text-xs text-text-muted mt-1">
+                    A wheel of tools for files on Windows
+                  </p>
                 </div>
 
-                <div className="p-4 bg-[#2a2929] border border-white/[0.06] rounded-lg space-y-3">
+                <div className="p-4 bg-surface-field border border-line-subtle rounded-lg space-y-3">
                   <div className="flex items-center justify-between text-xs">
                     <div>
-                      <span className="text-neutral-400">Version</span>
-                      <div className="font-mono text-neutral-200 mt-0.5 flex items-center gap-2">
+                      <span className="text-text-muted">Version</span>
+                      <div className="font-mono text-text mt-0.5 flex items-center gap-2">
                         <span>{appVersion}</span>
                         {updateStatus === "up_to_date" && (
-                          <span className="text-[11px] text-emerald-400 font-sans flex items-center gap-1">
+                          <span className="text-[11px] text-positive font-sans flex items-center gap-1">
                             <Check size={12} className="inline" /> Up to date
                           </span>
                         )}
                         {updateStatus === "ready" && (
-                          <span className="text-[11px] text-lime-400 font-sans font-medium">
+                          <span className="text-[11px] text-accent font-sans font-medium">
                             • v{updateVersion} installed & ready
                           </span>
                         )}
                         {updateStatus === "available" && (
-                          <span className="text-[11px] text-amber-400 font-sans font-medium">
+                          <span className="text-[11px] text-caution font-sans font-medium">
                             • v{updateVersion} available
                           </span>
                         )}
@@ -1148,18 +1306,18 @@ export function SettingsWindow() {
                   </div>
 
                   {updateStatus === "error" && (
-                    <div className="text-[11px] text-red-400 bg-red-500/10 border border-red-500/20 rounded px-2.5 py-1.5">
+                    <div className="text-[11px] text-negative bg-negative-soft border border-negative/20 rounded px-2.5 py-1.5">
                       {updateError || "Could not check for updates."}
                     </div>
                   )}
 
-                  <div className="h-px bg-white/[0.04]" />
+                  <div className="h-px bg-overlay-faint" />
 
                   <div className="flex items-center justify-between text-xs">
                     <div>
-                      <div className="text-neutral-400">Update Channel</div>
-                      <div className="text-neutral-300 text-[11px] mt-0.5">
-                        Pre-release includes Alpha and Beta builds
+                      <div className="text-text-muted">Which versions to offer</div>
+                      <div className="text-text-secondary text-[11px] mt-0.5">
+                        Pre-release means you get alpha and beta builds early
                       </div>
                     </div>
                     <SegmentedControl
@@ -1180,12 +1338,12 @@ export function SettingsWindow() {
                     />
                   </div>
 
-                  <div className="h-px bg-white/[0.04]" />
+                  <div className="h-px bg-overlay-faint" />
 
                   <div className="flex items-center justify-between text-xs">
                     <div>
-                      <div className="text-neutral-400">Local Data Storage</div>
-                      <div className="font-mono text-neutral-400 text-[11px] truncate max-w-xs mt-0.5">
+                      <div className="text-text-muted">Where Lime keeps its files</div>
+                      <div className="font-mono text-text-muted text-[11px] truncate max-w-xs mt-0.5">
                         %LOCALAPPDATA%\Lime\
                       </div>
                     </div>
@@ -1194,7 +1352,7 @@ export function SettingsWindow() {
                       onClick={() => invoke("open_data_folder")}
                     >
                       <FolderOpen size={12} className="inline mr-1" />
-                      Open Folder
+                      Open folder
                     </WheelButton>
                   </div>
                 </div>
@@ -1203,7 +1361,7 @@ export function SettingsWindow() {
           )}
         </main>
       </div>
-    </div>
+    </WindowFrame>
   );
 }
 

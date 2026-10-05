@@ -104,12 +104,17 @@ pub fn open_settings_window(app: &AppHandle) {
     let win = builder.build();
 
     if let Ok(win) = win {
+        #[cfg(target_os = "windows")]
+        if let Ok(hwnd) = win.hwnd() {
+            // The window is transparent and its corners are rounded in CSS, so
+            // Windows' own border, corner rounding and shadow have to go or they
+            // draw over the rounded edge.
+            wheel_win::vibrancy::make_overlay_transparent_frameless(hwnd.0 as isize);
+            wheel_win::force_focus_window(hwnd.0 as isize);
+        }
+
         let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();
-        #[cfg(target_os = "windows")]
-        if let Ok(hwnd) = win.hwnd() {
-            wheel_win::force_focus_window(hwnd.0 as isize);
-        }
     }
 }
