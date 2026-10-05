@@ -44,7 +44,33 @@ interface DropFilesEvent {
   y: number;
 }
 
+/**
+ * Force a repaint once the stylesheet is present.
+ *
+ * The wheel reads its colours from CSS custom properties, so the very first
+ * paint would otherwise draw with empty colour values if React mounted before
+ * the stylesheet resolved.
+ */
+function useThemeColors() {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    // Reading `cssRules` forces the stylesheet to resolve; then one frame so the
+    // SVG paints with real values rather than empty ones.
+    try {
+      for (const sheet of Array.from(document.styleSheets)) {
+        void sheet.cssRules.length;
+      }
+    } catch {
+      // A cross-origin sheet would throw; the tokens are local, so this is fine.
+    }
+    const frame = requestAnimationFrame(() => setReady(true));
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  return ready;
+}
+
 export function WheelOverlay() {
+  useThemeColors();
   const isDragging = useWheelStore((s) => s.isDragging);
   const dragFiles = useWheelStore((s) => s.dragFiles);
   const dragExtensions = useWheelStore((s) => s.dragExtensions);

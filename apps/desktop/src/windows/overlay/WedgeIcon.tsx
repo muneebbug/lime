@@ -32,7 +32,8 @@ export function WedgeIcon({ icon, isHovered = false, size = 20 }: WedgeIconProps
     <span
       style={{
         fontSize: size,
-        color: isHovered ? "white" : "hsla(0,0%,90%,0.85)",
+        // Colour comes from the shared tokens, not a literal here.
+        color: isHovered ? "var(--color-wheel-mark)" : "var(--color-wheel-body)",
         lineHeight: 1,
         userSelect: "none",
       }}

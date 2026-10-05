@@ -1,6 +1,20 @@
 import React, { useMemo } from "react";
 import { ActionManifest, WheelPage } from "../../store/wheelStore";
 
+/**
+ * Read a colour token from the stylesheet.
+ *
+ * `index.css` is the single source of truth for colour; SVG presentation
+ * attributes cannot use Tailwind classes, so they resolve through here. The
+ * empty-string fallback means a typo renders transparent rather than black.
+ */
+function cssVar(name: string): string {
+  if (typeof window === "undefined") return "";
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+}
+
 export interface PetalData {
   id: string;
   action: string;
@@ -472,16 +486,44 @@ export function getCatalogForExtensions(extensions: string[] = []): PetalDef[] {
 export const CONVERT_PETALS: PetalData[] = getPetalsForPage("convert", [], 8);
 export const TOOLS_PETALS: PetalData[] = getPetalsForPage("tools", [], 1);
 
-/** Outer diameter in CSS px per wheel size preset. Mirrors `WheelSize::px` in wheel-core. */
+/**
+ * Wheel colours, read from the CSS custom properties in `index.css`.
+ *
+ * SVG attributes cannot take Tailwind utility classes, so the wheel reads the
+ * same tokens as everything else instead of keeping its own copies. The empty
+ * fallbacks mean a missing token renders transparent rather than black.
+ */
+const WHEEL_COLORS = {
+  ring: cssVar("--color-wheel-ring"),
+  ringActive: cssVar("--color-wheel-ring-active"),
+  label: cssVar("--color-wheel-label"),
+  labelDim: cssVar("--color-wheel-label-dim"),
+  labelActive: cssVar("--color-wheel-label-active"),
+  face: cssVar("--color-wheel-face"),
+  faceInactive: cssVar("--color-wheel-face-inactive"),
+  mark: cssVar("--color-wheel-mark"),
+  markTint: cssVar("--color-wheel-mark-tint"),
+};
+
+/**
+ * Outer diameter in CSS px per wheel size preset. Mirrors `WheelSize::px` in
+ * wheel-core, which serialises to these same snake_case names.
+ *
+ * Keys stay lowercase and lookups are case-insensitive, so a settings file
+ * holding either casing still resolves instead of falling back to medium.
+ */
 export const WHEEL_SIZE_PX: Record<string, number> = {
   small: 280,
   medium: 320,
   large: 400,
 };
 
+export const DEFAULT_WHEEL_SIZE_KEY = "medium";
+
 /** Resolve a wheel size preset name to its pixel diameter, falling back to medium. */
 export function wheelDiameter(size: string | undefined | null): number {
-  return WHEEL_SIZE_PX[size ?? ""] ?? WHEEL_SIZE_PX.medium;
+  const key = (size ?? "").trim().toLowerCase();
+  return WHEEL_SIZE_PX[key] ?? WHEEL_SIZE_PX[DEFAULT_WHEEL_SIZE_KEY];
 }
 
 /**
@@ -586,7 +628,7 @@ export function filterActions(
 
 function ToolIcon({
   type,
-  stroke = "#222428",
+  stroke = WHEEL_COLORS.ring,
 }: {
   type: string;
   stroke?: string;
@@ -645,7 +687,7 @@ function RadialWheelInner({
     [activePetals, hoveredWedge]
   );
 
-  const wheelSize = size || WHEEL_SIZE_PX.medium;
+  const wheelSize = size || WHEEL_SIZE_PX[DEFAULT_WHEEL_SIZE_KEY];
   const scale = wheelSize / 272;
   const count = activePetals.length;
   const labelFontSize = count <= 4 ? "12.5px" : count <= 7 ? "11px" : "10.5px";
@@ -704,9 +746,9 @@ function RadialWheelInner({
             r="120"
             gradientUnits="userSpaceOnUse"
           >
-            <stop offset="0" stopColor="#ffffff" stopOpacity="0.88" />
-            <stop offset="0.68" stopColor="#f3f6f7" stopOpacity="0.65" />
-            <stop offset="1" stopColor="#f4f6f6" stopOpacity="0.82" />
+            <stop offset="0" stopColor="var(--color-wheel-mark)" stopOpacity="0.88" />
+            <stop offset="0.68" stopColor="var(--color-wheel-body)" stopOpacity="0.65" />
+            <stop offset="1" stopColor="var(--color-wheel-body)" stopOpacity="0.82" />
           </radialGradient>
 
           {/* Active highlighted petal gradient — Lime logo match */}
@@ -717,11 +759,12 @@ function RadialWheelInner({
             x2="100%"
             y2="100%"
           >
-            <stop offset="0%" stopColor="#d6f224" />
-            <stop offset="100%" stopColor="#b2d415" />
+            <stop offset="0%" stopColor="var(--color-wheel-glow-top)" />
+            <stop offset="100%" stopColor="var(--color-wheel-glow-bottom)" />
           </linearGradient>
 
-          {/* Shadows */}
+          {/* Shadows. Black is the only correct flood colour for a drop shadow,
+              so it stays literal rather than joining the palette tokens. */}
           <filter id="center-pill-shadow" x="-30%" y="-30%" width="160%" height="160%">
             <feDropShadow
               dx="0"
@@ -754,8 +797,8 @@ function RadialWheelInner({
           cx="0"
           cy="0"
           r={OUTER_DISC_R}
-          fill="rgba(244, 247, 249, 0.45)"
-          stroke="rgba(255, 255, 255, 0.8)"
+          fill="var(--color-wheel-disc)"
+          stroke="var(--color-wheel-disc-edge)"
           strokeWidth="1.5"
           filter="url(#wheel-outer-shadow)"
         />
@@ -794,14 +837,14 @@ function RadialWheelInner({
                 }
                 stroke={
                   isHighlighted
-                    ? "#1e7d23"
-                    : "rgba(255, 255, 255, 0.85)"
+                    ? WHEEL_COLORS.labelActive
+                    : "var(--color-wheel-mark-tint)"
                 }
                 strokeWidth={isHighlighted ? 1.5 : 1.2}
                 style={{
                   filter: isHighlighted
-                    ? "drop-shadow(0 4px 16px rgba(203, 231, 31, 0.55))"
-                    : "drop-shadow(0 2px 5px rgba(0,0,0,0.06))",
+                    ? "drop-shadow(0 4px 16px var(--color-wheel-glow))"
+                    : "drop-shadow(0 2px 5px var(--color-wheel-shadow))",
                   transformOrigin: "0px 0px",
                   transform: isHighlighted ? "scale(1.025)" : "scale(1)",
                   transition:
@@ -824,7 +867,7 @@ function RadialWheelInner({
                 >
                   <ToolIcon
                     type={petal.icon.type}
-                    stroke={isHighlighted ? "#163300" : "#222428"}
+                    stroke={isHighlighted ? WHEEL_COLORS.ringActive : WHEEL_COLORS.ring}
                   />
                 </g>
               )}
@@ -842,7 +885,7 @@ function RadialWheelInner({
                 }
                 textAnchor="middle"
                 dominantBaseline="central"
-                fill={isHighlighted ? "#163300" : "#222428"}
+                fill={isHighlighted ? WHEEL_COLORS.ringActive : WHEEL_COLORS.ring}
                 fontSize={
                   hasIcon
                     ? activePetals.length === 1
@@ -872,7 +915,7 @@ function RadialWheelInner({
                   y={78}
                   textAnchor="middle"
                   dominantBaseline="central"
-                  fill={isHighlighted ? "#163300" : "#4b5563"}
+                  fill={isHighlighted ? WHEEL_COLORS.ringActive : WHEEL_COLORS.labelDim}
                   fontSize="9.5px"
                   fontWeight="700"
                   fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
@@ -921,8 +964,8 @@ function RadialWheelInner({
             cx="0"
             cy="0"
             r={CENTER_DISC_R}
-            fill="#ffffff"
-            stroke="rgba(0,0,0,0.05)"
+            fill="var(--color-wheel-mark)"
+            stroke="var(--color-wheel-shadow)"
             strokeWidth="1"
             filter="url(#center-pill-shadow)"
           />
@@ -933,7 +976,7 @@ function RadialWheelInner({
               y="0"
               textAnchor="middle"
               dominantBaseline="central"
-              fill="#1e2022"
+              fill={WHEEL_COLORS.face}
               fontSize="13px"
               fontWeight="700"
               fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
@@ -958,7 +1001,7 @@ function RadialWheelInner({
                 y="10"
                 textAnchor="middle"
                 dominantBaseline="central"
-                fill="#2d3135"
+                fill={WHEEL_COLORS.faceInactive}
                 fontSize="8.5px"
                 fontWeight="700"
                 fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
@@ -974,13 +1017,13 @@ function RadialWheelInner({
                     cx="-4"
                     cy="20"
                     r="1.8"
-                    fill={currentPage === "convert" ? "#1e7d23" : "#d1d5db"}
+                    fill={currentPage === "convert" ? WHEEL_COLORS.labelActive : WHEEL_COLORS.label}
                   />
                   <circle
                     cx="4"
                     cy="20"
                     r="1.8"
-                    fill={currentPage === "tools" ? "#1e7d23" : "#d1d5db"}
+                    fill={currentPage === "tools" ? WHEEL_COLORS.labelActive : WHEEL_COLORS.label}
                   />
                 </>
               )}

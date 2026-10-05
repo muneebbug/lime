@@ -11,6 +11,13 @@ interface HudInfo {
   type: HudState;
   message: string;
   subtext?: string;
+  /** Optional action, e.g. repairing a missing dependency. */
+  action?: {
+    label: string;
+    command: string;
+    /** Passed to the command when it takes an argument. */
+    args?: Record<string, unknown>;
+  };
 }
 
 interface JobStartedEvent {
@@ -113,14 +120,30 @@ export function StatusHud() {
     }).then((u) => unlisteners.push(u));
 
     listen<{ error: string }>("job-failed", ({ payload }) => {
+      // A missing engine is fixable, so offer the fix rather than a dead end.
+      // The marker is added by the backend so this stays a single source of
+      // truth for "what is missing".
+      const missingFfmpeg = payload.error?.includes("FFMPEG_MISSING");
       const info: HudInfo = {
         id: `${Date.now()}`,
         type: "error",
-        message: "Conversion failed",
-        subtext: payload.error,
+        message: missingFfmpeg ? "FFmpeg required" : "Conversion failed",
+        subtext: missingFfmpeg
+          ? "Video, audio and GIF conversion need FFmpeg. Images still convert."
+          : payload.error,
+        action: missingFfmpeg
+          ? {
+              label: "Set up FFmpeg",
+              command: "open_settings_page",
+              args: { page: "engines" },
+            }
+          : undefined,
       };
       setHud(info);
-      settle(info, AUTO_DISMISS_MS.error);
+      // No auto-dismiss: the offer to fix it should stay until acted on.
+      if (!missingFfmpeg) {
+        settle(info, AUTO_DISMISS_MS.error);
+      }
     }).then((u) => unlisteners.push(u));
 
     return () => {
@@ -144,40 +167,52 @@ return (
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 6 }}
             transition={{ duration: 0.16, ease: "easeOut" }}
-            className={`w-full flex items-center rounded-2xl bg-neutral-950/92 border border-white/15 backdrop-blur-2xl shadow-2xl cursor-default select-none ${
+            className={`w-full flex items-center rounded-2xl bg-surface-window/95 border border-line-strong backdrop-blur-2xl shadow-2xl cursor-default select-none ${
               compact ? "flex-row gap-2 px-4 py-2.5" : "flex-col px-4 py-3 text-center"
             }`}
             onClick={dismiss}
           >
             {hud.type === "loading" && (
               <Loader2
-                className={`w-5 h-5 shrink-0 text-[#cbe71f] animate-spin ${compact ? "" : "mb-1.5"}`}
+                className={`w-5 h-5 shrink-0 text-accent animate-spin ${compact ? "" : "mb-1.5"}`}
               />
             )}
             {hud.type === "success" && (
               <CheckCircle2
-                className={`w-5 h-5 shrink-0 text-[#cbe71f] ${compact ? "" : "mb-1.5"}`}
+                className={`w-5 h-5 shrink-0 text-accent ${compact ? "" : "mb-1.5"}`}
               />
             )}
             {hud.type === "error" && (
               <AlertCircle
-                className={`w-5 h-5 shrink-0 text-rose-400 ${compact ? "" : "mb-1.5"}`}
+                className={`w-5 h-5 shrink-0 text-negative ${compact ? "" : "mb-1.5"}`}
               />
             )}
 
             <div
               className={
                 compact
-                  ? "text-[13px] font-semibold text-white tracking-wide leading-tight truncate"
-                  : "text-[13px] font-semibold text-white tracking-wide leading-tight"
+                  ? "text-[13px] font-semibold text-text tracking-wide leading-tight truncate"
+                  : "text-[13px] font-semibold text-text tracking-wide leading-tight"
               }
             >
               {hud.message}
             </div>
             {!compact && hud.subtext && (
-              <div className="text-[11px] text-neutral-300 mt-1 line-clamp-2 leading-snug font-sans">
+              <div className="text-[11px] text-text-secondary mt-1 line-clamp-2 leading-snug font-sans">
                 {hud.subtext}
               </div>
+            )}
+            {hud.action && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  invoke(hud.action!.command, hud.action!.args).catch(console.error);
+                  setHud(null);
+                }}
+                className="mt-2 self-start text-[11px] font-medium px-2.5 py-1 rounded-md bg-overlay hover:bg-overlay-hover transition-colors"
+              >
+                {hud.action.label}
+              </button>
             )}
           </motion.div>
         )}
