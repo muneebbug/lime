@@ -29,6 +29,13 @@ import {
   SettingRow,
   SettingSection,
 } from "../../ui/WheelUI";
+import {
+  formatBytes,
+  formatEta,
+  formatPercent,
+  formatSpeed,
+  type FfmpegDownloadProgress,
+} from "../../lib/ffmpegDownload";
 
 type SettingsNavId =
   | "general"
@@ -69,8 +76,8 @@ export function SettingsWindow() {
   const [ffmpegError, setFfmpegError] = useState<string | null>(null);
   const [ffmpegDownload, setFfmpegDownload] = useState<{
     state: "idle" | "downloading" | "done" | "error";
-    percent: number;
-  }>({ state: "idle", percent: 0 });
+    progress: FfmpegDownloadProgress | null;
+  }>({ state: "idle", progress: null });
 
   // Lets the FFmpeg HUD prompt drop the user straight on the fix.
   useEffect(() => {
@@ -114,12 +121,12 @@ export function SettingsWindow() {
 
   async function handleDownloadFfmpeg() {
     setFfmpegError(null);
-    setFfmpegDownload({ state: "downloading", percent: 0 });
+    setFfmpegDownload({ state: "downloading", progress: null });
     try {
       await invoke("download_ffmpeg");
     } catch (e) {
       setFfmpegError(String(e));
-      setFfmpegDownload({ state: "error", percent: 0 });
+      setFfmpegDownload({ state: "error", progress: null });
     }
   }
 
@@ -163,27 +170,35 @@ export function SettingsWindow() {
 
   // FFmpeg download runs in Rust and reports back over events.
   useEffect(() => {
-    const unlistenProgress = listen<any>("ffmpeg-download-progress", (e) => {
-      const pct = Math.round(e.payload?.percent ?? 0);
-      setFfmpegDownload({ state: "downloading", percent: pct });
+    const unlistenProgress = listen<FfmpegDownloadProgress>(
+      "ffmpeg-download-progress",
+      (e) => setFfmpegDownload({ state: "downloading", progress: e.payload })
+    );
+
+    // A failed mirror is followed by another attempt; reset so the bar does not
+    // carry the previous attempt's totals into the next one.
+    const unlistenAttempt = listen<any>("ffmpeg-download-attempt", () => {
+      setFfmpegDownload({ state: "downloading", progress: null });
+      setFfmpegError(null);
     });
 
     const unlistenDone = listen<any>("ffmpeg-download-finished", async (e) => {
       if (e.payload?.ok) {
-        setFfmpegDownload({ state: "done", percent: 100 });
+        setFfmpegDownload({ state: "done", progress: null });
         setFfmpegError(null);
       } else {
-        setFfmpegDownload({ state: "error", percent: 0 });
+        setFfmpegDownload({ state: "error", progress: null });
         setFfmpegError(e.payload?.error ?? "The FFmpeg download failed.");
       }
       await refreshFfmpegStatus();
     });
 
     return () => {
-      unlistenProgress.then((fn) => fn());
-      unlistenDone.then((fn) => fn());
-    };
-  }, []);
+unlistenProgress.then((fn) => fn());
+        unlistenAttempt.then((fn) => fn());
+        unlistenDone.then((fn) => fn());
+      };
+    }, []);
 
   // Load initial settings and backend statuses
   useEffect(() => {
@@ -1095,7 +1110,7 @@ if (!settings) {
                     className="text-xs font-medium px-3 py-1.5 rounded-md bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-40 transition-colors"
                   >
                     {ffmpegDownload.state === "downloading"
-                      ? `Downloading ${ffmpegDownload.percent}%`
+                      ? `Downloading ${formatPercent(ffmpegDownload.progress?.fraction)}%`
                       : "Download"}
                   </button>
 
@@ -1123,11 +1138,38 @@ if (!settings) {
                 </div>
 
                 {ffmpegDownload.state === "downloading" && (
-                  <div className="h-1 w-full rounded-full bg-overlay overflow-hidden">
+                  <div className="pl-1 space-y-1">
                     <div
-                      className="h-full bg-accent transition-[width] duration-200"
-                      style={{ width: `${ffmpegDownload.percent}%` }}
-                    />
+                      className="h-1 w-full rounded-full bg-overlay overflow-hidden"
+                      role="progressbar"
+                      aria-valuenow={formatPercent(ffmpegDownload.progress?.fraction)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label="FFmpeg download progress"
+                    >
+                      <div
+                        className="h-full bg-accent transition-[width] duration-150 ease-out"
+                        style={{
+                          width: `${Math.max(
+                            2,
+                            formatPercent(ffmpegDownload.progress?.fraction)
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    {/* Only shown once the server reports a size and a rate. */}
+                    {ffmpegDownload.progress?.total ? (
+                      <p className="text-[11px] text-text-muted font-mono tabular-nums">
+                        {formatBytes(ffmpegDownload.progress.received)} of{" "}
+                        {formatBytes(ffmpegDownload.progress.total)}
+                        {ffmpegDownload.progress.bytesPerSec
+                          ? ` — ${formatSpeed(ffmpegDownload.progress.bytesPerSec)}`
+                          : ""}
+                        {formatEta(ffmpegDownload.progress.etaSecs)
+                          ? ` — ${formatEta(ffmpegDownload.progress.etaSecs)}`
+                          : ""}
+                      </p>
+                    ) : null}
                   </div>
                 )}
 

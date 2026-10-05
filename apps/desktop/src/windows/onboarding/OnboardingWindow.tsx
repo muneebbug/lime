@@ -5,6 +5,13 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { motion } from "motion/react";
 import { Check, Download, Loader2, FolderOpen, ArrowLeft, ArrowRight } from "lucide-react";
 import { WindowFrame, LimeLogo } from "../../ui/WheelUI";
+import {
+  formatBytes,
+  formatEta,
+  formatPercent,
+  formatSpeed,
+  type FfmpegDownloadProgress,
+} from "../../lib/ffmpegDownload";
 
 /**
  * First-run setup.
@@ -35,8 +42,10 @@ export function OnboardingWindow() {
   const [error, setError] = useState<string | null>(null);
   const [download, setDownload] = useState<{
     state: "idle" | "downloading" | "error";
-    percent: number;
-  }>({ state: "idle", percent: 0 });
+    progress: FfmpegDownloadProgress | null;
+    /** Which mirror is serving the file, or served it. */
+    mirror: string | null;
+  }>({ state: "idle", progress: null, mirror: null });
 
   const refreshFfmpeg = useCallback(async () => {
     try {
@@ -54,21 +63,31 @@ export function OnboardingWindow() {
   }, [refreshFfmpeg]);
 
   useEffect(() => {
-    const onProgress = listen<any>("ffmpeg-download-progress", (e) =>
-      setDownload({ state: "downloading", percent: Math.round(e.payload?.percent ?? 0) })
+    const onProgress = listen<FfmpegDownloadProgress>(
+      "ffmpeg-download-progress",
+      (e) => setDownload({ state: "downloading", progress: e.payload, mirror: null })
+    );
+    const onAttempt = listen<{ mirror: string; label: string }>(
+      "ffmpeg-download-attempt",
+      (e) => {
+        // A new mirror starts from zero. Keeping the previous attempt's totals on
+        // screen until the first byte arrives made the bar appear to jump back.
+        setDownload({ state: "downloading", progress: null, mirror: e.payload?.mirror ?? null });
+      }
     );
     const onDone = listen<any>("ffmpeg-download-finished", async (e) => {
       if (e.payload?.ok) {
-        setDownload({ state: "idle", percent: 100 });
+        setDownload({ state: "idle", progress: null, mirror: e.payload?.mirror ?? null });
         setError(null);
       } else {
-        setDownload({ state: "error", percent: 0 });
+        setDownload({ state: "error", progress: null, mirror: null });
         setError(e.payload?.error ?? "The download did not finish.");
       }
       refreshFfmpeg();
     });
     return () => {
       onProgress.then((f) => f());
+      onAttempt.then((f) => f());
       onDone.then((f) => f());
     };
   }, [refreshFfmpeg]);
@@ -211,35 +230,73 @@ export function OnboardingWindow() {
             </div>
           ) : (
             <>
-              <button
-                onClick={async () => {
-                  setError(null);
-                  setDownload({ state: "downloading", percent: 0 });
-                  await invoke("download_ffmpeg");
-                }}
-                disabled={download.state === "downloading"}
-                className="w-full flex items-center justify-center gap-2 rounded-[10px] border border-accent/40 bg-accent/10 text-accent hover:bg-accent/15 disabled:opacity-50 transition-colors py-2.5 text-[13px] font-medium"
-              >
-                {download.state === "downloading" ? (
-                  <>
-                    <Loader2 size={15} className="animate-spin" />
-                    Downloading {download.percent}%
-                  </>
-                ) : (
-                  <>
-                    <Download size={15} />
-                    Download FFmpeg
-                  </>
-                )}
-              </button>
+              {download.state === "downloading" ? (
+                // Progress replaces the button while running, so the download
+                // cannot be started twice and has room for size, speed and ETA.
+                <div className="rounded-[10px] border border-accent/30 bg-accent/[0.06] px-4 py-3">
+                  <div className="flex items-center justify-between gap-3 mb-2">
+                    <span className="flex items-center gap-2 text-[13px] font-medium text-accent">
+                      <Loader2 size={14} className="animate-spin" />
+                      Downloading FFmpeg
+                    </span>
+                    <span className="font-mono text-[12px] text-accent tabular-nums">
+                      {formatPercent(download.progress?.fraction)}%
+                    </span>
+                  </div>
 
-              {download.state === "downloading" && (
-                <div className="h-1 w-full rounded-full bg-line-subtle overflow-hidden">
                   <div
-                    className="h-full bg-accent transition-[width] duration-200"
-                    style={{ width: `${download.percent}%` }}
-                  />
+                    className="h-1.5 w-full rounded-full bg-line-subtle overflow-hidden"
+                    role="progressbar"
+                    aria-valuenow={formatPercent(download.progress?.fraction)}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="FFmpeg download progress"
+                  >
+                    <div
+                      className="h-full bg-accent rounded-full transition-[width] duration-150 ease-out"
+                      style={{
+                        width: `${Math.max(
+                          2,
+                          formatPercent(download.progress?.fraction)
+                        )}%`,
+                      }}
+                    />
+                  </div>
+
+                  <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-text-muted tabular-nums">
+                    <span className="font-mono">
+                      {formatBytes(download.progress?.received ?? 0)}
+                      {download.progress?.total ? ` of ${formatBytes(download.progress.total)}` : ""}
+                    </span>
+                    <span className="flex items-center gap-2">
+                      {download.progress?.bytesPerSec ? (
+                        <span className="font-mono">
+                          {formatSpeed(download.progress.bytesPerSec)}
+                        </span>
+                      ) : null}
+                      {formatEta(download.progress?.etaSecs) ? (
+                        <span>{formatEta(download.progress?.etaSecs)}</span>
+                      ) : null}
+                    </span>
+                  </div>
                 </div>
+              ) : (
+<button
+                  onClick={async () => {
+                    setError(null);
+                    setDownload({ state: "downloading", progress: null, mirror: null });
+                    try {
+                      await invoke("download_ffmpeg");
+                    } catch (e) {
+                      setDownload({ state: "error", progress: null, mirror: null });
+                      setError(String(e));
+                    }
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-[10px] border border-accent/40 bg-accent/10 text-accent hover:bg-accent/15 transition-colors py-2.5 text-[13px] font-medium"
+                >
+                  <Download size={15} />
+                  Download FFmpeg
+                </button>
               )}
 
               <button
