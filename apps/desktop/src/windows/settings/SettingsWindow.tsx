@@ -28,6 +28,8 @@ import {
   WheelButton,
   SettingRow,
   SettingSection,
+  StatusPill,
+  PathRow,
 } from "../../ui/WheelUI";
 import {
   formatBytes,
@@ -1076,71 +1078,43 @@ if (!settings) {
           )}
 
 
-          {/* TAB 6: ENGINES */}
+{/* TAB 6: ENGINES */}
           {activeTab === "engines" && (
             <div className="w-full">
-              <SettingSection
-                first
-                title="FFmpeg"
-                description="Needed to turn video and audio into other formats, and to make high quality GIFs. Converting images does not need it."
-              >
+              <SettingSection first title="FFmpeg">
                 <SettingRow
-                  title="Status"
+                  title="Ready"
                   description={
                     ffmpegStatus?.installed
-                      ? ffmpegStatus.version || "Ready"
+                      ? `Version ${ffmpegStatus.version ?? "unknown"}`
                       : "Not found on this computer"
                   }
                 >
-                  <span
-                    className={`text-xs font-medium px-2.5 py-1 rounded-md ${
-                      ffmpegStatus?.installed
-                        ? "text-positive bg-positive-soft"
-                        : "text-caution bg-caution-soft"
-                    }`}
-                  >
-                    {ffmpegStatus?.installed ? "Ready" : "Missing"}
-                  </span>
+                  <StatusPill ready={!!ffmpegStatus?.installed} />
                 </SettingRow>
+              </SettingSection>
 
-                <div className="flex items-center gap-2 pl-1">
-                  <button
-                    onClick={() => void handleDownloadFfmpeg()}
-                    disabled={ffmpegDownload.state === "downloading"}
-                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-40 transition-colors"
-                  >
-                    {ffmpegDownload.state === "downloading"
-                      ? `Downloading ${formatPercent(ffmpegDownload.progress?.fraction)}%`
-                      : "Download"}
-                  </button>
+              {/* Download progress lives in its own section rather than
+                  squeezed under the button row, so the numbers have room to
+                  stay on one line while it runs. */}
+              {ffmpegDownload.state === "downloading" && (
+                <SettingSection title="Downloading">
+                  <div className="px-4 py-3 space-y-2">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-[13px] text-text font-mono tabular-nums">
+                        {formatBytes(ffmpegDownload.progress?.received ?? 0)}
+                        <span className="text-text-muted">
+                          {" of "}
+                          {formatBytes(ffmpegDownload.progress?.total ?? 0)}
+                        </span>
+                      </span>
+                      <span className="text-[13px] text-text font-mono tabular-nums shrink-0">
+                        {formatPercent(ffmpegDownload.progress?.fraction)}%
+                      </span>
+                    </div>
 
-                  <button
-                    onClick={() => void handleLocateFfmpeg()}
-                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-overlay-faint hover:bg-overlay transition-colors"
-                  >
-                    Choose a file
-                  </button>
-
-                  <button
-                    onClick={() => void handleClearFfmpegPath()}
-                    disabled={!ffmpegStatus?.custom_path}
-                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-overlay-faint hover:bg-overlay disabled:opacity-30 transition-colors"
-                  >
-                    Forget that file
-                  </button>
-
-                  <button
-                    onClick={() => void invoke("open_onboarding")}
-                    className="text-xs font-medium px-3 py-1.5 rounded-md bg-overlay-faint hover:bg-overlay transition-colors"
-                  >
-                    Run setup again
-                  </button>
-                </div>
-
-                {ffmpegDownload.state === "downloading" && (
-                  <div className="pl-1 space-y-1">
                     <div
-                      className="h-1 w-full rounded-full bg-overlay overflow-hidden"
+                      className="h-1.5 w-full rounded-full bg-overlay overflow-hidden"
                       role="progressbar"
                       aria-valuenow={formatPercent(ffmpegDownload.progress?.fraction)}
                       aria-valuemin={0}
@@ -1148,7 +1122,7 @@ if (!settings) {
                       aria-label="FFmpeg download progress"
                     >
                       <div
-                        className="h-full bg-accent transition-[width] duration-150 ease-out"
+                        className="h-full bg-accent rounded-full transition-[width] duration-150 ease-out"
                         style={{
                           width: `${Math.max(
                             2,
@@ -1157,45 +1131,97 @@ if (!settings) {
                         }}
                       />
                     </div>
-                    {/* Only shown once the server reports a size and a rate. */}
-                    {ffmpegDownload.progress?.total ? (
-                      <p className="text-[11px] text-text-muted font-mono tabular-nums">
-                        {formatBytes(ffmpegDownload.progress.received)} of{" "}
-                        {formatBytes(ffmpegDownload.progress.total)}
-                        {ffmpegDownload.progress.bytesPerSec
-                          ? ` — ${formatSpeed(ffmpegDownload.progress.bytesPerSec)}`
-                          : ""}
-                        {formatEta(ffmpegDownload.progress.etaSecs)
-                          ? ` — ${formatEta(ffmpegDownload.progress.etaSecs)}`
-                          : ""}
-                      </p>
+
+                    {/* Only meaningful once the server reports a rate. */}
+                    {ffmpegDownload.progress?.bytesPerSec ? (
+                      <div className="flex items-center justify-between gap-3 text-[11px] text-text-muted tabular-nums">
+                        <span className="font-mono">
+                          {formatSpeed(ffmpegDownload.progress.bytesPerSec)}
+                        </span>
+                        <span>
+                          {formatEta(ffmpegDownload.progress.etaSecs) ?? "Estimating time left"}
+                        </span>
+                      </div>
                     ) : null}
                   </div>
-                )}
+                </SettingSection>
+              )}
 
-                {ffmpegError && (
-                  <p className="text-xs text-negative leading-relaxed">{ffmpegError}</p>
-                )}
+              <SettingSection title="Setup">
+                {/* Actions that repair the install. Left-aligned and evenly
+                    spaced, rather than a dense strip of mixed-weight buttons. */}
+                <div className="flex items-center gap-2 px-4 py-3">
+                  <button
+                    onClick={() => void handleDownloadFfmpeg()}
+                    disabled={ffmpegDownload.state === "downloading"}
+                    className="text-[12px] font-medium px-3 py-[7px] rounded-[7px] bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-40 transition-colors"
+                  >
+                    {ffmpegDownload.state === "downloading" ? "Downloading" : "Download"}
+                  </button>
 
-                {ffmpegStatus?.custom_path_stale && (
-                  <p className="text-xs text-caution leading-relaxed">
-                    The file you chose is no longer there, so Lime is looking
-                    somewhere else.
-                  </p>
-                )}
+                  <button
+                    onClick={() => void handleLocateFfmpeg()}
+                    className="text-[12px] font-medium px-3 py-[7px] rounded-[7px] bg-overlay-faint hover:bg-overlay transition-colors"
+                  >
+                    Choose a file
+                  </button>
 
-                {ffmpegStatus?.installed && ffmpegStatus?.path && (
-                  <p className="text-[11px] text-text/35 font-mono truncate">
-                    Using: {ffmpegStatus.path}
-                  </p>
-                )}
+                  {ffmpegStatus?.custom_path && (
+                    <button
+                      onClick={() => void handleClearFfmpegPath()}
+                      className="text-[12px] font-medium px-3 py-[7px] rounded-[7px] bg-overlay-faint hover:bg-overlay transition-colors"
+                    >
+                      Forget that file
+                    </button>
+                  )}
 
-                {ffmpegStatus?.managed_dir && (
-                  <p className="text-[11px] text-text/35 font-mono truncate">
-                    Downloads go to: {ffmpegStatus.managed_dir}
-                  </p>
-                )}
+                  <button
+                    onClick={() => void invoke("open_onboarding")}
+                    className="text-[12px] px-3 py-[7px] rounded-[7px] text-text-muted hover:text-text transition-colors ml-auto"
+                  >
+                    Run setup again
+                  </button>
+                </div>
+
+                {/* Paths are detail, not settings: kept below the actions, and
+                    only shown when they tell the user something. */}
+                {(ffmpegStatus?.installed && ffmpegStatus?.path) ||
+                (ffmpegStatus?.installed && ffmpegStatus?.managed_dir) ? (
+                  <div className="px-4 pb-3 -mt-1 space-y-1">
+                    {ffmpegStatus?.installed && ffmpegStatus?.path && (
+                      <PathRow label="In use" value={ffmpegStatus.path} />
+                    )}
+                    {ffmpegStatus?.installed && ffmpegStatus?.managed_dir && (
+                      <PathRow label="Downloads to" value={ffmpegStatus.managed_dir} />
+                    )}
+                  </div>
+                ) : null}
               </SettingSection>
+
+              {/* Problems and errors sit in their own section so they are never
+                  mistaken for part of the controls above. */}
+              {(ffmpegError || ffmpegStatus?.custom_path_stale) && (
+                <SettingSection title="Needs attention">
+                  <div className="px-4 py-3 space-y-1.5">
+                    {ffmpegStatus?.custom_path_stale && (
+                      <p className="text-[12px] text-caution leading-relaxed">
+                        The file you chose is no longer there, so Lime is looking
+                        somewhere else.
+                      </p>
+                    )}
+                    {ffmpegError && (
+                      <p className="text-[12px] text-negative leading-relaxed">
+                        {ffmpegError}
+                      </p>
+                    )}
+                  </div>
+                </SettingSection>
+              )}
+
+<p className="text-[11px] text-text-muted leading-relaxed mt-3">
+                FFmpeg is needed to turn video and audio into other formats, and to
+                make high quality GIFs. Converting images does not need it.
+              </p>
             </div>
           )}
 

@@ -378,6 +378,38 @@ export function WheelButton({ children, onClick, variant = "secondary", disabled
   );
 }
 
+/** Small state badge, e.g. Ready / Missing. */
+export function StatusPill({ ready }: { ready: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-[3px] rounded-full ${
+        ready ? "text-positive bg-positive-soft" : "text-caution bg-caution-soft"
+      }`}
+    >
+      <span
+        className={`w-1.5 h-1.5 rounded-full ${ready ? "bg-positive" : "bg-caution"}`}
+        aria-hidden="true"
+      />
+      {ready ? "Ready" : "Missing"}
+    </span>
+  );
+}
+
+/** A labelled, truncated path. Long paths must not break the row layout. */
+export function PathRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline gap-2 min-w-0">
+      <span className="text-[11px] text-text-muted shrink-0">{label}</span>
+      <span
+        className="text-[11px] text-text-muted/70 font-mono truncate"
+        title={value}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 /**
  * Setting row.
  *

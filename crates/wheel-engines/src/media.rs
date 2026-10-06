@@ -103,7 +103,34 @@ pub fn probe_ffmpeg(path: &Path) -> Option<String> {
     if first.is_empty() {
         None
     } else {
-        Some(first.to_string())
+        Some(short_version(first))
+    }
+}
+
+/// Reduce FFmpeg's banner to just the build name.
+///
+/// `ffmpeg -version` prints a whole copyright line, such as
+/// `ffmpeg version N-127203-ga35c879992-20261005 Copyright (c) 2000-2026 the
+/// FFmpeg developers`. That is a log line, not something to show in a UI, and it
+/// wraps badly in a settings row. Keep the release name only.
+pub fn short_version(banner: &str) -> String {
+    // Everything up to the first `Copyright`/`built with` marker.
+    let head = banner
+        .split(" Copyright")
+        .next()
+        .unwrap_or(banner)
+        .split(" built with")
+        .next()
+        .unwrap_or(banner)
+        .trim();
+
+    // Drop the leading `ffmpeg version ` prefix if present.
+    let name = head.strip_prefix("ffmpeg version ").unwrap_or(head).trim();
+
+    if name.is_empty() {
+        banner.trim().to_string()
+    } else {
+        name.to_string()
     }
 }
 
@@ -677,6 +704,34 @@ mod tests {
             assert!(status.path.is_none());
             assert!(status.source.is_none());
         }
+    }
+
+    #[test]
+    fn test_short_version_strips_the_copyright_banner() {
+        // The real first line from `ffmpeg -version` on a nightly build. Shown
+        // verbatim it overflowed the settings row and read as a log line.
+        let banner = "ffmpeg version N-127203-ga35c879992-20261005 Copyright (c) 2000-2026 the FFmpeg developers";
+        assert_eq!(short_version(banner), "N-127203-ga35c879992-20261005");
+
+        // A release build has a plain version number.
+        assert_eq!(
+            short_version("ffmpeg version 6.1.1 Copyright (c) 2000-2024"),
+            "6.1.1"
+        );
+
+        // A build that also reports its configuration.
+        assert_eq!(
+            short_version("ffmpeg version 7.0 built with gcc 13"),
+            "7.0"
+        );
+    }
+
+    #[test]
+    fn test_short_version_leaves_unexpected_input_intact() {
+        // Never lose information: if nothing matches, keep what we were given.
+        assert_eq!(short_version("something else entirely"), "something else entirely");
+        assert_eq!(short_version("ffmpeg version 6.0"), "6.0");
+        assert_eq!(short_version("  ffmpeg version 6.0  "), "6.0");
     }
 
     #[test]
