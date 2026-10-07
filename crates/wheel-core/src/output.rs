@@ -25,14 +25,18 @@ pub fn resolve_output_path(
         .unwrap_or("")
         .to_lowercase();
 
+    let alongside_source = source
+        .parent()
+        .unwrap_or(Path::new("."))
+        .to_path_buf();
+
     let parent = match policy {
         OutputPolicy::FixedFolder => fixed_folder
             .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| source.parent().unwrap_or(Path::new(".")).to_path_buf()),
-        _ => source
-            .parent()
-            .unwrap_or(Path::new("."))
-            .to_path_buf(),
+            .unwrap_or_else(|| alongside_source.clone()),
+        // Clipboard has no destination directory; the path is not used.
+        OutputPolicy::Clipboard => alongside_source.clone(),
+        OutputPolicy::NextToSource => alongside_source.clone(),
     };
 
     // Build base name
@@ -83,5 +87,50 @@ mod tests {
         let src = Path::new("C:/Users/test/photo.png");
         let out = resolve_output_path(src, "png", "-compressed", &OutputPolicy::NextToSource, None, false);
         assert_eq!(out.file_stem().unwrap().to_str().unwrap(), "photo-compressed");
+    }
+
+    #[test]
+    fn test_fixed_folder_saves_into_the_chosen_folder() {
+        let src = Path::new("C:/Users/test/pictures/photo.png");
+        let chosen = Path::new("D:/Users/test/Desktop");
+
+        let out = resolve_output_path(
+            src,
+            "webp",
+            "",
+            &OutputPolicy::FixedFolder,
+            Some(chosen),
+            false,
+        );
+
+        assert_eq!(out.parent().unwrap(), chosen);
+        assert_eq!(out.file_name().unwrap().to_str().unwrap(), "photo.webp");
+    }
+
+    #[test]
+    fn test_fixed_folder_without_a_path_falls_back_beside_the_source() {
+        // A cleared folder must not produce a bare relative name.
+        let src = Path::new("C:/Users/test/pictures/photo.png");
+
+        let out = resolve_output_path(src, "webp", "", &OutputPolicy::FixedFolder, None, false);
+
+        assert_eq!(out.parent().unwrap(), Path::new("C:/Users/test/pictures"));
+    }
+
+    #[test]
+    fn test_next_to_source_ignores_any_folder_argument() {
+        // Guard the contrast: NextToSource must not be swayed by a stale value.
+        let src = Path::new("C:/Users/test/pictures/photo.png");
+
+        let out = resolve_output_path(
+            src,
+            "webp",
+            "",
+            &OutputPolicy::NextToSource,
+            Some(Path::new("D:/somewhere/else")),
+            false,
+        );
+
+        assert_eq!(out.parent().unwrap(), Path::new("C:/Users/test/pictures"));
     }
 }

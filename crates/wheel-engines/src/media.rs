@@ -32,8 +32,6 @@ pub enum FfmpegSource {
     Bundled,
     /// Found on the system `PATH`.
     SystemPath,
-    /// Legacy `%LOCALAPPDATA%\Wheel\bin`, kept so upgrades from the old name work.
-    Legacy,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -158,8 +156,7 @@ pub fn get_ffmpeg_status(custom: Option<&str>) -> FfmpegStatus {
 
 /// Resolve `ffmpeg.exe` and report which rule matched.
 ///
-/// Order: user choice, Lime's own download, a bundled sidecar, the legacy
-/// directory, then `PATH`.
+/// Order: user choice, Lime's own download, a bundled sidecar, then `PATH`.
 pub fn resolve_ffmpeg(custom: Option<&str>) -> Option<(PathBuf, FfmpegSource, String)> {
     if let Some(p) = custom {
         let path = PathBuf::from(p);
@@ -190,18 +187,8 @@ pub fn resolve_ffmpeg(custom: Option<&str>) -> Option<(PathBuf, FfmpegSource, St
         }
     }
 
-    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        let legacy = PathBuf::from(&local_app_data)
-            .join("Wheel")
-            .join("bin")
-            .join("ffmpeg.exe");
-        if let Some(version) = probe_ffmpeg(&legacy) {
-            return Some((legacy, FfmpegSource::Legacy, version));
-        }
-    }
-
     if let Some(version) = probe_ffmpeg(Path::new("ffmpeg")) {
-        return Some((PathBuf::from("ffmpeg"), FfmpegSource::SystemPath, version));
+        return Some((Path::new("ffmpeg").to_path_buf(), FfmpegSource::SystemPath, version));
     }
 
     None

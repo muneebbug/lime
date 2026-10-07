@@ -34,53 +34,53 @@ pub async fn save_settings(
     state: State<'_, AppState>,
     settings: WheelSettings,
 ) -> Result<(), String> {
-    let migrated = settings.migrate();
+    let updated = settings;
 
     let old_settings = {
         let mut lock = state.settings.lock().await;
-        if *lock == migrated {
+        if *lock == updated {
             return Ok(());
         }
         let old = lock.clone();
-        *lock = migrated.clone();
+        *lock = updated.clone();
         old
     };
 
     // Immediately update live Win32 hooks at runtime without requiring an app relaunch
-    if migrated.trigger.movement_threshold_px != old_settings.trigger.movement_threshold_px {
-        wheel_win::hooks::set_threshold(migrated.trigger.movement_threshold_px as i32);
+    if updated.trigger.movement_threshold_px != old_settings.trigger.movement_threshold_px {
+        wheel_win::hooks::set_threshold(updated.trigger.movement_threshold_px as i32);
     }
-    if migrated.trigger.always_show != old_settings.trigger.always_show {
-        wheel_win::hooks::set_always_show(migrated.trigger.always_show);
+    if updated.trigger.always_show != old_settings.trigger.always_show {
+        wheel_win::hooks::set_always_show(updated.trigger.always_show);
     }
-    if migrated.trigger.modifier != old_settings.trigger.modifier {
-        wheel_win::hooks::set_modifier(migrated.trigger.modifier.clone());
+    if updated.trigger.modifier != old_settings.trigger.modifier {
+        wheel_win::hooks::set_modifier(updated.trigger.modifier.clone());
     }
-    if migrated.trigger.paused != old_settings.trigger.paused {
-        wheel_win::hooks::set_paused(migrated.trigger.paused);
+    if updated.trigger.paused != old_settings.trigger.paused {
+        wheel_win::hooks::set_paused(updated.trigger.paused);
     }
 
     // Synchronize Windows startup registration (Launch at Windows Login) ONLY IF CHANGED
-    if migrated.general.launch_at_login != old_settings.general.launch_at_login {
-        if let Err(e) = wheel_win::shell::set_launch_at_login(migrated.general.launch_at_login) {
+    if updated.general.launch_at_login != old_settings.general.launch_at_login {
+        if let Err(e) = wheel_win::shell::set_launch_at_login(updated.general.launch_at_login) {
             tracing::warn!("Failed to synchronize launch at login: {}", e);
         }
     }
 
     // Synchronize live audio effects toggle
-    crate::sound::set_sound_enabled(migrated.wheel_ui.sound_enabled);
+    crate::sound::set_sound_enabled(updated.wheel_ui.sound_enabled);
 
     // Republish the FFmpeg override so conversions in flight pick up a path the
     // user just chose or cleared, without needing a relaunch.
     wheel_engines::media::set_custom_ffmpeg_path(
-        migrated.ffmpeg.custom_path.as_ref().map(std::path::PathBuf::from),
+        updated.ffmpeg.custom_path.as_ref().map(std::path::PathBuf::from),
     );
 
     // Broadcast settings update to frontend windows
-    let _ = app.emit("settings-updated", &migrated);
+    let _ = app.emit("settings-updated", &updated);
 
     let settings_path = crate::settings_file_path();
-    if let Err(e) = migrated.save_to_path(&settings_path) {
+    if let Err(e) = updated.save_to_path(&settings_path) {
         tracing::warn!("Failed to persist settings to disk at {:?}: {}", settings_path, e);
     } else {
         info!("Settings saved and persisted to disk at {:?}", settings_path);
@@ -334,21 +334,15 @@ async fn run_instant_action(
         out
     };
 
-    let chosen_folder: Option<PathBuf> = if output_settings.policy == wheel_core::OutputPolicy::AskEachTime {
-        tokio::task::spawn_blocking(wheel_win::shell::pick_folder)
-            .await
-            .ok()
-            .and_then(|r| r.ok())
-            .flatten()
-    } else {
-        None
-    };
+    let fixed_folder = output_settings
+        .fixed_folder
+        .as_ref()
+        .map(std::path::Path::new);
 
-    let effective_folder = if output_settings.policy == wheel_core::OutputPolicy::AskEachTime {
-        chosen_folder.as_deref()
-    } else {
-        output_settings.fixed_folder.as_ref().map(std::path::Path::new)
-    };
+    // The one destination for every output below. "Ask every time" was removed
+    // because a dialog raised from this background job could not be trusted to
+    // come forward or to return a value, so the folder is now always a setting.
+    let effective_folder = fixed_folder;
 
     if is_trim {
         for input in &job.inputs {
@@ -971,12 +965,59 @@ pub async fn apply_status_position(
 
 /// Prompt the user to pick a folder using the native Windows dialog
 #[tauri::command]
-pub async fn pick_folder() -> Result<Option<String>, String> {
-    tokio::task::spawn_blocking(wheel_win::shell::pick_folder)
-        .await
-        .map_err(|e| e.to_string())?
-        .map(|opt| opt.map(|p| p.to_string_lossy().to_string()))
-        .map_err(|e| e.to_string())
+pub async fn pick_folder(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    let owner_hwnd = owner_window_handle(&app);
+    if let Some(hwnd) = owner_hwnd {
+        #[cfg(target_os = "windows")]
+        wheel_win::force_focus_window(hwnd);
+    }
+
+    tokio::task::spawn_blocking(move || {
+        wheel_win::shell::pick_folder_owned(owner_hwnd, "Choose a folder")
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map(|opt| opt.map(|p| p.to_string_lossy().to_string()))
+    .map_err(|e| e.to_string())
+}
+
+/// The window a native dialog should belong to.
+///
+/// Prefers the overlay, falling back to Settings, so the dialog always has an
+/// owner. A dialog with no owner is unowned: Windows gives it no z-order
+/// relationship to us, which is why it used to open behind the app and steal no
+/// focus.
+fn owner_window_handle(app: &tauri::AppHandle) -> Option<isize> {
+    #[cfg(target_os = "windows")]
+    {
+        use tauri::Manager;
+
+        let visible = |label: &str| {
+            app.get_webview_window(label)
+                .map(|w| w.is_visible().unwrap_or(false))
+                .unwrap_or(false)
+        };
+
+        // The overlay is what the user was just dragging from; Settings is the
+        // fallback when the dialog comes from a button in the app itself.
+        let label = if visible("overlay") {
+            "overlay"
+        } else if visible("settings") {
+            "settings"
+        } else {
+            "overlay"
+        };
+
+        return app
+            .get_webview_window(label)
+            .and_then(|w| w.hwnd().ok())
+            .map(|hwnd| hwnd.0 as isize);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = app;
+        None
+    }
 }
 
 /// Open the %LOCALAPPDATA%\Lime data directory in Windows Explorer

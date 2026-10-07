@@ -872,7 +872,6 @@ if (!settings) {
                     options={[
                       { label: "Next to Source", value: "next_to_source" },
                       { label: "Fixed Folder", value: "fixed_folder" },
-                      { label: "Ask Each Time", value: "ask_each_time" },
                       { label: "Clipboard", value: "clipboard" },
                     ]}
                     onChange={(val) => {

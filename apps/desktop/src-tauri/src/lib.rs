@@ -16,22 +16,13 @@ pub mod sound;
 /// The name of the app — single source of truth.
 pub const APP_NAME: &str = wheel_core::action::APP_NAME;
 
-/// Resolve the on-disk settings file.
-///
-/// Prefers the current `Lime` directory but still points at the legacy `Wheel`
-/// one, so an upgrade keeps reading the configuration it already wrote.
+/// Resolve the on-disk settings file: always the `Lime` directory.
 pub fn settings_file_path() -> std::path::PathBuf {
     let local = std::env::var("LOCALAPPDATA")
         .or_else(|_| std::env::var("APPDATA"))
         .unwrap_or_else(|_| ".".to_string());
-    let local = std::path::PathBuf::from(local);
 
-    let lime_dir = local.join("Lime");
-    if lime_dir.exists() {
-        lime_dir.join("settings.json")
-    } else {
-        local.join("Wheel").join("settings.json")
-    }
+    std::path::PathBuf::from(local).join("Lime").join("settings.json")
 }
 
 /// Global application state accessible from Tauri commands.

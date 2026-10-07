@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-/// Versioned settings schema.
-/// Increment SETTINGS_VERSION when making breaking changes; add a migration.
-pub const SETTINGS_VERSION: u32 = 2;
-
+/// Settings schema.
+///
+/// Lime has not shipped to users, so there is no migration story: the schema is
+/// simply edited in place, and a settings file that no longer parses falls back
+/// to defaults. Add a migration only once there are real installs to preserve.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct WheelSettings {
     #[serde(default = "default_version")]
@@ -21,6 +22,9 @@ pub struct WheelSettings {
     #[serde(default = "default_presets")]
     pub presets: Vec<ActionPreset>,
 }
+
+/// Current schema version, written so a future change can spot old files.
+pub const SETTINGS_VERSION: u32 = 2;
 
 fn default_version() -> u32 {
     SETTINGS_VERSION
@@ -41,27 +45,19 @@ impl Default for WheelSettings {
 }
 
 impl WheelSettings {
-    /// Apply schema migrations to bring old settings up to the current version.
-    pub fn migrate(mut self) -> Self {
-        // Example migration: v0 -> v1
-        // if self.version == 0 { ... self.version = 1; }
-        if let Some(legacy) = self.output.preserve_metadata.take() {
-            self.output.metadata.images = legacy;
-        }
-        self.version = SETTINGS_VERSION;
-        if self.presets.is_empty() {
-            self.presets = default_presets();
-        }
-        self
-    }
-
     /// Load settings from a JSON file, or return default settings if the file does not exist.
     pub fn load_or_default<P: AsRef<std::path::Path>>(path: P) -> Self {
         let path = path.as_ref();
         if path.exists() {
             if let Ok(content) = std::fs::read_to_string(path) {
-                if let Ok(settings) = serde_json::from_str::<WheelSettings>(&content) {
-                    return settings.migrate();
+                if let Ok(mut settings) = serde_json::from_str::<WheelSettings>(&content) {
+                    // Stamp the current version so a file written by an older
+                    // build is recognisable later.
+                    settings.version = SETTINGS_VERSION;
+                    if settings.presets.is_empty() {
+                        settings.presets = default_presets();
+                    }
+                    return settings;
                 }
             }
         }
@@ -70,27 +66,18 @@ impl WheelSettings {
 
     /// Load settings and report whether this is a first run for onboarding.
     ///
-    /// Onboarding is a first-run experience, so it should only appear when there
-    /// is no history to speak of: no settings file, or one we could not parse. A
-    /// readable config means the user has been here before, even if it predates
-    /// the onboarding field, and ambushing them with a setup screen on upgrade
-    /// is worse than making the option available in Settings.
+    /// Onboarding is a first-run experience, so it appears when there is no
+    /// usable history: no settings file, or one we could not parse (in which case
+    /// the settings themselves have already fallen back to defaults).
     pub fn load_reporting_first_run<P: AsRef<std::path::Path>>(path: P) -> (Self, bool) {
         let path = path.as_ref();
-        let file_exists = path.exists();
+        let is_first_run = !path.exists()
+            || std::fs::read_to_string(path)
+                .ok()
+                .and_then(|content| serde_json::from_str::<WheelSettings>(&content).ok())
+                .is_none();
 
-        let stored_version = std::fs::read_to_string(path)
-            .ok()
-            .and_then(|content| serde_json::from_str::<serde_json::Value>(&content).ok())
-            .and_then(|value| value.get("version").and_then(|v| v.as_u64()));
-
-        let settings = Self::load_or_default(path);
-
-        // A file we cannot read is treated as a fresh install: better to offer
-        // setup than to leave someone with no route back into it.
-        let is_first_run = !file_exists || stored_version.is_none();
-
-        (settings, is_first_run)
+        (Self::load_or_default(path), is_first_run)
     }
 
     /// Save settings to a JSON file, creating parent directories if necessary.
@@ -309,7 +296,7 @@ impl StatusHorizontal {
 
 /// Radial wheel diameter preset. Stored as a name so the pixel geometry behind
 /// each option stays an implementation detail.
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum WheelSize {
     Small,
@@ -334,33 +321,6 @@ impl Default for WheelSize {
     }
 }
 
-/// Accepts the preset name in any casing, and also the raw 280-400px diameter
-/// written by older settings files so existing installs keep their other
-/// preferences instead of silently falling back to defaults on the next load.
-impl<'de> Deserialize<'de> for WheelSize {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum Repr {
-            Name(String),
-            LegacyPx(u32),
-        }
-
-        match Repr::deserialize(deserializer)? {
-            // Casing is normalised because the UI sends the enum's own
-            // capitalised variant names, while older files hold lowercase.
-            Repr::Name(name) => match name.trim().to_ascii_lowercase().as_str() {
-                "small" => Ok(WheelSize::Small),
-                "large" => Ok(WheelSize::Large),
-                _ => Ok(WheelSize::Medium),
-            },
-            Repr::LegacyPx(px) if px < 300 => Ok(WheelSize::Small),
-            Repr::LegacyPx(px) if px > 360 => Ok(WheelSize::Large),
-            Repr::LegacyPx(_) => Ok(WheelSize::Medium),
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Theme {
@@ -369,7 +329,7 @@ pub enum Theme {
     Dark,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum OutputPolicy {
     /// Save next to the source file (default)
@@ -377,10 +337,30 @@ pub enum OutputPolicy {
     NextToSource,
     /// Save to a fixed folder
     FixedFolder,
-    /// Ask every time (opens save dialog)
-    AskEachTime,
     /// Copy result to clipboard
     Clipboard,
+}
+
+/// Reads a policy, tolerating casing and separator differences.
+///
+/// Lime is unreleased, so nothing older needs migrating; this exists only so a
+/// hand-edited settings file cannot fail to parse and reset every preference.
+impl<'de> Deserialize<'de> for OutputPolicy {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let name = String::deserialize(deserializer)?;
+        let key: String = name
+            .trim()
+            .to_ascii_lowercase()
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric())
+            .collect();
+
+        Ok(match key.as_str() {
+            "fixedfolder" => OutputPolicy::FixedFolder,
+            "clipboard" => OutputPolicy::Clipboard,
+            _ => OutputPolicy::NextToSource,
+        })
+    }
 }
 
 /// Per-media-type metadata preservation.
@@ -424,10 +404,6 @@ pub struct OutputSettings {
     pub recycle_source: bool,
     #[serde(default)]
     pub metadata: MetadataSettings,
-    /// Legacy single metadata toggle. Only read to seed `metadata.images`
-    /// during migration; never written back out.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub preserve_metadata: Option<bool>,
 }
 
 impl Default for OutputSettings {
@@ -439,7 +415,6 @@ impl Default for OutputSettings {
             overwrite_source: false,
             recycle_source: false,
             metadata: MetadataSettings::default(),
-            preserve_metadata: None,
         }
     }
 }
@@ -522,11 +497,10 @@ mod tests {
 
     #[test]
     fn test_settings_without_the_new_fields_still_load() {
-        // An older settings.json has no onboarding_completed or ffmpeg key. It
-        // must still deserialize, and report onboarding as not-done so the
-        // launcher can tell a legacy file from a fresh one.
+        // A file with no `onboarding_completed` or `ffmpeg` key must still
+        // deserialize, so an absent key means "not done" rather than a parse error.
         let json = r#"{
-            "version": 1,
+            "version": 2,
             "general": {
                 "launch_at_login": false,
                 "language": "en",
@@ -536,7 +510,7 @@ mod tests {
             }
         }"#;
 
-        let parsed: WheelSettings = serde_json::from_str(json).expect("legacy file must parse");
+        let parsed: WheelSettings = serde_json::from_str(json).expect("file must parse");
         assert!(!parsed.general.onboarding_completed);
         assert!(parsed.ffmpeg.custom_path.is_none());
         assert_eq!(parsed.ffmpeg, FfmpegSettings::default());
@@ -557,26 +531,61 @@ mod tests {
     }
 
     #[test]
-    fn test_wheel_size_accepts_any_casing_on_the_way_in() {
-        // Settings written by hand, or by an older UI build that sent the Rust
-        // variant names verbatim, must not silently collapse to medium.
-        for (input, expected) in [
-            ("\"small\"", WheelSize::Small),
-            ("\"Small\"", WheelSize::Small),
-            ("\"SMALL\"", WheelSize::Small),
-            ("\" large \"", WheelSize::Large),
-            ("\"Large\"", WheelSize::Large),
-        ] {
-            assert_eq!(serde_json::from_str::<WheelSize>(input).unwrap(), expected, "for {input}");
+    fn test_wheel_size_rejects_values_it_does_not_know() {
+        // No compatibility shim: an unrecognised size is a broken file, and
+        // `load_or_default` falls back to defaults rather than guessing.
+        for input in ["\"huge\"", "\"\"", "280"] {
+            assert!(
+                serde_json::from_str::<WheelSize>(input).is_err(),
+                "expected {input} to be rejected"
+            );
         }
     }
 
     #[test]
-    fn test_wheel_size_accepts_legacy_pixel_values() {
-        // Older settings files stored a raw diameter instead of a name.
-        assert_eq!(serde_json::from_str::<WheelSize>("280").unwrap(), WheelSize::Small);
-        assert_eq!(serde_json::from_str::<WheelSize>("320").unwrap(), WheelSize::Medium);
-        assert_eq!(serde_json::from_str::<WheelSize>("400").unwrap(), WheelSize::Large);
+    fn test_unknown_output_policy_does_not_wipe_sibling_settings() {
+        // An unknown policy string falls back to the default policy, but the
+        // rest of the file is still read, so one bad value cannot silently reset
+        // every other preference.
+        let json = r#"{
+            "version": 2,
+            "general": { "launch_at_login": true, "language": "fr",
+                         "auto_update": false, "minimize_to_tray": true,
+                         "include_prereleases": true },
+            "output": {
+                "policy": "something_lime_never_wrote",
+                "fixed_folder": "C:/Users/test/Out",
+                "suffix": "_x",
+                "recycle_source": true,
+                "metadata": { "images": true, "audio": false, "video": true }
+            }
+        }"#;
+
+        let parsed: WheelSettings = serde_json::from_str(json).expect("file must parse");
+        assert_eq!(parsed.output.policy, OutputPolicy::NextToSource);
+        // Sibling settings must be intact, which is the whole point.
+        assert_eq!(parsed.output.fixed_folder.as_deref(), Some("C:/Users/test/Out"));
+        assert!(parsed.output.recycle_source);
+        assert!(parsed.general.launch_at_login);
+        assert_eq!(parsed.general.language, "fr");
+    }
+
+    #[test]
+    fn test_output_policy_round_trips_and_defaults() {
+        for policy in [
+            OutputPolicy::NextToSource,
+            OutputPolicy::FixedFolder,
+            OutputPolicy::Clipboard,
+        ] {
+            let json = serde_json::to_string(&policy).unwrap();
+            assert_eq!(serde_json::from_str::<OutputPolicy>(&json).unwrap(), policy);
+        }
+        assert_eq!(OutputPolicy::default(), OutputPolicy::NextToSource);
+        // Unknown values fall back rather than failing the file.
+        assert_eq!(
+            serde_json::from_str::<OutputPolicy>("\"something_new\"").unwrap(),
+            OutputPolicy::NextToSource
+        );
     }
 
     #[test]
@@ -632,7 +641,7 @@ mod tests {
 
         let (settings, first_run) = WheelSettings::load_reporting_first_run(&path);
         assert!(first_run);
-        assert_eq!(settings, WheelSettings::default().migrate());
+        assert_eq!(settings, WheelSettings::default());
 
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -658,11 +667,19 @@ mod tests {
     }
 
     #[test]
-    fn test_settings_migration() {
-        let mut settings = WheelSettings::default();
-        settings.version = 0;
-        let migrated = settings.migrate();
-        assert_eq!(migrated.version, SETTINGS_VERSION);
+    fn test_version_is_stamped_on_load() {
+        // There are no migrations while Lime is unreleased; a file written by an
+        // older build is simply restamped to the current schema version.
+        let dir = std::env::temp_dir().join("wheel_settings_version_stamp");
+        let _ = std::fs::create_dir_all(&dir);
+        let path = dir.join("settings.json");
+        std::fs::write(&path, br#"{ "version": 1, "general": { "language": "en" } }"#).unwrap();
+
+        let loaded = WheelSettings::load_or_default(&path);
+        assert_eq!(loaded.version, SETTINGS_VERSION);
+        assert_eq!(loaded.general.language, "en");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -699,65 +716,37 @@ mod tests {
     }
 
     #[test]
-    fn test_wheel_size_deserializes_legacy_pixel_diameter() {
-        // Pre-preset settings stored a raw 280-400px diameter; snap to nearest preset.
-        assert_eq!(
-            serde_json::from_str::<WheelSize>("280").expect("parse 280"),
-            WheelSize::Small
-        );
-        assert_eq!(
-            serde_json::from_str::<WheelSize>("320").expect("parse 320"),
-            WheelSize::Medium
-        );
-        assert_eq!(
-            serde_json::from_str::<WheelSize>("400").expect("parse 400"),
-            WheelSize::Large
-        );
-    }
-
-    #[test]
-    fn test_legacy_settings_file_keeps_other_preferences() {
-        // A settings.json written before the size preset must still load, not reset to defaults.
-        let legacy = r#"{
-            "version": 1,
-            "general": { "launch_at_login": true, "language": "en", "auto_update": false, "minimize_to_tray": true, "include_prereleases": false },
-            "trigger": { "modifier": "shift", "movement_threshold_px": 12, "always_show": false, "confirm_timeout_ms": 300, "paused": true },
-            "wheel_ui": { "slot_count": 8, "theme": "system", "animation_speed": 1.0, "reduced_motion": true, "size": 280, "corner_radius": 16, "sound_enabled": false, "context_filter_enabled": true },
-            "output": { "policy": "next_to_source", "fixed_folder": null, "suffix": "", "overwrite_source": false, "recycle_source": false, "preserve_metadata": true },
-            "presets": []
+    fn test_a_sparse_settings_file_fills_in_defaults() {
+        // Fields marked `#[serde(default)]` may be omitted from the JSON and fall
+        // back to their default instead of failing the parse, so a settings file
+        // written before a field existed is still usable.
+        let sparse = r#"{
+            "version": 2,
+            "general": {
+                "launch_at_login": true, "language": "fr",
+                "auto_update": false, "minimize_to_tray": true,
+                "include_prereleases": true
+            },
+            "wheel_ui": {
+                "slot_count": 8, "theme": "system", "animation_speed": 1.0,
+                "reduced_motion": true, "size": "large", "corner_radius": 16,
+                "sound_enabled": false, "context_filter_enabled": true
+            }
         }"#;
         let parsed: WheelSettings =
-            serde_json::from_str(legacy).expect("legacy settings should deserialize");
-        assert_eq!(parsed.wheel_ui.size, WheelSize::Small);
+            serde_json::from_str(sparse).expect("a sparse file should deserialize");
+
+        // What was written is kept.
         assert!(parsed.general.launch_at_login);
-        assert!(parsed.trigger.paused);
-        assert!(parsed.wheel_ui.reduced_motion);
-        // Fields added after this file was written must fall back, not fail the parse.
+        assert_eq!(parsed.general.language, "fr");
+        assert_eq!(parsed.wheel_ui.size, WheelSize::Large);
+
+        // What was omitted falls back.
         assert_eq!(parsed.wheel_ui.status_vertical, StatusVertical::Bottom);
         assert_eq!(parsed.wheel_ui.status_horizontal, StatusHorizontal::Center);
         assert_eq!(parsed.wheel_ui.hud_style, HudStyle::Standard);
-    }
-
-    #[test]
-    fn test_legacy_preserve_metadata_seeds_image_setting() {
-        let legacy = r#"{
-            "version": 1,
-            "output": { "policy": "next_to_source", "preserve_metadata": false }
-        }"#;
-        let parsed: WheelSettings = serde_json::from_str(legacy).expect("should deserialize");
-        let migrated = parsed.migrate();
-        assert!(
-            !migrated.output.metadata.images,
-            "legacy `preserve_metadata: false` must not silently become true"
-        );
-        // Audio and video did not exist as separate toggles; they keep the default.
-        assert!(migrated.output.metadata.audio);
-        assert!(migrated.output.metadata.video);
-        // The legacy field must not be written back out.
-        assert_eq!(
-            serde_json::to_string(&migrated.output).unwrap(),
-            r#"{"policy":"next_to_source","fixed_folder":null,"suffix":"","overwrite_source":false,"recycle_source":false,"metadata":{"images":false,"audio":true,"video":true}}"#
-        );
+        assert_eq!(parsed.output.policy, OutputPolicy::NextToSource);
+        assert!(parsed.output.metadata.images);
     }
 
     #[test]
