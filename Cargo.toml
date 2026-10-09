@@ -18,6 +18,13 @@ anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
+# Codec and rasteriser crates are pinned to optimised code in dev builds.
+#
+# These are all hot numeric loops over every pixel, and unoptimised they dominate
+# the time to open a file. Measured on a 993k-pixel SVG in a debug build: opening
+# it took 1.66s with the rasteriser at opt-level 0, against ~100ms for everything
+# else combined. `tiny-skia` is the one that matters most - it is what actually
+# rasterises - and it was missing here while the codec crates were already listed.
 [profile.dev.package.image]
 opt-level = 3
 
@@ -25,6 +32,18 @@ opt-level = 3
 opt-level = 3
 
 [profile.dev.package.ravif]
+opt-level = 3
+
+[profile.dev.package.tiny-skia]
+opt-level = 3
+
+[profile.dev.package.tiny-skia-path]
+opt-level = 3
+
+[profile.dev.package.resvg]
+opt-level = 3
+
+[profile.dev.package.usvg]
 opt-level = 3
 
 [profile.release]

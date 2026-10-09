@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use anyhow::{Context, Result};
 use image::ImageFormat;
 use tracing::info;
@@ -339,9 +340,63 @@ pub fn sanitize_svg_string(svg: &str) -> String {
     output
 }
 
+/// Markers that mean a document can draw text, and so needs fonts.
+///
+/// **Lowercase.** The document is lowercased before these are compared against it,
+/// and a marker written as `<foreignObject` would silently never match - which is
+/// how text ends up rendering with a fallback font. `text_markers_are_lowercase`
+/// stops that coming back.
+///
+/// Checked before the font database is touched at all. Loading every font
+/// installed on the machine costs ~1.6s on Windows, and an icon or a map pin is
+/// almost always pure geometry: a real 3KB file of five paths was taking that
+/// long on every open, to resolve fonts it never used.
+const TEXT_MARKERS: &[&str] = &[
+    "<text",
+    "<tspan",
+    "<textpath",
+    "<foreignobject",
+    "font-family",
+    "font-size",
+    "font-weight",
+    "@font-face",
+];
+
+/// Whether a document refers to text anywhere.
+fn svg_uses_text(bytes: &[u8]) -> bool {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        // Not readable as text, so it is not an SVG we can parse either. Assume
+        // text so the font database is still there if it turns out to be.
+        return true;
+    };
+
+    // Case-insensitive: SVG is XML, so `<TEXT` is equally valid.
+    let lower = text.to_ascii_lowercase();
+    TEXT_MARKERS.iter().any(|marker| lower.contains(marker))
+}
+
+/// The system font database, built once and shared.
+///
+/// `load_system_fonts` reads and parses every font installed on the machine.
+/// Doing that per file meant opening three SVGs cost three times the work, when
+/// the answer never changes within a session. `usvg::Options` holds the database
+/// behind an `Arc` and only clones it if something else holds a reference too, so
+/// handing every `Options` a clone of this one is free.
+fn shared_font_database() -> &'static Arc<resvg::usvg::fontdb::Database> {
+    static FONTS: std::sync::OnceLock<Arc<resvg::usvg::fontdb::Database>> = std::sync::OnceLock::new();
+
+    FONTS.get_or_init(|| {
+        let mut db = resvg::usvg::fontdb::Database::new();
+        db.load_system_fonts();
+        Arc::new(db)
+    })
+}
+
 pub fn decode_svg_bytes(bytes: &[u8]) -> Result<image::DynamicImage> {
     let mut opt = resvg::usvg::Options::default();
-    opt.fontdb_mut().load_system_fonts();
+    if svg_uses_text(bytes) {
+        opt.fontdb = Arc::clone(shared_font_database());
+    }
 
     // Sanitize SVG if it contains CSS Color 4 functions (like display-p3 from Figma)
     let sanitized_bytes: std::borrow::Cow<[u8]> = if let Ok(s) = std::str::from_utf8(bytes) {
@@ -746,6 +801,85 @@ fn convert_image_loaded(img: image::DynamicImage, input: &Path, params: &Convert
 
     info!("Conversion complete: {:?}", params.output_path);
     Ok(params.output_path.clone())
+}
+
+#[cfg(test)]
+mod svg_font_gate_tests {
+    use super::*;
+
+    #[test]
+    fn geometry_only_documents_are_recognised_as_text_free() {
+        // A real file that took 1.6s to open because fonts were loaded for it.
+        let map_pin = r#"<svg width="100%" height="100%" viewBox="0 0 829 1198">
+            <g transform="matrix(1,0,0,1,-52.89,-55.81)">
+                <path d="M4435,11769C3906,11730" style="fill:rgb(32,31,31);fill-rule:nonzero;"/>
+                <path d="M0,-222.3C21.2,-222.3" style="fill:rgb(255,254,238)"/>
+            </g>
+        </svg>"#;
+        assert!(!svg_uses_text(map_pin.as_bytes()));
+    }
+
+    #[test]
+    fn every_way_of_drawing_text_is_caught() {
+        // A miss here means text renders with a fallback font, or not at all, so
+        // the list has to be generous rather than clever.
+        for document in [
+            r##"<svg><text x="10" y="20">Map</text></svg>"##,
+            r##"<svg><text x="10"><tspan>Pin</tspan></text></svg>"##,
+            r##"<svg><text><textPath href="#p">Label</textPath></text></svg>"##,
+            r##"<svg><foreignObject width="10" height="10"><div/></foreignObject></svg>"##,
+            // No text element at all, but a font is still requested.
+            r##"<svg><style>.a{font-family:Arial}</style><path d="M0 0"/></svg>"##,
+            r##"<svg><path d="M0 0" style="font-size:12px"/></svg>"##,
+            r##"<svg><style>@font-face{font-family:x}</style></svg>"##,
+        ] {
+            assert!(
+                svg_uses_text(document.as_bytes()),
+                "text marker missed in: {document}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_check_ignores_case_because_svg_is_xml() {
+        assert!(svg_uses_text(r##"<svg><TEXT>Map</TEXT></svg>"##.as_bytes()));
+        assert!(svg_uses_text(r##"<svg><path style="FONT-FAMILY:Arial"/></svg>"##.as_bytes()));
+    }
+
+    #[test]
+    fn undecodable_input_assumes_text_so_fonts_are_available() {
+        // Not valid UTF-8 means not a parseable SVG either, but if it somehow is,
+        // having the fonts present is the safe direction to fail in.
+        assert!(svg_uses_text(&[0xff, 0xfe, 0x00]));
+    }
+
+    #[test]
+    fn text_markers_are_lowercase() {
+        // They are compared against a lowercased document, so a marker with any
+        // capitals in it would never match - and the symptom is text quietly
+        // rendering in the wrong font, which is very hard to trace back here.
+        for marker in TEXT_MARKERS {
+            assert_eq!(
+                *marker,
+                marker.to_ascii_lowercase(),
+                "{marker:?} must be stored lowercase"
+            );
+        }
+    }
+
+    #[test]
+    fn the_font_database_is_built_once_and_shared() {
+        // Two documents that need fonts must not each pay to load the system.
+        let first = Arc::as_ptr(shared_font_database());
+        let second = Arc::as_ptr(shared_font_database());
+        assert_eq!(first, second, "the database is being rebuilt per call");
+
+        // And it has to actually contain fonts, or text renders blank.
+        assert!(
+            shared_font_database().len() > 0,
+            "the shared database is empty, so text would not render"
+        );
+    }
 }
 
 #[cfg(test)]

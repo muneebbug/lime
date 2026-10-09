@@ -50,6 +50,8 @@ export interface PetalDef {
   supportedExtensions?: Set<string>;
   /** Optional custom predicate for fine-grained contextual matching */
   isApplicable?: (extensions: string[]) => boolean;
+  /** Filled in from the registry manifest, for petals built from one. */
+  manifest?: ActionManifest;
 }
 
 export interface PetalGeometry {
@@ -164,7 +166,18 @@ export const AUDIO_CONVERT_CATALOG: PetalDef[] = [
   { id: "convert.wma", action: "wma", title: "WMA", subtitle: "Convert to WMA", supportedExtensions: AUDIO_EXTS },
 ];
 
-// Only TRIM tool kept — strictly accepts transparent background compatible image files
+// Presentation for the wheel's Tools page: the label, the subtitle, and the icon.
+//
+// Deliberately *not* the list of tools. That comes from the Rust registry via
+// `get_actions`, which is the single source of truth for what exists. An earlier
+// version of this file listed the tools here as well, and registering a new tool
+// in Rust changed nothing on screen - the tool was simply invisible, with no
+// error and no failing test. The registry drives the list; this file only decides
+// how each one looks, and any tool without an entry here still gets a title and
+// icon derived from its manifest.
+//
+// `supportedExtensions` is left unset where the manifest already says it, so the
+// two cannot disagree about which files a tool handles.
 export const TOOLS_CATALOG: PetalDef[] = [
   {
     id: "tool.trim",
@@ -172,7 +185,13 @@ export const TOOLS_CATALOG: PetalDef[] = [
     title: "TRIM",
     subtitle: "Trim Blank Pixels",
     icon: { type: "trim" },
-    supportedExtensions: TRANSPARENT_IMAGE_EXTS,
+  },
+  {
+    id: "tool.recolor",
+    action: "recolor",
+    title: "RECOLOR",
+    subtitle: "Recolor Image",
+    icon: { type: "recolor" },
   },
 ];
 
@@ -358,22 +377,79 @@ export function calculatePetalGeometry(
 }
 
 /**
+ * Build a petal definition from a registry manifest.
+ *
+ * Presentation (subtitle, icon) comes from `TOOLS_CATALOG` when there is a
+ * matching entry; everything else is taken from the manifest itself.
+ *
+ * This is what stops a newly registered tool from being invisible. The wheel
+ * originally listed tools only in `TOOLS_CATALOG`, so registering `tool.recolor`
+ * in Rust changed nothing on screen and the tool simply did not exist to anyone
+ * using the app. Deriving the list from the registry makes the manifest the
+ * single source of truth for *whether* a tool exists, and leaves the catalog
+ * responsible only for how it looks.
+ */
+function toolPetalFromManifest(manifest: ActionManifest): PetalDef {
+  const known = TOOLS_CATALOG.find((def) => def.id === manifest.id);
+
+  return {
+    id: manifest.id,
+    action: known?.action ?? manifest.id.replace(/^tool\./, ""),
+    title: known?.title ?? manifest.title.toUpperCase(),
+    subtitle: known?.subtitle ?? manifest.title,
+    category: "tools",
+    icon: known?.icon ?? { type: manifest.icon || "trim" },
+    // Fall back to the manifest's own `accepts` so a tool is not hidden by a
+    // catalog entry that forgot to list its extensions.
+    supportedExtensions:
+      known?.supportedExtensions ?? new Set(manifest.accepts?.extensions ?? []),
+    manifest,
+  };
+}
+
+/**
+ * Tool definitions to draw, from the registry when it has loaded.
+ *
+ * Falls back to the catalog alone while `get_actions` is still in flight, which
+ * is what lets the wheel be drawn the instant it appears instead of repopulating
+ * itself a moment later.
+ */
+function toolDefsFor(
+  extensions: string[],
+  contextFilterEnabled: boolean,
+  manifests?: ActionManifest[]
+): PetalDef[] {
+  const exts = (extensions || []).map((e) => e.toLowerCase().trim()).filter(Boolean);
+
+  let defs: PetalDef[];
+  if (manifests && manifests.length > 0) {
+    const tools = manifests.filter(
+      (m) => m.category === "tools" && m.enabled !== false
+    );
+    defs = tools.map(toolPetalFromManifest);
+  } else {
+    defs = TOOLS_CATALOG;
+  }
+
+  if (!contextFilterEnabled || exts.length === 0) return defs;
+  return defs.filter((def) => isActionApplicable(def, exts));
+}
+
+/**
  * Generate petals dynamically for any page, file extensions, and custom slot count (1-10).
  */
 export function getPetalsForPage(
   page: WheelPage,
   extensions: string[] = [],
   customSlotCount = 8,
-  contextFilterEnabled = true
+  contextFilterEnabled = true,
+  manifests?: ActionManifest[]
 ): PetalData[] {
   const clampedCount = Math.max(1, Math.min(10, customSlotCount));
-  const exts = (extensions || []).map((e) => e.toLowerCase().trim()).filter(Boolean);
+  const exts = (extensions || []).map((e: string) => e.toLowerCase().trim()).filter(Boolean);
 
   if (page === "tools") {
-    // Only tools applicable to dragged extensions
-    const defs = contextFilterEnabled && exts.length > 0
-      ? TOOLS_CATALOG.filter((def) => isActionApplicable(def, exts))
-      : TOOLS_CATALOG;
+    const defs = toolDefsFor(extensions, contextFilterEnabled, manifests);
 
     if (defs.length === 0) {
       return [];
@@ -482,9 +558,16 @@ export function getCatalogForExtensions(extensions: string[] = []): PetalDef[] {
   }
 }
 
-// Fallback exports for backward compatibility
+// Fallback exports for backward compatibility.
 export const CONVERT_PETALS: PetalData[] = getPetalsForPage("convert", [], 8);
-export const TOOLS_PETALS: PetalData[] = getPetalsForPage("tools", [], 1);
+// The tools page sizes itself to however many tools there are. Hardcoding a slot
+// count here silently truncated the list to the first tool, which is exactly the
+// bug that hid Recolor.
+export const TOOLS_PETALS: PetalData[] = getPetalsForPage(
+  "tools",
+  [],
+  TOOLS_CATALOG.length
+);
 
 /**
  * Wheel colours, read from the CSS custom properties in `index.css`.
@@ -529,22 +612,21 @@ export function wheelDiameter(size: string | undefined | null): number {
 /**
  * Perform exact mathematical hit testing against `count` radial sectors.
  * Inner radius is 48.64, outer radius is 119.52.
+ *
+ * Takes the count the wheel was actually drawn with, not a page name. This used
+ * to accept a page and guess a sector count from it, and the guess for the tools
+ * page was hardcoded to 1 - correct only while there happened to be one tool, and
+ * silently wrong the moment a second was added. Callers already know the count;
+ * passing it removes the guess.
  */
 export function hitTestWedge(
   cursorX: number,
   cursorY: number,
-  pageOrCount: WheelPage | number,
+  count: number,
   wheelCenterX = 200,
   wheelCenterY = 200,
   scale = 1
 ): number | null {
-  const count =
-    typeof pageOrCount === "number"
-      ? pageOrCount
-      : pageOrCount === "convert"
-      ? 8
-      : 1;
-
   const dx = (cursorX - wheelCenterX) / (scale || 1);
   const dy = (cursorY - wheelCenterY) / (scale || 1);
   const dist = Math.sqrt(dx * dx + dy * dy);
@@ -607,7 +689,16 @@ export function filterActions(
   contextFilterEnabled = true,
   slotCount = 8
 ): ActionManifest[] {
-  const petals = getPetalsForPage(page, extensions, slotCount, contextFilterEnabled);
+  /*
+   * `slotCount` is a user preference for how many *conversion* targets the wheel
+   * shows. It must not gate the tools page: at the smallest setting a user can
+   * pick, it would silently hide every tool past the first, which is how Recolor
+   * went missing for anyone with `slot_count` set low. The tools page sizes
+   * itself to the tools that are available.
+   */
+  const toolCount = toolDefsFor(extensions, contextFilterEnabled, actions).length;
+  const slots = page === "tools" ? Math.max(1, toolCount) : slotCount;
+  const petals = getPetalsForPage(page, extensions, slots, contextFilterEnabled, actions);
   return petals.map((p, idx) => {
     const existing = actions.find((a) => a.id === p.id);
     if (existing) {
@@ -634,6 +725,16 @@ function ToolIcon({
   stroke?: string;
 }) {
   switch (type) {
+    case "recolor":
+      // A droplet over two dots: reads as "change this colour to that one"
+      // at wedge size, where a brush or palette turns to mush.
+      return (
+        <g fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3.2c3 3.4 4.6 5.9 4.6 7.8a4.6 4.6 0 0 1-9.2 0c0-1.9 1.6-4.4 4.6-7.8Z" />
+          <circle cx="12" cy="16.4" r="2" fill={stroke} fillOpacity="0.35" />
+          <circle cx="18.6" cy="18.6" r="1.9" fill={stroke} />
+        </g>
+      );
     case "trim":
     default:
       return (

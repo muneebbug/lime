@@ -18,6 +18,10 @@ const ICON_MAP: Record<string, string> = {
   "edit": "🎨",
   "annotate": "✏️",
   "redact": "⬛",
+  "trim": "✂",
+  // Distinct from "edit": recolor is about colour, so a palette reads faster
+  // than a brush here.
+  "recolor": "🎨",
 };
 
 interface WedgeIconProps {

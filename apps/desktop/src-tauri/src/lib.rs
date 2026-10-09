@@ -9,6 +9,7 @@ mod download;
 pub mod ffmpeg;
 mod onboarding;
 mod overlay;
+pub mod recolor_cmd;
 mod status;
 mod tray;
 pub mod sound;
@@ -141,6 +142,10 @@ pub fn run() {
             commands::open_file,
             commands::trim_image_file,
             commands::convert_media_file,
+            recolor_cmd::recolor_inspect,
+            recolor_cmd::recolor_extract_colors,
+            recolor_cmd::recolor_group_colors,
+            recolor_cmd::recolor_apply,
             commands::open_settings_window,
     commands::open_settings_page,
             commands::show_status,

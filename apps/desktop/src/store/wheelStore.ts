@@ -1,13 +1,27 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 
+/**
+ * An action as the Rust registry reports it over the Tauri bridge.
+ *
+ * Every field here is snake_case, because that is what serde emits. An earlier
+ * version of this file declared camelCase field names while the wire format was
+ * snake_case, which typechecked fine and then read `undefined` for every
+ * property at runtime. The rule for this file is simple: mirror the Rust struct
+ * in `crates/wheel-core/src/action.rs`, character for character.
+ */
 export interface ActionManifest {
   id: string;
   title: string;
   icon: string;
+  /** "convert", "tools", or `{ custom: "name" }` for a user-defined action. */
   category: "convert" | "tools" | { custom: string };
   accepts: { extensions: string[]; multi: boolean };
   kind: "instant" | "window";
+  /** Present only for `kind: "window"`. */
+  window?: { width: number; height: number; resizable: boolean; mica: boolean };
+  /** Format- or tool-specific default parameters. */
+  defaults?: unknown;
   enabled: boolean;
   order: number;
 }

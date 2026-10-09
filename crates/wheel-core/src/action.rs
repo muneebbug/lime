@@ -257,7 +257,7 @@ pub fn default_actions() -> Vec<ActionManifest> {
         icon: "trim".to_string(),
         category: ActionCategory::Tools,
         accepts: AcceptedInput {
-            extensions: transparent_image_exts,
+            extensions: transparent_image_exts.clone(),
             multi: true,
         },
         kind: ActionKind::Instant,
@@ -265,6 +265,32 @@ pub fn default_actions() -> Vec<ActionManifest> {
         defaults: serde_json::json!({}),
         enabled: true,
         order: 0,
+    });
+
+    // Recolor opens its own window: it needs a side-by-side preview and a live
+    // rule list, which a progress HUD cannot express. The window is wider and
+    // taller than the default because the layout is two panes.
+    actions.push(ActionManifest {
+        id: "tool.recolor".to_string(),
+        title: "Recolor Image".to_string(),
+        icon: "recolor".to_string(),
+        category: ActionCategory::Tools,
+        accepts: AcceptedInput {
+            extensions: transparent_image_exts,
+            // One image at a time. The window edits a single file, and
+            // "replace blue with red" is a decision about one image.
+            multi: false,
+        },
+        kind: ActionKind::Window,
+        window: Some(WindowConfig {
+            width: 1180,
+            height: 780,
+            resizable: true,
+            mica: true,
+        }),
+        defaults: serde_json::json!({}),
+        enabled: true,
+        order: 1,
     });
 
     actions
@@ -280,7 +306,63 @@ mod tests {
         let convert_count = actions.iter().filter(|a| a.category == ActionCategory::Convert).count();
         let tools_count = actions.iter().filter(|a| a.category == ActionCategory::Tools).count();
         assert!(convert_count >= 8);
-        assert_eq!(tools_count, 1);
+        assert_eq!(tools_count, 2);
+    }
+
+    #[test]
+    fn recolor_is_registered_as_a_single_image_tool_window() {
+        let registry = default_actions()
+            .into_iter()
+            .fold(ActionRegistry::new(), |mut acc, action| {
+                acc.register(action);
+                acc
+            });
+
+        let recolor = registry.get("tool.recolor").expect("recolor must exist");
+
+        assert_eq!(recolor.kind, ActionKind::Window);
+        assert_eq!(recolor.category, ActionCategory::Tools);
+        assert!(!recolor.accepts.multi, "recolor edits one image at a time");
+        assert!(recolor.accepts.extensions.contains(&"png".to_string()));
+        assert!(recolor.accepts.extensions.contains(&"webp".to_string()));
+
+        // The window config has to allow the two-pane layout to breathe, and has
+        // to be resizable because previews are shown at different zooms.
+        let window = recolor.window.as_ref().expect("a window config is required");
+        assert!(window.width >= 900 && window.height >= 600);
+        assert!(window.resizable);
+
+        // Every accepted extension must be something the image engine can open,
+        // otherwise the tool appears in the wheel and then fails to load.
+        for ext in &recolor.accepts.extensions {
+            assert!(
+                wheel_engines_supported(ext),
+                "recolor accepts .{ext}, which the image engine cannot decode"
+            );
+        }
+    }
+
+    /// Mirrors what `image_convert::load_image` can open, for the assertion
+    /// above. Kept as a list rather than a call into the engine so this crate
+    /// does not take a dependency on the engines crate, which sits above it.
+    fn wheel_engines_supported(ext: &str) -> bool {
+        matches!(
+            ext,
+            "png"
+                | "jpg"
+                | "jpeg"
+                | "webp"
+                | "avif"
+                | "tiff"
+                | "tif"
+                | "gif"
+                | "ico"
+                | "bmp"
+                | "svg"
+                | "svgz"
+                | "heic"
+                | "heif"
+        )
     }
 
     #[test]

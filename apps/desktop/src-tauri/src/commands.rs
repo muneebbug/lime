@@ -285,6 +285,16 @@ fn open_tool_window(
     }
 
     let win = win_res?;
+
+    // Settings and onboarding both clear the DWM border and let the frame helper
+    // finish the transparent-window treatment, so their CSS corner radius is the
+    // only edge the user sees. A tool window that skipped it showed the Windows
+    // corner rounding sitting on top of the app's own radius.
+    #[cfg(target_os = "windows")]
+    if let Ok(hwnd) = win.hwnd() {
+        wheel_win::vibrancy::make_overlay_transparent_frameless(hwnd.0 as isize);
+    }
+
     let _ = win.unminimize();
     let _ = win.show();
     let _ = win.set_focus();

@@ -356,7 +356,6 @@ pub fn is_potential_file_drag_source(_x: i32, _y: i32) -> bool {
 
 #[cfg(all(test, windows))]
 mod dialog_tests {
-    use super::*;
     use windows::Win32::System::Com::{
         CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
         COINIT_APARTMENTTHREADED,
@@ -390,8 +389,10 @@ mod dialog_tests {
         // this machine. This is the check that would have caught the bad GUID.
         unsafe {
             // Each test runs on its own thread, so COM is initialised here rather
-            // than relying on process-wide state.
-            CoInitializeEx(None, COINIT_APARTMENTTHREADED).ok();
+            // than relying on process-wide state. A failure is not an error: COM
+            // is already initialised often enough, and an RPC_E_CHANGED_MODE
+            // here would not stop the CLSID check that follows.
+            let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED);
 
             let outcome = CoCreateInstance::<_, IFileOpenDialog>(
                 &EXPECTED_CLSID,
