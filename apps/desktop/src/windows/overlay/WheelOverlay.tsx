@@ -78,6 +78,10 @@ export function WheelOverlay() {
   const hoveredWedge = useWheelStore((s) => s.hoveredWedge);
   const loadActions = useWheelStore((s) => s.loadActions);
   const togglePage = useWheelStore((s) => s.togglePage);
+  // The registry decides which tools exist for these files. Every check below
+  // has to use it, or the wheel can offer a tool the backend will refuse - or,
+  // as with a JPEG before the manifests were fixed, offer nothing at all.
+  const actions = useWheelStore((s) => s.actions);
   const setHoveredWedge = useWheelStore((s) => s.setHoveredWedge);
 
 const overlayRef = useRef<HTMLDivElement>(null);
@@ -93,7 +97,7 @@ const overlayRef = useRef<HTMLDivElement>(null);
   const soundEnabled = wheelSettings?.wheel_ui?.sound_enabled ?? false;
   const reducedMotion = wheelSettings?.wheel_ui?.reduced_motion ?? false;
 
-  const hasTools = hasToolsForExtensions(dragExtensions, contextFilterEnabled);
+  const hasTools = hasToolsForExtensions(dragExtensions, contextFilterEnabled, actions);
 
   useEffect(() => {
     if (!hasTools && currentPage === "tools") {
@@ -197,7 +201,7 @@ const overlayRef = useRef<HTMLDivElement>(null);
       return;
     }
 
-    const hasToolsForFiles = hasToolsForExtensions(extensions, contextFilterEnabled);
+    const hasToolsForFiles = hasToolsForExtensions(extensions, contextFilterEnabled, actions);
     if (!hasToolsForFiles && useWheelStore.getState().currentPage === "tools") {
       useWheelStore.getState().setPage("convert");
     }
@@ -342,7 +346,11 @@ const overlayRef = useRef<HTMLDivElement>(null);
     // Toggle page event from low-level hook (scroll wheel, right-click, Tab, or Space)
     const onToggle = () => {
       const state = useWheelStore.getState();
-      const canToggle = hasToolsForExtensions(state.dragExtensions, contextFilterEnabled);
+      const canToggle = hasToolsForExtensions(
+        state.dragExtensions,
+        contextFilterEnabled,
+        state.actions
+      );
       if (!canToggle) return;
       lastHoveredRef.current = null;
       state.togglePage();
@@ -437,6 +445,7 @@ const overlayRef = useRef<HTMLDivElement>(null);
               soundEnabled={soundEnabled}
               slotCount={slotCount}
               hasTools={hasTools}
+              actions={actions}
             />
           </motion.div>
         )}

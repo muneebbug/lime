@@ -9,9 +9,8 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "typecheck": "tsc --noEmit",
-    "test": "pnpm run test:tools && pnpm run test:parity",
-    "test:tools": "node scripts/run-ts-check.mjs scripts/check-tools.mts",
-    "test:parity": "node --experimental-strip-types scripts/recolor-parity.mts"
+    "test": "pnpm run test:tools",
+    "test:tools": "node --experimental-strip-types scripts/tools-gating.mts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

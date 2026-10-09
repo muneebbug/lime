@@ -246,10 +246,29 @@ pub fn default_actions() -> Vec<ActionManifest> {
     }
 
     // --- Tool actions ---
+    //
+    // Two different questions, and conflating them is what made every tool
+    // vanish for a JPEG.
+    //
+    // Trim removes blank margins, which only exist where there is an alpha
+    // channel to be blank. A JPEG has no transparency, so there is nothing for
+    // it to find and it is correctly unavailable there.
+    //
+    // Recolor repaints colour, and a JPEG is full of it. It was previously given
+    // the transparent-only list, which meant the wheel filtered every tool out
+    // for a .jpg: the Tools page came up empty and nothing could be hovered.
+    // The engine never had that limitation - it decodes and re-encodes JPEG and
+    // BMP, and warns on save that they cannot store transparency.
     let transparent_image_exts = vec![
         "png".into(), "webp".into(), "avif".into(), "tiff".into(), "tif".into(),
         "gif".into(), "ico".into(), "svg".into(), "heic".into(),
     ];
+    let opaque_image_exts = vec![
+        "jpg".into(), "jpeg".into(), "bmp".into(),
+    ];
+
+    let mut all_image_exts = transparent_image_exts.clone();
+    all_image_exts.extend(opaque_image_exts);
 
     actions.push(ActionManifest {
         id: "tool.trim".to_string(),
@@ -276,7 +295,8 @@ pub fn default_actions() -> Vec<ActionManifest> {
         icon: "recolor".to_string(),
         category: ActionCategory::Tools,
         accepts: AcceptedInput {
-            extensions: transparent_image_exts,
+            // Every image format, alpha or not.
+            extensions: all_image_exts,
             // One image at a time. The window edits a single file, and
             // "replace blue with red" is a decision about one image.
             multi: false,
@@ -307,6 +327,77 @@ mod tests {
         let tools_count = actions.iter().filter(|a| a.category == ActionCategory::Tools).count();
         assert!(convert_count >= 8);
         assert_eq!(tools_count, 2);
+    }
+
+    /// Tools available for one file extension, in registry order.
+    fn tools_for(ext: &str) -> Vec<String> {
+        let actions = default_actions();
+        actions
+            .iter()
+            .filter(|a| a.category == ActionCategory::Tools)
+            .filter(|a| a.accepts.accepts_extension(ext))
+            .map(|a| a.id.clone())
+            .collect()
+    }
+
+    #[test]
+    fn opaque_images_offer_recolor() {
+        // The bug this pins: every tool was gated on the transparent-only list,
+        // so a JPEG produced an empty Tools page and nothing could be hovered.
+        for ext in ["jpg", "jpeg", "bmp"] {
+            assert_eq!(
+                tools_for(ext),
+                vec!["tool.recolor".to_string()],
+                "{ext} should offer Recolor and nothing else"
+            );
+        }
+    }
+
+    #[test]
+    fn transparent_images_offer_trim_and_recolor() {
+        for ext in ["png", "webp", "gif", "svg", "avif", "tiff", "tif", "ico", "heic"] {
+            assert_eq!(
+                tools_for(ext),
+                vec!["tool.trim".to_string(), "tool.recolor".to_string()],
+                "{ext} should offer both tools"
+            );
+        }
+    }
+
+    #[test]
+    fn trim_stays_away_from_formats_with_no_alpha() {
+        // Trimming finds blank margins, and a JPEG has no blank margins to find.
+        let actions = default_actions();
+        let trim = actions
+            .iter()
+            .find(|a| a.id == "tool.trim")
+            .expect("trim must exist");
+
+        for ext in ["jpg", "jpeg", "bmp"] {
+            assert!(
+                !trim.accepts.accepts_extension(ext),
+                "trim must not claim {ext}"
+            );
+        }
+    }
+
+    #[test]
+    fn recolor_covers_every_image_format_the_wheel_offers() {
+        let actions = default_actions();
+        let recolor = actions
+            .iter()
+            .find(|a| a.id == "tool.recolor")
+            .expect("recolor must exist");
+
+        for ext in [
+            "png", "webp", "avif", "tiff", "tif", "gif", "ico", "svg", "heic", "jpg", "jpeg",
+            "bmp",
+        ] {
+            assert!(
+                recolor.accepts.accepts_extension(ext),
+                "recolor must accept {ext}"
+            );
+        }
     }
 
     #[test]

@@ -574,9 +574,10 @@ export function getPetalsForPage(
  */
 export function hasToolsForExtensions(
   extensions: string[] = [],
-  contextFilterEnabled = true
+  contextFilterEnabled = true,
+  manifests?: ActionManifest[]
 ): boolean {
-  const tools = getPetalsForPage("tools", extensions, 10, contextFilterEnabled);
+  const tools = getPetalsForPage("tools", extensions, 10, contextFilterEnabled, manifests);
   return tools.length > 0;
 }
 
@@ -801,6 +802,16 @@ export interface RadialWheelProps {
   soundEnabled?: boolean;
   slotCount?: number;
   hasTools?: boolean;
+  /**
+   * The action registry from `get_actions`.
+   *
+   * Required for the drawn petals to match the hover test. The overlay decides
+   * what is hovered from the registry, so a wheel drawn from the fallback
+   * catalog can paint a tool that hover will never reach - which is what a JPEG
+   * hit, where the catalog offered Trim and Recolor while the registry, having
+   * filtered on extensions, offered neither, and every petal stayed inert.
+   */
+  actions?: ActionManifest[];
 }
 
 function RadialWheelInner({
@@ -815,12 +826,20 @@ function RadialWheelInner({
   contextFilterEnabled = true,
   slotCount = 8,
   hasTools: hasToolsProp,
+  actions,
 }: RadialWheelProps) {
-  const hasTools = hasToolsProp ?? hasToolsForExtensions(extensions, contextFilterEnabled);
+  const hasTools =
+    hasToolsProp ?? hasToolsForExtensions(extensions, contextFilterEnabled, actions);
 
   const activePetals = useMemo(() => {
-    return getPetalsForPage(currentPage, extensions, slotCount, contextFilterEnabled);
-  }, [currentPage, extensions, contextFilterEnabled, slotCount]);
+    return getPetalsForPage(
+      currentPage,
+      extensions,
+      slotCount,
+      contextFilterEnabled,
+      actions
+    );
+  }, [currentPage, extensions, contextFilterEnabled, slotCount, actions]);
 
   const hoveredPetal = useMemo(
     () => activePetals.find((p) => p.id === hoveredWedge) ?? null,
