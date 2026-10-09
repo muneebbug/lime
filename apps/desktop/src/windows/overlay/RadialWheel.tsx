@@ -215,6 +215,18 @@ const CORNER_OUT_FRAC = 0.186;
 const CORNER_IN_FRAC = 0.168;
 
 /**
+ * Reference step for an 8-petal wheel (Math.PI / 4).
+ *
+ * For 8+ petals, corners follow the reference fractions of the angular step.
+ * For fewer petals (especially count = 2, where angleStep = Math.PI), letting the
+ * corner angle scale strictly with angleStep balloons the corner to 33.5° (70px of arc),
+ * causing the outer edges to collapse inward and leave giant crescent gaps.
+ * Corner setbacks instead adapt smoothly between a crisp 12-13px fillet for 2-petal
+ * half-rings and the reference 8-petal geometry.
+ */
+const REF_STEP = Math.PI / 4;
+
+/**
  * Builds one petal.
  *
  * Two details separate this from a plain annular sector and are what make the
@@ -249,13 +261,40 @@ export function computePetalPath(
   const halfAt = (r: number) => (angleStep - gap / r) / 2;
 
   const band = rOut - rIn;
-  const rSideIn = rIn + band * SIDE_START_FRAC;
-  const rSideOut = rIn + band * SIDE_END_FRAC;
+
+  // Approximate slot count to smoothly interpolate corner sizes for low petal counts.
+  const count = Math.max(2, Math.min(8, Math.round((2 * Math.PI) / angleStep)));
+  const t = (count - 2) / 6;
+
+  const refROutCorner = band * (1 - SIDE_END_FRAC); // ~20.15px
+  const refRInCorner = band * SIDE_START_FRAC; // ~6.58px
+  const refArcOutCorner = REF_STEP * CORNER_OUT_FRAC * rOut; // ~17.46px
+  const refArcInCorner = REF_STEP * CORNER_IN_FRAC * rIn; // ~6.42px
+
+  const rOutCorner = (13.0 + t * (refROutCorner - 13.0)) * cornerScale;
+  const arcOutCorner = (12.0 + t * (refArcOutCorner - 12.0)) * cornerScale;
+  const rInCorner = (6.0 + t * (refRInCorner - 6.0)) * cornerScale;
+  const arcInCorner = (5.8 + t * (refArcInCorner - 5.8)) * cornerScale;
+
+  const rSideIn = rIn + rInCorner;
+  const rSideOut = rOut - rOutCorner;
 
   const sIn = halfAt(rSideIn);
   const sOut = halfAt(rSideOut);
-  const arcOut = Math.max(0.01, sOut - angleStep * CORNER_OUT_FRAC * cornerScale);
-  const arcIn = Math.max(0.01, sIn - angleStep * CORNER_IN_FRAC * cornerScale);
+
+  const maxAngleOut = Math.min(
+    angleStep * CORNER_OUT_FRAC * cornerScale,
+    arcOutCorner / rOut
+  );
+  const dOut = Math.min(maxAngleOut, sOut * 0.45);
+  const arcOut = Math.max(0.01, sOut - dOut);
+
+  const maxAngleIn = Math.min(
+    angleStep * CORNER_IN_FRAC * cornerScale,
+    arcInCorner / rIn
+  );
+  const dIn = Math.min(maxAngleIn, sIn * 0.45);
+  const arcIn = Math.max(0.01, sIn - dIn);
 
   const p1 = polar(rSideIn, centerAngle + sIn);
   const p2 = polar(rSideOut, centerAngle + sOut);
