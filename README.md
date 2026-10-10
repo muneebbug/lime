@@ -48,29 +48,11 @@ Nothing is uploaded. Every conversion happens on your machine. Windows open on w
 
 ## Tools
 
-Three tools, on the Tools page of the wheel. Each opens its own window and only appears for the files it can actually handle.
+Three tools on the Tools page of the wheel. Each opens its own window and is only offered for the files it can handle.
 
-### Trim
-
-Crops away fully transparent borders, keeping the smallest rectangle that contains every visible pixel. Needs an alpha channel, so it is not offered for JPEG or BMP. It is not offered for SVG either: trimming a vector means rewriting its `viewBox`, which is not implemented, and rasterising it to shrink would be the wrong answer.
-
-### Recolor Image
-
-Replace any colour in an image by rule — "swap this blue for that red" — or flatten everything to one. Matching is perceptual, so a rule catches the shades your eye would call the same colour rather than an exact RGB match, and the tolerance slider sets how far it reaches.
-
-- Rules either repaint flat or carry each pixel's lightness through, so the image keeps its shading. The second is off by default.
-- **SVG is edited as markup**, not re-encoded, so gradients, structure and hand-written ids survive.
-- The colour list follows the tolerance slider, because a rule is a radius rather than a point. Each swatch says how many colours and pixels it will actually repaint, so there is no surprise between clicking and saving.
-
-### Compress Image
-
-Shrinks an image by re-encoding it. The output keeps the input's format, because compressing is not converting — use the Convert page for that.
-
-- **Balanced** is the default and is visually lossless in most cases. **Strong** trades visible quality for size; **Maximal** pushes furthest.
-- Basic settings cover resize, compress-to-a-target-file-size, and whether to keep EXIF. Advanced exposes the per-format knobs: chroma subsampling, progressive JPEG, PNG mode, zopfli, TIFF effort and more. Anything you leave alone keeps the preset's value.
-- **Lossy PNG** is offered explicitly, not as a default. Quantising a photo to 256 colours is a big win and a real loss, so it should be a choice.
-- Works on JPG, JPEG, PNG, WebP and TIFF. Not GIF, because re-encoding an animation risks flattening it to a single frame.
-- Compress has no progress bar yet; slow settings show a spinner.
+- **Trim** — crops away fully transparent borders.
+- **Recolor Image** — replaces colours by rule, with a tolerance you control.
+- **Compress Image** — makes a file smaller in the same format.
 
 
 ## Requirements
