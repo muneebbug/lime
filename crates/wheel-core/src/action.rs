@@ -254,6 +254,12 @@ pub fn default_actions() -> Vec<ActionManifest> {
     // channel to be blank. A JPEG has no transparency, so there is nothing for
     // it to find and it is correctly unavailable there.
     //
+    // SVG is excluded for a different reason: the engine rasterises it before
+    // cropping, then can only write the result back as a raster format, so saving
+    // to a `.svg` path failed with "Failed to save trimmed image". Trimming a
+    // vector properly means rewriting its viewBox, which is a feature rather than
+    // a bug fix. Recolor still handles SVG, because it edits the markup.
+    //
     // Recolor repaints colour, and a JPEG is full of it. It was previously given
     // the transparent-only list, which meant the wheel filtered every tool out
     // for a .jpg: the Tools page came up empty and nothing could be hovered.
@@ -261,14 +267,17 @@ pub fn default_actions() -> Vec<ActionManifest> {
     // BMP, and warns on save that they cannot store transparency.
     let transparent_image_exts = vec![
         "png".into(), "webp".into(), "avif".into(), "tiff".into(), "tif".into(),
-        "gif".into(), "ico".into(), "svg".into(), "heic".into(),
+        "gif".into(), "ico".into(), "heic".into(),
     ];
     let opaque_image_exts = vec![
         "jpg".into(), "jpeg".into(), "bmp".into(),
     ];
 
+    // Recolor additionally takes SVG, which it edits as source rather than
+    // rasterising.
     let mut all_image_exts = transparent_image_exts.clone();
     all_image_exts.extend(opaque_image_exts);
+    all_image_exts.push("svg".into());
 
     actions.push(ActionManifest {
         id: "tool.trim".to_string(),
@@ -355,13 +364,20 @@ mod tests {
 
     #[test]
     fn transparent_images_offer_trim_and_recolor() {
-        for ext in ["png", "webp", "gif", "svg", "avif", "tiff", "tif", "ico", "heic"] {
+        for ext in ["png", "webp", "gif", "avif", "tiff", "tif", "ico", "heic"] {
             assert_eq!(
                 tools_for(ext),
                 vec!["tool.trim".to_string(), "tool.recolor".to_string()],
                 "{ext} should offer both tools"
             );
         }
+    }
+
+    #[test]
+    fn svg_offers_recolor_only() {
+        // Trimming rasterises the SVG and then cannot write it back as a vector,
+        // so the wheel must not offer it. Recolor edits the markup and works.
+        assert_eq!(tools_for("svg"), vec!["tool.recolor".to_string()]);
     }
 
     #[test]
@@ -379,6 +395,12 @@ mod tests {
                 "trim must not claim {ext}"
             );
         }
+        // SVG is trimmed by rasterising, which cannot be written back as a
+        // vector, so the wheel must not offer it either.
+        assert!(
+            !trim.accepts.accepts_extension("svg"),
+            "trim must not claim svg"
+        );
     }
 
     #[test]

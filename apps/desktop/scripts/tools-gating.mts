@@ -19,9 +19,13 @@ const out = join(root, ".tools-check");
 
 /** The registry, mirrored from crates/wheel-core/src/action.rs. */
 const manifest = {
-  "tool.trim": { exts: ["png", "webp", "avif", "tiff", "tif", "gif", "ico", "svg", "heic"] },
+  "tool.trim": { exts: ["png", "webp", "avif", "tiff", "tif", "gif", "ico", "heic"] },
   "tool.recolor": {
-    exts: ["png", "webp", "avif", "tiff", "tif", "gif", "ico", "svg", "heic", "jpg", "jpeg", "bmp"],
+    exts: [
+      "png", "webp", "avif", "tiff", "tif", "gif", "ico", "heic",
+      "jpg", "jpeg", "bmp",
+      "svg",
+    ],
   },
 };
 
@@ -102,10 +106,12 @@ const expectedTools = {
   jpg: ["tool.recolor"],
   jpeg: ["tool.recolor"],
   bmp: ["tool.recolor"],
+  // Trim rasterises an SVG and cannot write it back as a vector, so it failed
+  // on save. Recolor edits the markup and works.
+  svg: ["tool.recolor"],
   png: ["tool.trim", "tool.recolor"],
   webp: ["tool.trim", "tool.recolor"],
   gif: ["tool.trim", "tool.recolor"],
-  svg: ["tool.trim", "tool.recolor"],
   avif: ["tool.trim", "tool.recolor"],
   tiff: ["tool.trim", "tool.recolor"],
   tif: ["tool.trim", "tool.recolor"],
