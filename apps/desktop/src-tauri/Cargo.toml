@@ -1,6 +1,6 @@
 [package]
 name = "desktop"
-version = "0.1.0-pre-alpha.1"
+version = "0.1.0-pre-alpha.2"
 description = "Lime — Windows radial drag-and-drop file toolkit"
 authors = ["Lime Contributors"]
 edition = "2021"

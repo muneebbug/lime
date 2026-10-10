@@ -94,8 +94,14 @@ export function SettingsWindow() {
     };
   }, []);
 
-  // Auto-updater state
-  const [appVersion, setAppVersion] = useState<string>("v0.1.0-pre-alpha.1");
+  // Auto-updater state.
+  //
+  // Empty until `get_app_version` answers. This used to be a hardcoded string,
+  // which meant a version number living in five places: it flashed the previous
+  // release for a moment on every open, and stayed on screen forever if the
+  // command failed. The command reads the real one from the Tauri package
+  // info, so there is nothing to guess at here.
+  const [appVersion, setAppVersion] = useState<string>("");
   const [updateStatus, setUpdateStatus] = useState<
     "idle" | "checking" | "available" | "downloading" | "ready" | "up_to_date" | "error"
   >("idle");
@@ -1323,7 +1329,7 @@ if (!settings) {
                     <div>
                       <span className="text-text-muted">Version</span>
                       <div className="font-mono text-text mt-0.5 flex items-center gap-2">
-                        <span>{appVersion}</span>
+                        <span>{appVersion || "…"}</span>
                         {updateStatus === "up_to_date" && (
                           <span className="text-[11px] text-positive font-sans flex items-center gap-1">
                             <Check size={12} className="inline" /> Up to date

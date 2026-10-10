@@ -1,7 +1,7 @@
 {
   "name": "wheel-monorepo",
   "private": true,
-  "version": "v0.1.0-pre-alpha.1",
+  "version": "v0.1.0-pre-alpha.2",
   "scripts": {
     "dev": "pnpm --filter desktop tauri dev",
     "build": "pnpm --filter desktop tauri build",
