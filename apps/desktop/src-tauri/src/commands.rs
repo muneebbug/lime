@@ -228,6 +228,42 @@ fn get_in_flight_tools() -> &'static std::sync::Mutex<std::collections::HashSet<
     IN_FLIGHT.get_or_init(|| std::sync::Mutex::new(std::collections::HashSet::new()))
 }
 
+/// Where a tool window should open.
+///
+/// `WindowBuilder::center()` centres on the *primary* monitor, so on a multi-
+/// monitor setup a tool opened from a secondary display appeared somewhere the
+/// user was not looking, and often behind the window they had just dragged from.
+///
+/// Centring on the anchor rather than the primary display is the whole fix;
+/// `clamp_to_work_area` additionally keeps the window inside the work area so it
+/// cannot open half off a screen or under a taskbar.
+/// The overlay is the fallback; the cursor is the truth.
+///
+/// The live cursor wins because it is literally where the user is, and it still
+/// moves after the wheel appears. The overlay is second: `show_overlay` puts it
+/// at the cursor and clamps it into that monitor's work area, so its centre is
+/// a good answer when the cursor cannot be read.
+fn tool_window_anchor(app: &tauri::AppHandle) -> (i32, i32) {
+    if let Ok(cursor) = app.cursor_position() {
+        return (cursor.x as i32, cursor.y as i32);
+    }
+    if let Some(overlay) = app.get_webview_window("overlay") {
+        if let (Ok(position), Ok(size)) = (overlay.outer_position(), overlay.outer_size()) {
+            return (
+                position.x + size.width as i32 / 2,
+                position.y + size.height as i32 / 2,
+            );
+        }
+    }
+    (0, 0)
+}
+
+/// Top-left for a window of this size, centred on the active monitor.
+fn tool_window_position(app: &tauri::AppHandle, width: i32, height: i32) -> (i32, i32) {
+    let (anchor_x, anchor_y) = tool_window_anchor(app);
+    wheel_win::dpi::clamp_to_work_area(anchor_x, anchor_y, width, height)
+}
+
 fn open_tool_window(
     app: &tauri::AppHandle,
     manifest: &ActionManifest,
@@ -251,6 +287,12 @@ fn open_tool_window(
         let _ = win.unminimize();
         let _ = win.show();
         let _ = win.set_focus();
+        // Already-open windows still follow the user. A tool left on the left
+        // monitor should come to the one they are now standing at.
+        if let Ok(size) = win.outer_size() {
+            let (x, y) = tool_window_position(&app, size.width as i32, size.height as i32);
+            let _ = win.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }));
+        }
         #[cfg(target_os = "windows")]
         if let Ok(hwnd) = win.hwnd() {
             wheel_win::force_focus_window(hwnd.0 as isize);
@@ -268,14 +310,17 @@ fn open_tool_window(
         guard.insert(window_id.clone());
     }
 
+    let (window_x, window_y) =
+        tool_window_position(&app, win_cfg.width as i32, win_cfg.height as i32);
+
     let win_res = tauri::WebviewWindowBuilder::new(app, &window_id, WebviewUrl::App(url.into()))
         .title(&manifest.title)
         .inner_size(win_cfg.width as f64, win_cfg.height as f64)
+        .position(window_x as f64, window_y as f64)
         .decorations(false)
         .transparent(true)
         .resizable(win_cfg.resizable)
         .maximizable(false)
-        .center()
         .focused(true)
         .build();
 

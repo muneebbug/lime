@@ -27,6 +27,11 @@ const manifest = {
       "svg",
     ],
   },
+  // Only formats where compressing is a real saving. GIF is out because its
+  // path is partial and re-encoding an animation risks flattening it.
+  "tool.compress": {
+    exts: ["jpg", "jpeg", "png", "webp", "tiff", "tif"],
+  },
 };
 
 function loadWheel() {
@@ -103,18 +108,19 @@ const manifests = Object.entries(manifest).map(([id, def]) => ({
 
 // What the user asked for, pinned per format.
 const expectedTools = {
-  jpg: ["tool.recolor"],
-  jpeg: ["tool.recolor"],
+  jpg: ["tool.recolor", "tool.compress"],
+  jpeg: ["tool.recolor", "tool.compress"],
   bmp: ["tool.recolor"],
   // Trim rasterises an SVG and cannot write it back as a vector, so it failed
   // on save. Recolor edits the markup and works.
   svg: ["tool.recolor"],
-  png: ["tool.trim", "tool.recolor"],
-  webp: ["tool.trim", "tool.recolor"],
+  png: ["tool.trim", "tool.recolor", "tool.compress"],
+  webp: ["tool.trim", "tool.recolor", "tool.compress"],
+  tiff: ["tool.trim", "tool.recolor", "tool.compress"],
+  tif: ["tool.trim", "tool.recolor", "tool.compress"],
+  // GIF and AVIF are already compressed, ICO is already packed.
   gif: ["tool.trim", "tool.recolor"],
   avif: ["tool.trim", "tool.recolor"],
-  tiff: ["tool.trim", "tool.recolor"],
-  tif: ["tool.trim", "tool.recolor"],
   ico: ["tool.trim", "tool.recolor"],
   heic: ["tool.trim", "tool.recolor"],
 };

@@ -322,6 +322,44 @@ pub fn default_actions() -> Vec<ActionManifest> {
         order: 1,
     });
 
+    // Compress: only formats where compressing is a real saving.
+    //
+    // Deliberately narrower than the set the app can open. GIF is out because
+    // its compression path is partial and re-encoding an animation risks
+    // flattening it to one frame, which is data loss. SVG would have to be
+    // rasterised to shrink, the same mistake as trimming one. ICO is already
+    // packed. HEIC cannot be decoded here at all, and AVIF is already
+    // compressed, so re-encoding buys nothing.
+    let compressible_exts = vec![
+        "jpg".into(), "jpeg".into(), "png".into(), "webp".into(),
+        "tiff".into(), "tif".into(),
+    ];
+
+    // Compress opens its own window: it shows a before/after size comparison and
+    // per-format settings, and a progress bar for the slow presets.
+    actions.push(ActionManifest {
+        id: "tool.compress".to_string(),
+        title: "Compress Image".to_string(),
+        icon: "compress".to_string(),
+        category: ActionCategory::Tools,
+        accepts: AcceptedInput {
+            extensions: compressible_exts,
+            // One at a time. The window reports a single before/after pair, and
+            // a batch here would need a different design rather than a loop.
+            multi: false,
+        },
+        kind: ActionKind::Window,
+        window: Some(WindowConfig {
+            width: 860,
+            height: 720,
+            resizable: true,
+            mica: true,
+        }),
+        defaults: serde_json::json!({}),
+        enabled: true,
+        order: 2,
+    });
+
     actions
 }
 
@@ -335,7 +373,7 @@ mod tests {
         let convert_count = actions.iter().filter(|a| a.category == ActionCategory::Convert).count();
         let tools_count = actions.iter().filter(|a| a.category == ActionCategory::Tools).count();
         assert!(convert_count >= 8);
-        assert_eq!(tools_count, 2);
+        assert_eq!(tools_count, 3);
     }
 
     /// Tools available for one file extension, in registry order.
@@ -350,25 +388,90 @@ mod tests {
     }
 
     #[test]
-    fn opaque_images_offer_recolor() {
-        // The bug this pins: every tool was gated on the transparent-only list,
-        // so a JPEG produced an empty Tools page and nothing could be hovered.
-        for ext in ["jpg", "jpeg", "bmp"] {
-            assert_eq!(
-                tools_for(ext),
-                vec!["tool.recolor".to_string()],
-                "{ext} should offer Recolor and nothing else"
+    fn compress_offers_only_formats_where_it_saves_bytes() {
+        for ext in ["jpg", "jpeg", "png", "webp", "tiff"] {
+            assert!(
+                tools_for(ext).contains(&"tool.compress".to_string()),
+                "{ext} should offer Compress"
             );
         }
     }
 
     #[test]
+    fn compress_refuses_formats_where_it_would_lose_data_or_do_nothing() {
+        let actions = default_actions();
+        let compress = actions
+            .iter()
+            .find(|a| a.id == "tool.compress")
+            .expect("compress must exist");
+
+        // GIF: partial support risks flattening an animation to one frame.
+        assert!(!compress.accepts.accepts_extension("gif"), "gif must be refused");
+        // SVG: shrinking it means rasterising it.
+        assert!(!compress.accepts.accepts_extension("svg"), "svg must be refused");
+        // Already packed or already compressed.
+        for ext in ["ico", "avif", "heic", "bmp"] {
+            assert!(
+                !compress.accepts.accepts_extension(ext),
+                "{ext} must be refused"
+            );
+        }
+    }
+
+    #[test]
+    fn compress_matches_the_engines_own_whitelist() {
+        // The engine's own list is checked against this in
+        // `tests/compress_manifest_agrees.rs`, which lives in wheel-engines
+        // because the dependency runs that way and a core test cannot see it.
+        let actions = default_actions();
+        let compress = actions
+            .iter()
+            .find(|a| a.id == "tool.compress")
+            .expect("compress must exist");
+        assert!(!compress.accepts.extensions.is_empty());
+    }
+
+    #[test]
+    fn opaque_images_offer_recolor() {
+        // The bug this pins: every tool was gated on the transparent-only list,
+        // so a JPEG produced an empty Tools page and nothing could be hovered.
+        // Compress covers JPEG too; BMP has no alpha to trim and no compression
+        // worth doing, so it only gets Recolor.
+        for ext in ["jpg", "jpeg"] {
+            assert_eq!(
+                tools_for(ext),
+                vec!["tool.recolor".to_string(), "tool.compress".to_string()],
+                "{ext} should offer Recolor and Compress"
+            );
+        }
+        assert_eq!(
+            tools_for("bmp"),
+            vec!["tool.recolor".to_string()],
+            "bmp has neither alpha to trim nor a useful compression"
+        );
+    }
+
+    #[test]
     fn transparent_images_offer_trim_and_recolor() {
-        for ext in ["png", "webp", "gif", "avif", "tiff", "tif", "ico", "heic"] {
+        // PNG, WebP and TIFF compress as well. GIF does not: re-encoding an
+        // animation risks flattening it to one frame.
+        for ext in ["png", "webp", "tiff", "tif"] {
+            assert_eq!(
+                tools_for(ext),
+                vec![
+                    "tool.trim".to_string(),
+                    "tool.recolor".to_string(),
+                    "tool.compress".to_string()
+                ],
+                "{ext} should offer all three tools"
+            );
+        }
+
+        for ext in ["gif", "avif", "ico", "heic"] {
             assert_eq!(
                 tools_for(ext),
                 vec!["tool.trim".to_string(), "tool.recolor".to_string()],
-                "{ext} should offer both tools"
+                "{ext} should offer Trim and Recolor only"
             );
         }
     }

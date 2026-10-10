@@ -19,3 +19,7 @@ wheel-core = { path = "../wheel-core" }
 image = { version = "0.25", features = ["avif"] }
 lopdf = { version = "0.45", default-features = false, features = ["embed_image"] }
 resvg = "0.48.1"
+
+# Lossy and lossless compression. Referenced only from compress.rs, so the rest
+# of the engine never has to know which library is doing the work.
+libcaesium = { workspace = true }

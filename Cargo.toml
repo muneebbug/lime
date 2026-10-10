@@ -18,6 +18,14 @@ anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "serde"] }
 
+# Image compression for the Compress tool.
+#
+# Chosen over hand-wiring libwebp-sys, mozjpeg and oxipng because it already
+# wraps exactly those, and because it implements target-size compression - a
+# quality search that has to behave differently per format - which is the fiddly
+# part of that feature rather than a detail.
+libcaesium = "0.21"
+
 # Codec and rasteriser crates are pinned to optimised code in dev builds.
 #
 # These are all hot numeric loops over every pixel, and unoptimised they dominate
@@ -44,6 +52,29 @@ opt-level = 3
 opt-level = 3
 
 [profile.dev.package.usvg]
+opt-level = 3
+
+# The Compress tool's codecs. Unoptimised, zopfli and mozjpeg are slow enough to
+# look like a hang - libcaesium's own README warns that PNG optimisation in a
+# debug build "can take a very long time to complete".
+[profile.dev.package.libcaesium]
+opt-level = 3
+
+[profile.dev.package.oxipng]
+opt-level = 3
+
+[profile.dev.package.lodepng]
+opt-level = 3
+
+[profile.dev.package.webp]
+opt-level = 3
+
+# C code built through the `cc` crate is compiled with these settings unless the
+# crate sets its own. Optimised, or mozjpeg is an order of magnitude slower.
+[profile.dev.package.mozjpeg-sys]
+opt-level = 3
+
+[profile.dev.package.libwebp-sys]
 opt-level = 3
 
 [profile.release]

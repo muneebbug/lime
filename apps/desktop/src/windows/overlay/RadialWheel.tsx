@@ -193,6 +193,13 @@ export const TOOLS_CATALOG: PetalDef[] = [
     subtitle: "Recolor Image",
     icon: { type: "recolor" },
   },
+  {
+    id: "tool.compress",
+    action: "compress",
+    title: "COMPRESS",
+    subtitle: "Compress Image",
+    icon: { type: "compress" },
+  },
 ];
 
 // -------------------------------------------------------------------------

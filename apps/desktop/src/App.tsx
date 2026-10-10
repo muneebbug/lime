@@ -4,6 +4,7 @@ import { SettingsWindow } from "./windows/settings/SettingsWindow";
 import { StatusHud } from "./windows/status/StatusHud";
 import { OnboardingWindow } from "./windows/onboarding/OnboardingWindow";
 import { RecolorWindow } from "./windows/recolor/RecolorWindow";
+import { CompressWindow } from "./windows/compress/CompressWindow";
 
 /** Route to the correct window based on URL search params */
 function getWindowParams() {
@@ -67,6 +68,8 @@ export function App() {
       switch (tool) {
         case "tool.recolor":
           return <RecolorWindow />;
+        case "tool.compress":
+          return <CompressWindow />;
         default:
           // An unknown id means the window was opened by a build that had a tool
           // this one does not. Falling back to the overlay would be baffling, so

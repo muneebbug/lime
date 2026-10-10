@@ -4,3 +4,4 @@ pub mod media;
 pub mod recolor;
 pub mod svg_recolor;
 pub mod trim;
+pub mod compress;

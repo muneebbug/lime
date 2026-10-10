@@ -5,6 +5,7 @@ use tracing::{error, info};
 use wheel_core::{ActionRegistry, JobQueue, WheelSettings, action::default_actions};
 
 mod commands;
+pub mod compress_cmd;
 mod download;
 pub mod ffmpeg;
 mod onboarding;
@@ -146,6 +147,8 @@ pub fn run() {
             recolor_cmd::recolor_extract_colors,
             recolor_cmd::recolor_group_colors,
             recolor_cmd::recolor_apply,
+            compress_cmd::compress_inspect,
+            compress_cmd::compress_apply,
             commands::open_settings_window,
     commands::open_settings_page,
             commands::show_status,
