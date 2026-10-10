@@ -12,7 +12,7 @@
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%20%2B%2064--bit-0078d4)](https://github.com/muneebbug/lime/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-cbe71f.svg)](LICENSE)
 
-[Download](https://github.com/muneebbug/lime/releases) · [Report an issue](https://github.com/muneebbug/lime/issues)
+[Download](https://github.com/muneebbug/lime/releases) · [Report an issue](https://github.com/muneebbug/lime/issues) · [Changelog](CHANGELOG.md)
 
 </div>
 
@@ -28,7 +28,7 @@
 3. A wheel appears around your cursor, showing only the actions that make sense for what you picked.
 4. Move onto the action you want and release. The result is written next to the original file.
 
-Nothing is uploaded. Every conversion happens on your machine.
+Nothing is uploaded. Every conversion happens on your machine. Windows open on whichever monitor your cursor is on.
 
 ## What it converts
 
@@ -46,9 +46,31 @@ Nothing is uploaded. Every conversion happens on your machine.
 - **Metadata is kept, per media type.** Images carry EXIF and colour profiles into JPEG, PNG and WebP; audio carries tags and cover art; video carries tags. Each can be switched off in Settings.
 - **Transparent pixels survive.** AVIF in particular round-trips exactly, so trimming a transparent PNG to AVIF and back does not damage the edges.
 
-## Trim
+## Tools
 
-The one built-in tool. Drop an image on the **TRIM** petal and it crops away fully transparent borders, keeping the smallest rectangle that contains every visible pixel.
+Three tools, on the Tools page of the wheel. Each opens its own window and only appears for the files it can actually handle.
+
+### Trim
+
+Crops away fully transparent borders, keeping the smallest rectangle that contains every visible pixel. Needs an alpha channel, so it is not offered for JPEG or BMP. It is not offered for SVG either: trimming a vector means rewriting its `viewBox`, which is not implemented, and rasterising it to shrink would be the wrong answer.
+
+### Recolor Image
+
+Replace any colour in an image by rule — "swap this blue for that red" — or flatten everything to one. Matching is perceptual, so a rule catches the shades your eye would call the same colour rather than an exact RGB match, and the tolerance slider sets how far it reaches.
+
+- Rules either repaint flat or carry each pixel's lightness through, so the image keeps its shading. The second is off by default.
+- **SVG is edited as markup**, not re-encoded, so gradients, structure and hand-written ids survive.
+- The colour list follows the tolerance slider, because a rule is a radius rather than a point. Each swatch says how many colours and pixels it will actually repaint, so there is no surprise between clicking and saving.
+
+### Compress Image
+
+Shrinks an image by re-encoding it. The output keeps the input's format, because compressing is not converting — use the Convert page for that.
+
+- **Balanced** is the default and is visually lossless in most cases. **Strong** trades visible quality for size; **Maximal** pushes furthest.
+- Basic settings cover resize, compress-to-a-target-file-size, and whether to keep EXIF. Advanced exposes the per-format knobs: chroma subsampling, progressive JPEG, PNG mode, zopfli, TIFF effort and more. Anything you leave alone keeps the preset's value.
+- **Lossy PNG** is offered explicitly, not as a default. Quantising a photo to 256 colours is a big win and a real loss, so it should be a choice.
+- Works on JPG, JPEG, PNG, WebP and TIFF. Not GIF, because re-encoding an animation risks flattening it to a single frame.
+- Compress has no progress bar yet; slow settings show a spinner.
 
 
 ## Requirements
@@ -92,14 +114,21 @@ The installer lands in `apps/desktop/src-tauri/target/release/bundle/nsis/`. It 
 
 ```
 apps/desktop/          Tauri app — React frontend and Rust commands
-  src/                 React UI, including the wheel and settings window
+  src/                 React UI, including the wheel and tool windows
   src-tauri/src/       Rust: window management, tray, settings persistence
 crates/wheel-core/     Settings, action registry, job queue, history database
-crates/wheel-engines/  Conversion engines: image, media, PDF, trim
+crates/wheel-engines/  Engines: image, media, PDF, trim, recolor, compress
 crates/wheel-win/      Windows shell integration
 ```
 
-The two crates under `crates/` have no Tauri dependency, so the conversion logic can be tested and reasoned about on its own. `cargo test --workspace` runs the whole suite.
+The crates under `crates/` have no Tauri dependency, so the conversion logic can be tested and reasoned about on its own. `cargo test --workspace` runs the whole suite.
+
+The frontend has its own checks:
+
+```powershell
+pnpm --filter desktop run test    # tool availability per file type
+pnpm --filter desktop typecheck
+```
 
 ### Where your data lives
 
@@ -112,6 +141,9 @@ Everything is written under `%LOCALAPPDATA%\Lime\`:
 
 ## Not done yet
 
+- Progress reporting and cancellation for Compress
+- Lossy WebP for the Convert page — it currently writes lossless, which can make a photo larger
+- Animated WebP
 - Hardware-accelerated conversion for NVIDIA, AMD and Intel GPUs
 - Converting PDF pages back into images
 - Smaller video-to-GIF output
